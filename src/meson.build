@@ -1,2 +1,2 @@
-sources = ['honey_lang.cpp', 'lexer.cpp']
+sources = ['main.cpp', 'lexer.cpp', 'parser.cpp']
 honey_exe = executable('honey', sources, install : true)

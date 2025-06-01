@@ -16,8 +16,11 @@ enum TokenKind {
   Int,
   Float,
   String,
+  NewLine,
   Undefined,
 };
+
+std::string token_kind_to_string(TokenKind kind);
 
 struct FilePos {
   uint line;
@@ -29,10 +32,12 @@ struct Token {
   TokenKind kind;
   std::string value;
   FilePos position;
+
+  void print_token();
 };
 
 struct Lexer {
-  FilePos current_pos;
+  FilePos current_pos = {0, 0, 0};
   bool capturing;
 
   std::string source;

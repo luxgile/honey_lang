@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug honey",
+            "type": "codelldb",
+            "request": "launch",
+            "windows": {
+              "program": "C:\\00Dev\\20game_asteroids\\build\\Debug\\asteroids.exe"
+            },
+            "linux": {
+              "program": "${workspaceFolder}/build/src/honey"
+            }
+        }
+    ]
+}

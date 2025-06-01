@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include <iostream>
 
 int Lexer::next_char() {
   src_index += 1;
@@ -20,7 +21,8 @@ int Lexer::next_char() {
 }
 
 Token Lexer::create_token(TokenKind kind, bool consume) {
-  if (temp_id == "") temp_id = last_char;
+  if (temp_id == "")
+    temp_id = last_char;
   Token token = Token{kind, std::string(temp_id), current_pos};
   temp_id = "";
   if (consume)
@@ -29,8 +31,11 @@ Token Lexer::create_token(TokenKind kind, bool consume) {
 }
 
 std::expected<Token, std::string> Lexer::get_token() {
-  if ( src_index >= (int)source.size())
+  if (src_index >= (int)source.size() - 1)
     return create_token(EoF);
+
+  // Don't skip new lines.
+  if (last_char == '\n') return create_token(NewLine, true);
 
   // Skip whitespace
   while (std::isspace(last_char))
@@ -106,3 +111,38 @@ std::expected<Token, std::string> Lexer::get_token() {
   return create_token(Undefined);
 }
 
+std::string token_kind_to_string(TokenKind kind) {
+  switch (kind) {
+  case EoF:
+    return "EoF";
+  case Colon:
+    return "Colon";
+  case Eq:
+    return "Eq";
+  case LBrace:
+    return "LBrace";
+  case RBrace:
+    return "RBrace";
+  case Bar:
+    return "Bar";
+  case Id:
+    return "Identifier";
+  case Int:
+    return "Int";
+  case Float:
+    return "Float";
+  case String:
+    return "String";
+  case NewLine:
+    return "NewLine";
+  case Undefined:
+  default:
+    return "Undefined";
+  }
+}
+
+void Token::print_token() {
+  std::cout << "[" << position.line << ":" << position.start << "-"
+            << position.end << "] " << token_kind_to_string(kind) << " "
+            << value << "\n";
+}
