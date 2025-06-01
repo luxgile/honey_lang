@@ -38,19 +38,20 @@ int main() {
   PrettyPrintAstVisitor pretty_printer;
   LlvmIrGenAstVisitor llvm_gen{parser.ctx};
 
-  /* parser.debug_checks = true; */
-  /* parser.debug_scan = true; */
+  parser.debug_checks = true;
+  parser.debug_scan = true;
 
   // Register print fn
-  std::vector<uptr<FieldDefAst>> print_args;
-  print_args.push_back(std::make_unique<FieldDefAst>("msg", "String"));
-  auto print_fn = std::make_unique<FnHeaderAst>(
-      "print", "Void", std::vector<uptr<FieldDefAst>>{}, std::move(print_args));
-  parser.ctx.defined_ext_fns.push_back(print_fn.get());
+  /* std::vector<uptr<FieldDefAst>> print_args; */
+  /* print_args.push_back(std::make_unique<FieldDefAst>("msg", "RawString")); */
+  /* auto print_fn = std::make_unique<FnHeaderAst>( */
+  /*     "print", "Void", std::vector<uptr<FieldDefAst>>{}, std::move(print_args)); */
+  /* parser.ctx.defined_ext_fns.push_back(print_fn.get()); */
 
+  // Register basic types
   parser.ctx.define_type("Void", llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_type(
-      "String", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
+      "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
 
   auto ext_fn_res = llvm_gen.build_external_fns();
   if (!ext_fn_res) {
@@ -68,13 +69,13 @@ int main() {
     }
 
     token = *tkn_result;
-    /* token.print_token(); */
+    token.print_token();
 
     auto statement = parser.parse_token(token);
     if (!statement)
       continue;
 
-    /* std::visit(pretty_printer, *statement); */
+    std::visit(pretty_printer, *statement);
 
     statements.push_back(std::move(*statement));
 

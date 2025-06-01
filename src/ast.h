@@ -26,6 +26,7 @@ using AstStatement = std::variant<uptr<FieldDefAst>, uptr<FnHeaderAst>, uptr<FnD
 struct FieldDefAst {
   std::string name;
   std::string type;
+  bool is_varadic;
 };
 
 struct IntExprAst {
@@ -61,5 +62,6 @@ struct BodyExprAst {
 /// Function declaration 'main := | | {}'
 struct FnDefAst {
   uptr<FnHeaderAst> fn_header;
-  AstExpression body;
+  bool is_external;
+  std::optional<AstExpression> body;
 };

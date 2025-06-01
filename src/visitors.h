@@ -83,16 +83,21 @@ struct LlvmIrGenAstVisitor {
     if (!fn_header.value()->empty())
       return std::unexpected("trying to redefine an existing fn");
 
-    current_fn = fn_header.value();
-    auto body_ret = std::visit(*this, node.body);
-    current_fn = nullptr;
+    if (!node.is_external) {
+      current_fn = fn_header.value();
+      auto body_ret = std::visit(*this, *node.body);
+      current_fn = nullptr;
 
-    if (!body_ret) {
-      fn_header.value()->eraseFromParent();
-      return std::unexpected(body_ret.error());
+      if (!body_ret) {
+        fn_header.value()->eraseFromParent();
+        return std::unexpected(body_ret.error());
+      }
+
+      builder->CreateRet(*body_ret);
+    } else {
+      fn_header.value()->setCallingConv(llvm::CallingConv::C);
     }
 
-    builder->CreateRet(*body_ret);
     llvm::verifyFunction(*fn_header.value());
     return {};
   }
@@ -124,9 +129,9 @@ struct LlvmIrGenAstVisitor {
   operator()(uptr<StringExprAst> &node) {
     auto str_const =
         llvm::ConstantDataArray::getString(*llvm_ctx, node->value, true);
-    auto global_str = new llvm::GlobalVariable(*module, str_const->getType(), true,
-                                           llvm::GlobalValue::PrivateLinkage,
-                                           str_const, ".str");
+    auto global_str = new llvm::GlobalVariable(
+        *module, str_const->getType(), true, llvm::GlobalValue::PrivateLinkage,
+        str_const, ".str");
     global_str->setAlignment(llvm::Align(1));
     return builder->CreateConstGEP2_32(str_const->getType(), global_str, 0, 0);
   }
@@ -237,6 +242,11 @@ struct PrettyPrintAstVisitor {
 
   void operator()(uptr<FnDefAst> &node) {
     (*this)(node->fn_header);
-    std::visit(*this, node->body);
+    if (node->is_external) {
+      std::print("\n");
+      return;
+    }
+
+    std::visit(*this, *node->body);
   }
 };

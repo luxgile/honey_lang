@@ -7,6 +7,8 @@
 
 enum TokenKind {
   EoF,
+  Dot,
+  Comma,
   Colon,
   Eq,
   LBrace,
@@ -16,6 +18,7 @@ enum TokenKind {
   Int,
   Float,
   String,
+  Extern,
   NewLine,
   Undefined,
 };

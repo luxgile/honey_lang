@@ -35,7 +35,8 @@ std::expected<Token, std::string> Lexer::get_token() {
     return create_token(EoF);
 
   // Don't skip new lines.
-  if (last_char == '\n') return create_token(NewLine, true);
+  if (last_char == '\n')
+    return create_token(NewLine, true);
 
   // Skip whitespace
   while (std::isspace(last_char))
@@ -47,11 +48,14 @@ std::expected<Token, std::string> Lexer::get_token() {
 
     capturing = true;
     last_char = next_char();
-    while (std::isalpha(last_char)) {
+    while (std::isalpha(last_char) || last_char == '_') {
       temp_id += last_char;
       last_char = next_char();
     }
     capturing = false;
+
+    if (temp_id == "extern")
+      return create_token(Extern);
 
     return create_token(Id);
   }
@@ -98,6 +102,10 @@ std::expected<Token, std::string> Lexer::get_token() {
   switch (last_char) {
   case ':':
     return create_token(Colon, true);
+  case '.':
+    return create_token(Dot, true);
+  case ',':
+    return create_token(Comma, true);
   case '=':
     return create_token(Eq, true);
   case '|':
@@ -117,6 +125,10 @@ std::string token_kind_to_string(TokenKind kind) {
     return "EoF";
   case Colon:
     return "Colon";
+  case Dot:
+    return "Dot";
+  case Comma:
+    return "Comma";
   case Eq:
     return "Eq";
   case LBrace:
@@ -133,6 +145,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Float";
   case String:
     return "String";
+  case Extern:
+    return "Extern";
   case NewLine:
     return "NewLine";
   case Undefined:

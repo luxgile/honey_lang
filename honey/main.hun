@@ -1,3 +1,6 @@
+
+extern printf := | | format: RawString, args: ...
+
 main := | | {
-  print "hello world"
+  printf "hello %s" "honey!"
 }

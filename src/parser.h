@@ -21,9 +21,7 @@ private:
   std::map<std::string, llvm::Type *> types;
 
 public:
-  void define_type(std::string name, llvm::Type* type) {
-    types[name] = type;
-  }
+  void define_type(std::string name, llvm::Type *type) { types[name] = type; }
 
   std::optional<llvm::Type *> get_type(std::string name) {
     auto type = types[name];
@@ -43,6 +41,12 @@ struct Parser {
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
   std::println(msg)
+
+  std::optional<Token> get_tk(int offset) {
+    if (offset >= (int)tk_queue.size())
+      return {};
+    return tk_queue[offset];
+  }
 
   std::optional<std::reference_wrapper<FnHeaderAst>>
   get_function(std::string &fn_name) {
@@ -95,17 +99,35 @@ struct Parser {
   std::optional<AstStatement> handle_queue() {
     LOG("\nstarting parsing...");
 
-    if (check_tokens({Id, Colon, Eq})) {
-      LOG("fn decl found");
+    if (auto fn = handle_fn_def()) {
+      return fn;
+    }
 
-      auto offset = 3;
-      auto header = handle_fn_header(offset);
-      auto body = handle_fn_body(offset);
-      if (header && body) {
+    return {};
+  }
+
+  std::optional<uptr<FnDefAst>> handle_fn_def() {
+    int offset = 0;
+    bool is_external = false;
+    if (check_tokens({Extern}))
+      is_external = true;
+
+    offset += 1;
+    if (check_tokens({Id, Colon, Eq}, offset)) {
+      LOG("fn decl found");
+      auto fn_id = *get_tk(offset);
+      offset += 3;
+      auto header = handle_fn_header(fn_id.value, offset);
+      std::optional<uptr<BodyExprAst>> body = {};
+
+      if (!is_external)
+        body = handle_fn_body(offset);
+
+      if (header && (body || is_external)) {
         tk_queue.clear();
         LOG("got fn expression");
-        auto fn =
-            std::make_unique<FnDefAst>(std::move(*header), std::move(*body));
+        auto fn = std::make_unique<FnDefAst>(std::move(*header), is_external,
+                                             std::move(body));
         ctx.defined_fns.push_back(fn.get());
         return fn;
       }
@@ -180,18 +202,14 @@ struct Parser {
     return std::make_unique<BodyExprAst>(std::move(exprs));
   }
 
-  std::optional<std::unique_ptr<FnHeaderAst>> handle_fn_header(int &offset) {
+  std::optional<std::unique_ptr<FnHeaderAst>>
+  handle_fn_header(std::string header_id, int &offset) {
     std::string ret_type = "void";
-    auto header_id = tk_queue[0].value;
 
     // Prev arguments
-    auto prefix = std::vector<uptr<FieldDefAst>>();
-    auto arg = handle_field_def(offset);
-    while (arg) {
-      prefix.push_back(std::move(*arg));
-      offset += 3;
-      arg = handle_field_def(offset);
-    }
+    auto prefix = handle_fn_args(offset);
+    if (!prefix)
+      return {};
 
     // Return type
     if (check_tokens({Bar}, offset)) {
@@ -210,23 +228,69 @@ struct Parser {
     }
 
     // Next arguments
-    auto suffix = std::vector<uptr<FieldDefAst>>();
-    arg = handle_field_def(offset);
-    while (arg) {
-      prefix.push_back(std::move(*arg));
-      offset += 3;
-      arg = handle_field_def(offset);
-    }
+    auto suffix = handle_fn_args(offset);
+    if (!suffix)
+      return {};
 
     LOG("found fn header");
-    return std::make_unique<FnHeaderAst>(header_id, ret_type, std::move(prefix),
-                                         std::move(suffix));
+    return std::make_unique<FnHeaderAst>(
+        header_id, ret_type, std::move(*prefix), std::move(*suffix));
   }
 
-  std::optional<uptr<FieldDefAst>> handle_field_def(int offset) {
+  std::optional<std::vector<uptr<FieldDefAst>>> handle_fn_args(int &offset) {
+    LOG("getting fn arguments");
+    auto args = std::vector<uptr<FieldDefAst>>();
+
+    if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
+        check_tokens({NewLine}, offset)) {
+      if (check_tokens({NewLine}, offset))
+        offset += 1;
+
+      return args;
+    }
+
+    while (true) {
+      auto arg = handle_field_def(offset);
+      if (!arg)
+        return {};
+
+      LOG("found argument for fn header");
+      args.push_back(std::move(*arg));
+
+      if (check_tokens({Comma}, offset)) {
+        offset += 1;
+        continue;
+      }
+
+      if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
+          check_tokens({NewLine}, offset)) {
+        if (check_tokens({NewLine}, offset))
+          offset += 1;
+
+        break;
+      }
+
+      return {};
+    }
+
+    LOG("all arguments found for fn header");
+    return args;
+  }
+
+  std::optional<uptr<FieldDefAst>> handle_field_def(int &offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
-      return std::make_unique<FieldDefAst>(tk_queue[offset].value,
-                                           tk_queue[offset + 2].value);
+      auto field = std::make_unique<FieldDefAst>(
+          tk_queue[offset].value, tk_queue[offset + 2].value, false);
+      offset += 3;
+      return field;
+    }
+
+    // Varadic argument
+    if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
+      auto field =
+          std::make_unique<FieldDefAst>(tk_queue[offset].value, "Void", true);
+      offset += 5;
+      return field;
     }
 
     return {};
