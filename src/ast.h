@@ -1,125 +1,65 @@
 #pragma once
 
+#include "helpers.h"
 #include <memory>
 #include <print>
 #include <string>
+#include <variant>
 #include <vector>
 
-struct AstNode {
-  virtual ~AstNode() {}
+struct IntExprAst;
+struct FloatExprAst;
+struct StringExprAst;
+struct CallExprAst;
+struct BodyExprAst;
+struct FnDefAst;
 
-  virtual void print_node() {}
-};
+using AstExpression =
+    std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
+                 uptr<CallExprAst>, uptr<BodyExprAst>>;
 
-struct FieldDefAst : AstNode {
+struct FieldDefAst;
+struct FnHeaderAst;
+
+using AstStatement = std::variant<uptr<FieldDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>>;
+
+struct FieldDefAst {
   std::string name;
   std::string type;
-
-  FieldDefAst(std::string name, std::string type)
-      : name(std::move(name)), type(std::move(type)) {}
-
-  void print_node() override { std::println("{}: {}", name, type); }
 };
 
-struct ExprAst : AstNode {};
-
-struct IntExprAst : ExprAst {
+struct IntExprAst {
   int value;
-
-  void print_node() override { std::println("{}", value); }
 };
 
-struct FloatExprAst : ExprAst {
+struct FloatExprAst {
   float value;
-
-  void print_node() override { std::println("{}", value); }
 };
 
-struct StringExprAst : ExprAst {
+struct StringExprAst {
   std::string value;
-
-  explicit StringExprAst(std::string value) : value(std::move(value)) {}
-
-  void print_node() override { std::println("{}", value); }
 };
 
-struct CallExprAst : ExprAst {
+struct CallExprAst {
   std::string fn_name;
-  std::vector<std::unique_ptr<ExprAst>> prefix_args;
-  std::vector<std::unique_ptr<ExprAst>> suffix_args;
-
-  CallExprAst(std::string fn_name,
-              std::vector<std::unique_ptr<ExprAst>> prefix_args,
-              std::vector<std::unique_ptr<ExprAst>> suffix_args)
-      : fn_name(std::move(fn_name)), prefix_args(std::move(prefix_args)),
-        suffix_args(std::move(suffix_args)) {}
-
-  void print_node() override {
-    for (auto &arg : prefix_args) {
-      arg->print_node();
-    }
-
-    std::print(" |{}| ", fn_name);
-
-    for (auto &arg : suffix_args) {
-      arg->print_node();
-    }
-  }
+  std::vector<AstExpression> prefix_args;
+  std::vector<AstExpression> suffix_args;
 };
 
-struct FnHeaderAst : AstNode {
+/// 'main := prev | ret | next '
+struct FnHeaderAst {
   std::string name;
   std::string type;
-  std::vector<FieldDefAst> prefix_args;
-  std::vector<FieldDefAst> suffix_args;
-
-  FnHeaderAst(std::string name, std::string type,
-              std::vector<FieldDefAst> prefix_args,
-              std::vector<FieldDefAst> suffix_args)
-      : name(std::move(name)), type(std::move(type)),
-        prefix_args(std::move(prefix_args)),
-        suffix_args(std::move(suffix_args)) {}
-
-  void print_node() override {
-    std::print("{} := ", name);
-
-    for (auto &arg : prefix_args) {
-      arg.print_node();
-    }
-
-    std::print("|{}|", type);
-
-    for (auto &arg : suffix_args) {
-      arg.print_node();
-    }
-  }
+  std::vector<uptr<FieldDefAst>> prefix_args;
+  std::vector<uptr<FieldDefAst>> suffix_args;
 };
 
-struct BodyExprAst : ExprAst {
-  std::vector<std::unique_ptr<ExprAst>> exprs;
-
-  explicit BodyExprAst(std::vector<std::unique_ptr<ExprAst>> exprs)
-      : exprs(std::move(exprs)) {}
-
-  void print_node() override {
-    std::println("{{");
-    for (auto& expr : exprs) {
-      expr->print_node();
-    }
-    std::println("}}");
-  }
+struct BodyExprAst {
+  std::vector<AstExpression> exprs;
 };
 
-struct FnExprAst : ExprAst {
-  std::unique_ptr<FnHeaderAst> fn_header;
-  std::unique_ptr<ExprAst> body;
-
-  FnExprAst(std::unique_ptr<FnHeaderAst> fn_header,
-            std::unique_ptr<ExprAst> body)
-      : fn_header(std::move(fn_header)), body(std::move(body)) {}
-
-  void print_node() override {
-    fn_header->print_node();
-    body->print_node();
-  }
+/// Function declaration 'main := | | {}'
+struct FnDefAst {
+  uptr<FnHeaderAst> fn_header;
+  AstExpression body;
 };

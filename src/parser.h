@@ -2,30 +2,57 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "llvm/IR/Type.h"
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <print>
+#include <string>
 #include <vector>
+
+struct ProgramCtx {
+  std::vector<FnHeaderAst *> defined_ext_fns;
+  std::vector<FnDefAst *> defined_fns;
+
+private:
+  std::map<std::string, llvm::Type *> types;
+
+public:
+  void define_type(std::string name, llvm::Type* type) {
+    types[name] = type;
+  }
+
+  std::optional<llvm::Type *> get_type(std::string name) {
+    auto type = types[name];
+    if (type == nullptr)
+      return std::nullopt;
+    return type;
+  }
+};
 
 struct Parser {
   bool debug_scan = false;
   bool debug_checks = false;
+  ProgramCtx ctx;
 
   std::vector<Token> tk_queue;
-
-  std::vector<FnHeaderAst> fns_defined;
 
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
   std::println(msg)
 
-  std::optional<FnHeaderAst> get_function(std::string fn_name) {
-    for (auto fn : fns_defined)
-      if (fn.name == fn_name)
-        return fn;
+  std::optional<std::reference_wrapper<FnHeaderAst>>
+  get_function(std::string &fn_name) {
+    for (auto &fn : ctx.defined_ext_fns)
+      if (fn->name == fn_name)
+        return std::ref(*fn);
+
+    for (auto &fn : ctx.defined_fns)
+      if (fn->fn_header->name == fn_name)
+        return std::ref(*fn->fn_header);
 
     return {};
   }
@@ -60,12 +87,12 @@ struct Parser {
     return true;
   }
 
-  std::optional<std::unique_ptr<AstNode>> parse_token(Token token) {
+  std::optional<AstStatement> parse_token(Token token) {
     tk_queue.push_back(token);
     return handle_queue();
   }
 
-  std::optional<std::unique_ptr<AstNode>> handle_queue() {
+  std::optional<AstStatement> handle_queue() {
     LOG("\nstarting parsing...");
 
     if (check_tokens({Id, Colon, Eq})) {
@@ -77,24 +104,28 @@ struct Parser {
       if (header && body) {
         tk_queue.clear();
         LOG("got fn expression");
-        return std::make_unique<FnExprAst>(std::move(*header), std::move(*body));
+        auto fn =
+            std::make_unique<FnDefAst>(std::move(*header), std::move(*body));
+        ctx.defined_fns.push_back(fn.get());
+        return fn;
       }
     }
 
     return {};
   }
 
-  std::optional<std::unique_ptr<ExprAst>> handle_expr(int &offset) {
+  std::optional<AstExpression> handle_expr(int &offset) {
     LOG("scanning for expression");
     if (check_tokens({Id}, offset)) {
 
       // Call expr
-      auto fn = get_function(tk_queue[offset].value);
-      if (fn) {
+      auto fn_found = get_function(tk_queue[offset].value);
+      if (fn_found) {
+        auto fn = &(*fn_found).get();
         offset += 1;
-        std::vector<std::unique_ptr<ExprAst>> prefix_args{};
+        std::vector<AstExpression> prefix_args{};
 
-        std::vector<std::unique_ptr<ExprAst>> suffix_args{};
+        std::vector<AstExpression> suffix_args{};
         int expected_arg_count = fn->suffix_args.size();
         for (int i = 0; i < expected_arg_count; i++) {
           auto expr = handle_expr(offset);
@@ -132,7 +163,7 @@ struct Parser {
     }
 
     LOG("starting fn body");
-    std::vector<std::unique_ptr<ExprAst>> exprs{};
+    std::vector<AstExpression> exprs{};
     while (!check_tokens({RBrace}, offset)) {
       auto expr = handle_expr(offset);
       if (!expr)
@@ -154,10 +185,10 @@ struct Parser {
     auto header_id = tk_queue[0].value;
 
     // Prev arguments
-    auto prefix = std::vector<FieldDefAst>();
+    auto prefix = std::vector<uptr<FieldDefAst>>();
     auto arg = handle_field_def(offset);
     while (arg) {
-      prefix.push_back(*arg);
+      prefix.push_back(std::move(*arg));
       offset += 3;
       arg = handle_field_def(offset);
     }
@@ -179,21 +210,23 @@ struct Parser {
     }
 
     // Next arguments
-    auto suffix = std::vector<FieldDefAst>();
+    auto suffix = std::vector<uptr<FieldDefAst>>();
     arg = handle_field_def(offset);
     while (arg) {
-      suffix.push_back(*arg);
+      prefix.push_back(std::move(*arg));
       offset += 3;
       arg = handle_field_def(offset);
     }
 
     LOG("found fn header");
-    return std::make_unique<FnHeaderAst>(header_id, ret_type, prefix, suffix);
+    return std::make_unique<FnHeaderAst>(header_id, ret_type, std::move(prefix),
+                                         std::move(suffix));
   }
 
-  std::optional<FieldDefAst> handle_field_def(int offset) {
+  std::optional<uptr<FieldDefAst>> handle_field_def(int offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
-      return FieldDefAst{tk_queue[offset].value, tk_queue[offset + 2].value};
+      return std::make_unique<FieldDefAst>(tk_queue[offset].value,
+                                           tk_queue[offset + 2].value);
     }
 
     return {};
