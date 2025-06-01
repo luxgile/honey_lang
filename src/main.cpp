@@ -16,6 +16,8 @@ int main() {
 
   Token token;
   Parser parser;
+  /* parser.debug_checks = true; */
+  /* parser.debug_scan = true; */
   parser.fns_defined.push_back(FnHeaderAst{"print", "Void", {}, {FieldDefAst{"msg", "String"}}});
   do {
     auto tkn_result = lexer.get_token();
@@ -30,7 +32,7 @@ int main() {
 
     auto expr = parser.parse_token(token);
     if (expr) {
-      std::cout << "Expr got." << "\n";
+      (*expr)->print_node();
     } 
 
   } while (token.kind != TokenKind::EoF && token.kind != TokenKind::Undefined);

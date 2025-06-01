@@ -1,2 +1,5 @@
 sources = ['main.cpp', 'lexer.cpp', 'parser.cpp']
-honey_exe = executable('honey', sources, install : true)
+
+llvm_dep = dependency('llvm', required: true)
+
+honey_exe = executable('honey', sources, install : true, dependencies: llvm_dep)
