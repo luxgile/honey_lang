@@ -56,8 +56,11 @@ struct CallExprAst {
 struct FnHeaderAst {
   std::string name;
   std::string type;
+  bool is_external;
   std::vector<uptr<FieldDefAst>> prefix_args;
   std::vector<uptr<FieldDefAst>> suffix_args;
+
+  bool is_vararic() { return suffix_args.size() > 0 && suffix_args[suffix_args.size() - 1]->is_varadic; }
 };
 
 struct BodyExprAst {
@@ -67,6 +70,5 @@ struct BodyExprAst {
 /// Function declaration 'main := | | {}'
 struct FnDefAst {
   uptr<FnHeaderAst> fn_header;
-  bool is_external;
   std::optional<AstExpression> body;
 };

@@ -2,9 +2,14 @@
 extern printf := | | format: RawString, args: ...
 
 salute_to := | | name: RawString {
-  printf "Hi %s!" name
+  printf "Hi %s! " name
+}
+
+related_to := lhs: RawString | | rhs: RawString {
+  printf "%s is related to %s" lhs rhs
 }
 
 main := | | {
-  salute_to "Jessie"
+  "Mario" related_to "Jessie"
 }
+

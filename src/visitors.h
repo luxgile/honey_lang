@@ -46,21 +46,35 @@ struct LlvmIrGenAstVisitor {
   std::expected<llvm::Function *, std::string>
   build_prototype(FnHeaderAst &header) {
     auto args_types = std::vector<llvm::Type *>{};
+
     for (auto &arg : header.prefix_args) {
       auto type = ctx.get_type(arg->type);
+
       if (!type)
         return std::unexpected("no prefix found");
-      args_types.push_back(*type);
-    }
-    for (auto &arg : header.suffix_args) {
-      auto type = ctx.get_type(arg->type);
-      if (!type)
-        return std::unexpected("no suffix found");
+
       args_types.push_back(*type);
     }
 
+    for (auto &arg : header.suffix_args) {
+      auto type = ctx.get_type(arg->type);
+
+      if (!type)
+        return std::unexpected("no suffix found");
+
+      args_types.push_back(*type);
+    }
+
+    // Varadic arguments are internally stored as 'Void' but llvm generator
+    // automatically adds it as another argument, so we need to drop the last
+    // one.
+    if (header.is_vararic()) {
+      args_types.pop_back();
+    }
+
     auto fn_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_ctx),
-                                           args_types, false);
+                                           args_types, header.is_vararic());
+
     auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
                                      header.name, module.get());
 
@@ -70,6 +84,10 @@ struct LlvmIrGenAstVisitor {
       i += 1;
     }
     for (auto &arg : header.suffix_args) {
+      // Skip last argument if it's varadic
+      if (fn->isVarArg() && fn->arg_size() - 1 == (size_t)i)
+        break;
+
       fn->getArg(i)->setName(arg->name);
       i += 1;
     }
@@ -85,8 +103,7 @@ struct LlvmIrGenAstVisitor {
     if (!fn_header.value()->empty())
       return std::unexpected("trying to redefine an existing fn");
 
-    if (!node.is_external) {
-
+    if (!node.fn_header->is_external) {
       defined_variables.clear();
       current_fn = fn_header.value();
       auto body_ret = std::visit(*this, *node.body);
@@ -156,10 +173,19 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected("tried to call unknown fn");
 
     if (callee_fn->arg_size() !=
-        node->prefix_args.size() + node->suffix_args.size())
+            node->prefix_args.size() + node->suffix_args.size() &&
+        !callee_fn->isVarArg())
       return std::unexpected("incorrect number of arguments used.");
 
     std::vector<llvm::Value *> args;
+
+    for (auto &arg : node->prefix_args) {
+      auto arg_val = std::visit(*this, arg);
+      if (!arg_val)
+        return std::unexpected(arg_val.error());
+      args.push_back(*arg_val);
+    }
+
     for (auto &arg : node->suffix_args) {
       auto arg_val = std::visit(*this, arg);
       if (!arg_val)
@@ -176,7 +202,7 @@ struct LlvmIrGenAstVisitor {
     builder->SetInsertPoint(bb);
 
     if (current_fn != nullptr) {
-      for (auto& arg : current_fn->args()) {
+      for (auto &arg : current_fn->args()) {
         defined_variables[std::string(arg.getName())] = &arg;
       }
     }
@@ -221,15 +247,22 @@ struct PrettyPrintAstVisitor {
 
   // Expressions
   void operator()(uptr<CallExprAst> &node) {
+
+    std::print("( ");
     for (auto &arg : node->prefix_args) {
       std::visit(*this, arg);
+      std::print(", ");
     }
+    std::print(" )");
 
     std::print(" |{}| ", node->fn_name);
 
+    std::print("( ");
     for (auto &arg : node->suffix_args) {
       std::visit(*this, arg);
+      std::print(", ");
     }
+    std::print(" )");
   }
 
   // Function
@@ -260,7 +293,7 @@ struct PrettyPrintAstVisitor {
 
   void operator()(uptr<FnDefAst> &node) {
     (*this)(node->fn_header);
-    if (node->is_external) {
+    if (node->fn_header->is_external) {
       std::print("\n");
       return;
     }

@@ -12,6 +12,7 @@
 #include <optional>
 #include <print>
 #include <string>
+#include <variant>
 #include <vector>
 
 /// Not sure if this is context for llvm ir gen or parsing...
@@ -51,6 +52,9 @@ struct Parser {
   ProgramCtx ctx;
 
   std::vector<Token> tk_queue;
+
+  /// Holds all expressions not used in a line. Used for prefix arguments.
+  std::vector<AstExpression> line_expressions;
 
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
@@ -147,6 +151,9 @@ struct Parser {
       auto fn_id = *get_tk(offset);
       offset += 3;
       auto header = handle_fn_header(fn_id.value, offset);
+      if (header)
+        header->get()->is_external = is_external;
+
       std::optional<uptr<BodyExprAst>> body = {};
 
       if (!is_external)
@@ -155,8 +162,8 @@ struct Parser {
       if (header && (body || is_external)) {
         tk_queue.clear();
         LOG("got fn expression");
-        auto fn = std::make_unique<FnDefAst>(std::move(*header), is_external,
-                                             std::move(body));
+        auto fn =
+            std::make_unique<FnDefAst>(std::move(*header), std::move(body));
         ctx.defined_fns.push_back(fn.get());
         return fn;
       }
@@ -175,15 +182,34 @@ struct Parser {
       if (fn_found) {
         auto fn = &(*fn_found).get();
         offset += 1;
+
         std::vector<AstExpression> prefix_args{};
+        for (auto &expr : line_expressions) {
+          std::println(" >>> adding line expression call as prefix");
+          prefix_args.push_back(std::move(expr));
+        }
+        line_expressions.clear();
 
         std::vector<AstExpression> suffix_args{};
-        int expected_arg_count = fn->suffix_args.size();
-        for (int i = 0; i < expected_arg_count; i++) {
-          auto expr = handle_expr(offset);
-          if (!expr)
-            return {};
-          suffix_args.push_back(std::move(*expr));
+        if (fn->is_vararic()) {
+          while (true) {
+            if (check_tokens({NewLine}, offset)) {
+              break;
+            }
+
+            auto expr = handle_expr(offset);
+            if (!expr)
+              return {};
+            suffix_args.push_back(std::move(*expr));
+          }
+        } else {
+          int expected_arg_count = fn->suffix_args.size();
+          for (int i = 0; i < expected_arg_count; i++) {
+            auto expr = handle_expr(offset);
+            if (!expr)
+              return {};
+            suffix_args.push_back(std::move(*expr));
+          }
         }
 
         LOG("call expr found");
@@ -213,7 +239,7 @@ struct Parser {
       return {};
 
     offset += 1;
-    if (check_tokens({NewLine}, offset)) { // Ignore new line
+    while (check_tokens({NewLine}, offset)) { // Ignore new line
       offset += 1;
     }
 
@@ -221,14 +247,26 @@ struct Parser {
     std::vector<AstExpression> exprs{};
     while (!check_tokens({RBrace}, offset)) {
       auto expr = handle_expr(offset);
-      if (!expr)
+      if (!expr) {
+        line_expressions.clear();
         return {};
-
-      if (check_tokens({NewLine}, offset)) { // Ignore new line
-        offset += 1;
       }
 
-      exprs.push_back(std::move(*expr));
+      std::println(" >>> adding expr to line expression");
+      line_expressions.push_back(std::move(*expr));
+
+      if (check_tokens({NewLine}, offset)) { // Ignore new line
+
+        std::println(" >>> clearing new line from body");
+        // Unused expressions are treated as normal expressions.
+        for (auto &expr : line_expressions) {
+          std::println(" >>> adding line expression to body");
+          exprs.push_back(std::move(expr));
+        }
+        line_expressions.clear();
+
+        offset += 1;
+      }
     }
 
     LOG("got fn body");
@@ -267,7 +305,7 @@ struct Parser {
 
     LOG("found fn header");
     return std::make_unique<FnHeaderAst>(
-        header_id, ret_type, std::move(*prefix), std::move(*suffix));
+        header_id, ret_type, false, std::move(*prefix), std::move(*suffix));
   }
 
   std::optional<std::vector<uptr<FieldDefAst>>> handle_fn_args(int &offset) {
