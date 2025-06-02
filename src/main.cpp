@@ -4,10 +4,10 @@
 #include "visitors.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CodeGen.h"
 #include "llvm/Support/FileSystem.h"
@@ -45,7 +45,8 @@ int main() {
   /* std::vector<uptr<FieldDefAst>> print_args; */
   /* print_args.push_back(std::make_unique<FieldDefAst>("msg", "RawString")); */
   /* auto print_fn = std::make_unique<FnHeaderAst>( */
-  /*     "print", "Void", std::vector<uptr<FieldDefAst>>{}, std::move(print_args)); */
+  /*     "print", "Void", std::vector<uptr<FieldDefAst>>{},
+   * std::move(print_args)); */
   /* parser.ctx.defined_ext_fns.push_back(print_fn.get()); */
 
   // Register basic types
@@ -86,9 +87,12 @@ int main() {
     auto gen_result = llvm_gen.build_statement(stmt);
     if (!gen_result)
       std::println("gen error: {}", gen_result.error());
-
-    llvm_gen.module->print(llvm::errs(), nullptr);
   }
+
+  std::println();
+  std::println(" ----- GENERATED LLVM IR -----");
+  std::println();
+  llvm_gen.module->print(llvm::errs(), nullptr);
 
   // Compilation
   llvm::InitializeAllTargetInfos();
@@ -121,7 +125,8 @@ int main() {
 
   llvm::legacy::PassManager pass;
   auto file_type = llvm::CodeGenFileType::ObjectFile;
-  if (target_machine->addPassesToEmitFile(pass, output_file, nullptr, file_type)) {
+  if (target_machine->addPassesToEmitFile(pass, output_file, nullptr,
+                                          file_type)) {
     std::println("target machine can't emit a file of this type");
     return 1;
   }

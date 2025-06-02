@@ -1,6 +1,10 @@
 
 extern printf := | | format: RawString, args: ...
 
+salute_to := | | name: RawString {
+  printf "Hi %s!" name
+}
+
 main := | | {
-  printf "hello %s" "honey!"
+  salute_to "Jessie"
 }

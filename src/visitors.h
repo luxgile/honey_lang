@@ -32,6 +32,8 @@ struct LlvmIrGenAstVisitor {
   uptr<llvm::IRBuilder<>> builder;
   uptr<llvm::Module> module;
 
+  std::map<std::string, llvm::Value *> defined_variables;
+
   LlvmIrGenAstVisitor(ProgramCtx &ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("honey jit", *llvm_ctx);
@@ -84,6 +86,8 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected("trying to redefine an existing fn");
 
     if (!node.is_external) {
+
+      defined_variables.clear();
       current_fn = fn_header.value();
       auto body_ret = std::visit(*this, *node.body);
       current_fn = nullptr;
@@ -125,6 +129,13 @@ struct LlvmIrGenAstVisitor {
     return llvm::ConstantFP::get(*llvm_ctx, llvm::APFloat(node->value));
   }
 
+  std::expected<llvm::Value *, std::string> operator()(uptr<VarExprAst> &node) {
+    auto var = defined_variables[node->name];
+    if (!var)
+      return std::unexpected("trying to reference an undefined variable");
+    return var;
+  }
+
   std::expected<llvm::Value *, std::string>
   operator()(uptr<StringExprAst> &node) {
     auto str_const =
@@ -159,11 +170,16 @@ struct LlvmIrGenAstVisitor {
     return builder->CreateCall(callee_fn, args, "calltmp");
   }
 
-  // Function
   std::expected<llvm::Value *, std::string>
   operator()(uptr<BodyExprAst> &node) {
     auto bb = llvm::BasicBlock::Create(*llvm_ctx, "entry", current_fn);
     builder->SetInsertPoint(bb);
+
+    if (current_fn != nullptr) {
+      for (auto& arg : current_fn->args()) {
+        defined_variables[std::string(arg.getName())] = &arg;
+      }
+    }
 
     llvm::Value *last_val = nullptr;
     for (auto &expr : node->exprs) {
@@ -196,6 +212,8 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<FloatExprAst> &node) { std::print("{}", node->value); }
 
   void operator()(uptr<StringExprAst> &node) { std::print("{}", node->value); }
+
+  void operator()(uptr<VarExprAst> &node) { std::print("{}", node->name); }
 
   void operator()(uptr<FieldDefAst> &node) {
     std::println("{}: {}", node->name, node->type);

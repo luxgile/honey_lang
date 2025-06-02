@@ -13,10 +13,11 @@ struct StringExprAst;
 struct CallExprAst;
 struct BodyExprAst;
 struct FnDefAst;
+struct VarExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
-                 uptr<CallExprAst>, uptr<BodyExprAst>>;
+                 uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>>;
 
 struct FieldDefAst;
 struct FnHeaderAst;
@@ -39,6 +40,10 @@ struct FloatExprAst {
 
 struct StringExprAst {
   std::string value;
+};
+
+struct VarExprAst {
+  std::string name;
 };
 
 struct CallExprAst {

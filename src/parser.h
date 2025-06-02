@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "lexer.h"
 #include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
 #include <algorithm>
 #include <functional>
 #include <initializer_list>
@@ -13,12 +14,14 @@
 #include <string>
 #include <vector>
 
+/// Not sure if this is context for llvm ir gen or parsing...
 struct ProgramCtx {
   std::vector<FnHeaderAst *> defined_ext_fns;
   std::vector<FnDefAst *> defined_fns;
 
 private:
   std::map<std::string, llvm::Type *> types;
+  std::map<std::string, uptr<VarExprAst>> variables;
 
 public:
   void define_type(std::string name, llvm::Type *type) { types[name] = type; }
@@ -28,6 +31,17 @@ public:
     if (type == nullptr)
       return std::nullopt;
     return type;
+  }
+
+  void define_var(std::string name, uptr<VarExprAst> &value) {
+    variables[name] = std::move(value);
+  }
+
+  std::optional<VarExprAst *> get_var(std::string name) {
+    auto var = &variables[name];
+    if (var == nullptr)
+      return std::nullopt;
+    return var->get();
   }
 };
 
@@ -93,6 +107,15 @@ struct Parser {
 
   std::optional<AstStatement> parse_token(Token token) {
     tk_queue.push_back(token);
+
+    if (debug_checks) {
+      std::print("[");
+      for (auto tk : tk_queue) {
+        std::print("{},", token_kind_to_string(tk.kind));
+      }
+      std::print("]");
+    }
+
     return handle_queue();
   }
 
@@ -108,11 +131,17 @@ struct Parser {
 
   std::optional<uptr<FnDefAst>> handle_fn_def() {
     int offset = 0;
-    bool is_external = false;
-    if (check_tokens({Extern}))
-      is_external = true;
 
-    offset += 1;
+    // Skip all new lines
+    while (check_tokens({NewLine}, offset))
+      offset += 1;
+
+    bool is_external = false;
+    if (check_tokens({Extern}, offset)) {
+      is_external = true;
+      offset += 1;
+    }
+
     if (check_tokens({Id, Colon, Eq}, offset)) {
       LOG("fn decl found");
       auto fn_id = *get_tk(offset);
@@ -139,9 +168,10 @@ struct Parser {
   std::optional<AstExpression> handle_expr(int &offset) {
     LOG("scanning for expression");
     if (check_tokens({Id}, offset)) {
+      auto identifier = get_tk(offset).value().value;
 
       // Call expr
-      auto fn_found = get_function(tk_queue[offset].value);
+      auto fn_found = get_function(identifier);
       if (fn_found) {
         auto fn = &(*fn_found).get();
         offset += 1;
@@ -161,7 +191,10 @@ struct Parser {
                                              std::move(suffix_args));
       }
 
-      // TODO: Identifiers
+      // Variable
+      auto var = std::make_unique<VarExprAst>(identifier);
+      offset += 1;
+      return var;
     }
 
     // TODO: Move to "primaries"
