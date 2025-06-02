@@ -1,5 +1,6 @@
 #include "lexer.h"
 #include <iostream>
+#include <string>
 
 int Lexer::next_char() {
   src_index += 1;
@@ -73,6 +74,42 @@ std::expected<Token, std::string> Lexer::get_token() {
     }
     capturing = false;
 
+    // Format temp_id so we replace escaping characters to C equivalents
+    std::string formatted_str;
+    for (int i = 0; i < (int)temp_id.size(); i++) {
+      auto c = temp_id[i];
+      if (c == '\\' && i < (int)temp_id.size() - 1) {
+        i += 1;
+        auto nc = temp_id[i];
+
+        switch (nc) {
+        case 'n':
+          formatted_str += "\x0A";
+          break;
+
+        case 't':
+          formatted_str += "\x09";
+          break;
+
+        case '"':
+          formatted_str += '"';
+          break;
+
+        case '\\':
+          formatted_str += '\\';
+          break;
+
+        default:
+          formatted_str += c;
+          formatted_str += nc;
+          break;
+        }
+      } else {
+        formatted_str += c;
+      }
+    }
+
+    temp_id = formatted_str;
     return create_token(String, true);
   }
 
