@@ -20,6 +20,7 @@ enum TokenKind {
   String,
   Extern,
   NewLine,
+  Meta,
   Undefined,
 };
 

@@ -20,6 +20,7 @@
 #include "llvm/Support/Alignment.h"
 #include <expected>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <print>
 #include <string>
@@ -141,9 +142,11 @@ struct LlvmIrGenAstVisitor {
     return llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, node->value));
   }
 
+  // BUG: Float generation is not working properly. Additions return a 0 value.
   std::expected<llvm::Value *, std::string>
   operator()(uptr<FloatExprAst> &node) {
-    return llvm::ConstantFP::get(*llvm_ctx, llvm::APFloat(node->value));
+    auto fp = llvm::ConstantFP::get(*llvm_ctx, llvm::APFloat(node->value));
+    return fp;
   }
 
   std::expected<llvm::Value *, std::string> operator()(uptr<VarExprAst> &node) {
@@ -194,6 +197,38 @@ struct LlvmIrGenAstVisitor {
     }
 
     return builder->CreateCall(callee_fn, args, "calltmp");
+  }
+
+  std::expected<llvm::Value *, std::string> operator()(uptr<MetaDefAst> &node) {
+    auto meta_fn = ctx.get_meta(node->name);
+
+    if (!meta_fn)
+      return std::unexpected("tried to call unknown meta fn");
+
+    if (meta_fn.value()->arg_num() != (int)node->args.size())
+      return std::unexpected("incorrect number of arguments used for meta fn.");
+
+    if (meta_fn.value()->kind == MetaFunctionKind::AddInt) {
+      auto lhs = std::visit(*this, node->args[0]);
+      if (!lhs)
+        return std::unexpected("error generating lhs of int add");
+      auto rhs = std::visit(*this, node->args[1]);
+      if (!rhs)
+        return std::unexpected("error generating rhs of int add");
+      return builder->CreateAdd(*lhs, *rhs, "addi32tmp");
+    }
+
+    if (meta_fn.value()->kind == MetaFunctionKind::AddFloat) {
+      auto lhs = std::visit(*this, node->args[0]);
+      if (!lhs)
+        return std::unexpected("error generating lhs of int add");
+      auto rhs = std::visit(*this, node->args[1]);
+      if (!rhs)
+        return std::unexpected("error generating rhs of int add");
+      return builder->CreateFAdd(*lhs, *rhs, "addf32tmp");
+    }
+
+    return {};
   }
 
   std::expected<llvm::Value *, std::string>
@@ -299,5 +334,13 @@ struct PrettyPrintAstVisitor {
     }
 
     std::visit(*this, *node->body);
+  }
+
+  void operator()(uptr<MetaDefAst> &node) {
+    std::print("@{} ", node->name);
+    for (auto &expr : node->args) {
+      std::visit(*this, expr);
+      std::print(", ");
+    }
   }
 };

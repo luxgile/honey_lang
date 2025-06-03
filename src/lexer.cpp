@@ -61,6 +61,19 @@ std::expected<Token, std::string> Lexer::get_token() {
     return create_token(Id);
   }
 
+  // Meta fn
+  if (last_char == '@') {
+    capturing = true;
+    last_char = next_char();
+    while (last_char != ' ' && last_char != '\n') {
+      temp_id += last_char;
+      last_char = next_char();
+    }
+    capturing = false;
+
+    return create_token(Meta);
+  }
+
   // String
   if (last_char == '"') {
     last_char = next_char();
@@ -133,7 +146,7 @@ std::expected<Token, std::string> Lexer::get_token() {
     }
     capturing = false;
 
-    return create_token(is_float ? Int : Float);
+    return create_token(is_float ? Float : Int);
   }
 
   switch (last_char) {
@@ -186,6 +199,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Extern";
   case NewLine:
     return "NewLine";
+  case Meta:
+    return "Meta";
   case Undefined:
   default:
     return "Undefined";

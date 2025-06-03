@@ -54,6 +54,9 @@ int main() {
   parser.ctx.define_type(
       "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
 
+  parser.ctx.define_meta("i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
+  parser.ctx.define_meta("f+", std::make_unique<MetaFunction>(MetaFunctionKind::AddFloat, 2));
+
   auto ext_fn_res = llvm_gen.build_external_fns();
   if (!ext_fn_res) {
     std::println("error on ext fn gen: ", ext_fn_res.error());

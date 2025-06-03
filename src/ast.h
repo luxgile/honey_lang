@@ -14,15 +14,43 @@ struct CallExprAst;
 struct BodyExprAst;
 struct FnDefAst;
 struct VarExprAst;
+struct MetaDefAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
-                 uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>>;
+                 uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>,
+                 uptr<MetaDefAst>>;
 
 struct FieldDefAst;
 struct FnHeaderAst;
+struct StatementExprAst;
 
-using AstStatement = std::variant<uptr<FieldDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>>;
+using AstStatement =
+    std::variant<uptr<FieldDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>>;
+
+enum struct MetaFunctionKind {
+  AddInt,
+  AddFloat,
+};
+
+/// Cannot be defined on Honey code, only internal implementation.
+struct MetaFunction {
+  MetaFunctionKind kind;
+  int num_args;
+
+  int arg_num() { return num_args; }
+};
+
+struct MetaDefAst {
+  std::string name;
+  std::vector<AstExpression> args;
+};
+
+/// Used for body statements that can be used as well as expressions.
+/// This ignores the value of the expression.
+struct StatementExprAst {
+  AstExpression expr;
+};
 
 struct FieldDefAst {
   std::string name;
@@ -60,7 +88,10 @@ struct FnHeaderAst {
   std::vector<uptr<FieldDefAst>> prefix_args;
   std::vector<uptr<FieldDefAst>> suffix_args;
 
-  bool is_vararic() { return suffix_args.size() > 0 && suffix_args[suffix_args.size() - 1]->is_varadic; }
+  bool is_vararic() {
+    return suffix_args.size() > 0 &&
+           suffix_args[suffix_args.size() - 1]->is_varadic;
+  }
 };
 
 struct BodyExprAst {

@@ -2,10 +2,12 @@
 extern printf := | | format: RawString, args: ...
 
 related_to := lhs: RawString | | rhs: RawString {
-  printf "%s is related to %s" lhs rhs
+  printf "%s is related to %s \n" lhs rhs
 }
 
 main := | | {
   "Mario" related_to "Jessie"
+  printf "5 + 3 = %d \n" @i+ 5 3
+  printf "2.5 + 5.1 = %f \n" 6.5
 }
 

@@ -5,6 +5,7 @@
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <initializer_list>
 #include <map>
@@ -23,6 +24,7 @@ struct ProgramCtx {
 private:
   std::map<std::string, llvm::Type *> types;
   std::map<std::string, uptr<VarExprAst>> variables;
+  std::map<std::string, uptr<MetaFunction>> defined_meta;
 
 public:
   void define_type(std::string name, llvm::Type *type) { types[name] = type; }
@@ -44,6 +46,17 @@ public:
       return std::nullopt;
     return var->get();
   }
+
+  void define_meta(std::string name, uptr<MetaFunction> meta) {
+    defined_meta[name] = std::move(meta);
+  }
+
+  std::optional<MetaFunction *> get_meta(std::string name) {
+    auto meta = &defined_meta[name];
+    if (meta->get() == nullptr)
+      return std::nullopt;
+    return meta->get();
+  }
 };
 
 struct Parser {
@@ -55,6 +68,9 @@ struct Parser {
 
   /// Holds all expressions not used in a line. Used for prefix arguments.
   std::vector<AstExpression> line_expressions;
+
+  /// Meta tags fn defined and not used
+  std::vector<uptr<MetaDefAst>> line_meta_def;
 
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
@@ -114,20 +130,61 @@ struct Parser {
 
     if (debug_checks) {
       std::print("[");
+      int i = 0;
       for (auto tk : tk_queue) {
-        std::print("{},", token_kind_to_string(tk.kind));
+        std::print("{} {},", i++, token_kind_to_string(tk.kind));
       }
-      std::print("]");
+      std::print("]\n");
     }
 
     return handle_queue();
   }
 
   std::optional<AstStatement> handle_queue() {
-    LOG("\nstarting parsing...");
+    LOG("starting parsing...");
 
     if (auto fn = handle_fn_def()) {
       return fn;
+    }
+
+    int offset = 0;
+    if (auto meta = handle_meta_def(offset)) {
+      // Meta functions at file level are meant to be used for the following
+      // statement.
+      // TODO: This is NOT the case for @IF or similar for conditional
+      // compilation.
+      line_meta_def.push_back(std::move(*meta));
+      LOG("meta body function found.");
+
+      tk_queue.clear();
+      return {};
+    }
+
+    return {};
+  }
+
+  std::optional<uptr<MetaDefAst>> handle_meta_def(int& offset) {
+    // Skip all new lines
+    while (check_tokens({NewLine}, offset))
+      offset += 1;
+
+    if (check_tokens({Meta}, offset)) {
+      auto meta_tk = get_tk(offset).value();
+      offset += 1;
+
+      auto meta_fn = ctx.get_meta(meta_tk.value);
+      if (!meta_fn)
+        return {};
+
+      std::vector<AstExpression> args;
+      for (int i = 0; i < meta_fn.value()->arg_num(); i++) {
+        auto expr = handle_expr(offset);
+        if (!expr)
+          return {};
+        args.push_back(std::move(*expr));
+      }
+
+      return std::make_unique<MetaDefAst>(meta_tk.value, std::move(args));
     }
 
     return {};
@@ -223,12 +280,31 @@ struct Parser {
       return var;
     }
 
-    // TODO: Move to "primaries"
+    if (check_tokens({Meta}, offset)) {
+      LOG("meta found");
+      auto meta = handle_meta_def(offset);
+      return meta;
+    }
+
     if (check_tokens({String}, offset)) {
       LOG("string found");
       std::string str = tk_queue[offset].value;
       offset += 1;
       return std::make_unique<StringExprAst>(str);
+    }
+
+    if (check_tokens({Int}, offset)) {
+      LOG("int found");
+      std::string i = tk_queue[offset].value;
+      offset += 1;
+      return std::make_unique<IntExprAst>(std::stoi(i));
+    }
+
+    if (check_tokens({Float}, offset)) {
+      LOG("int found");
+      std::string f = tk_queue[offset].value;
+      offset += 1;
+      return std::make_unique<FloatExprAst>(std::stof(f));
     }
 
     return {};
