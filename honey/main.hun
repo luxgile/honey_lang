@@ -6,8 +6,8 @@ related_to := lhs: RawString | | rhs: RawString {
 }
 
 main := | | {
-  "Mario" related_to "Jessie"
+  "Guille" related_to "Ichi"
   printf "5 + 3 = %d \n" @i+ 5 3
-  printf "2.5 + 5.1 = %f \n" 6.5
+  printf "3.2 + 6.5 = %.1f\n" @f+ 3.2 6.5
 }
 

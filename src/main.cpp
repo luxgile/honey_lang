@@ -137,5 +137,11 @@ int main() {
   pass.run(*llvm_gen.module);
   output_file.flush();
 
+  system("clang honey.o -o main");
+  std::println("\ncompiled object file to executable");
+
+  std::println("\nhoney program output:");
+  system("./main");
+
   return 0;
 }

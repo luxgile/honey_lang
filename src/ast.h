@@ -63,7 +63,7 @@ struct IntExprAst {
 };
 
 struct FloatExprAst {
-  float value;
+  double value;
 };
 
 struct StringExprAst {
