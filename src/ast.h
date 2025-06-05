@@ -2,6 +2,7 @@
 
 #include "helpers.h"
 #include <memory>
+#include <optional>
 #include <print>
 #include <string>
 #include <variant>
@@ -15,18 +16,21 @@ struct BodyExprAst;
 struct FnDefAst;
 struct VarExprAst;
 struct MetaDefAst;
+struct StatementExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>,
-                 uptr<MetaDefAst>>;
+                 uptr<MetaDefAst>, uptr<StatementExprAst>>;
 
-struct FieldDefAst;
+struct ArgDefAst;
 struct FnHeaderAst;
-struct StatementExprAst;
+struct VarDefStmtAst;
+struct ReturnStmtAst;
 
-using AstStatement =
-    std::variant<uptr<FieldDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>>;
+using AstStatement = std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>,
+                                  uptr<FnDefAst>, uptr<StatementExprAst>,
+                                  uptr<VarDefStmtAst>, uptr<ReturnStmtAst>>;
 
 enum struct MetaFunctionKind {
   AddInt,
@@ -52,7 +56,20 @@ struct StatementExprAst {
   AstExpression expr;
 };
 
-struct FieldDefAst {
+struct VarDefStmtAst {
+  std::string name;
+
+  /// It can be implicit based on the expression.
+  std::optional<std::string> type;
+
+  std::optional<AstExpression> assignment;
+};
+
+struct ReturnStmtAst {
+  std::optional<AstExpression> expr;
+};
+
+struct ArgDefAst {
   std::string name;
   std::string type;
   bool is_varadic;
@@ -85,8 +102,8 @@ struct FnHeaderAst {
   std::string name;
   std::string type;
   bool is_external;
-  std::vector<uptr<FieldDefAst>> prefix_args;
-  std::vector<uptr<FieldDefAst>> suffix_args;
+  std::vector<uptr<ArgDefAst>> prefix_args;
+  std::vector<uptr<ArgDefAst>> suffix_args;
 
   bool is_vararic() {
     return suffix_args.size() > 0 &&
@@ -95,7 +112,7 @@ struct FnHeaderAst {
 };
 
 struct BodyExprAst {
-  std::vector<AstExpression> exprs;
+  std::vector<AstStatement> statements;
 };
 
 /// Function declaration 'main := | | {}'

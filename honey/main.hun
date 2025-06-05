@@ -7,7 +7,10 @@ related_to := lhs: RawString | | rhs: RawString {
 
 main := | | {
   "Guille" related_to "Ichi"
-  printf "5 + 3 = %d \n" @i+ 5 3
-  printf "3.2 + 6.5 = %.1f\n" @f+ 3.2 6.5
+  my_int := @i+ 5 3
+  printf "5 + 3 = %d \n" my_int
+  
+  add := @f+ 3.2 6.5
+  printf "3.2 + 6.5 = %.1f\n" add
 }
 

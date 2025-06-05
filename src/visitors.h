@@ -12,16 +12,19 @@
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Alignment.h"
+#include <ctime>
 #include <expected>
 #include <functional>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <print>
 #include <string>
 #include <variant>
@@ -33,7 +36,14 @@ struct LlvmIrGenAstVisitor {
   uptr<llvm::IRBuilder<>> builder;
   uptr<llvm::Module> module;
 
-  std::map<std::string, llvm::Value *> defined_variables;
+  struct DefinedVariable {
+    llvm::Type *type;
+    llvm::AllocaInst *alloca;
+  };
+
+  // State
+  std::map<std::string, DefinedVariable> defined_variables;
+  llvm::Function *current_fn;
 
   LlvmIrGenAstVisitor(ProgramCtx &ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
@@ -41,8 +51,18 @@ struct LlvmIrGenAstVisitor {
     builder = std::make_unique<llvm::IRBuilder<>>(*llvm_ctx);
   }
 
-  // State
-  llvm::Function *current_fn;
+  std::optional<DefinedVariable *> get_defined_var(std::string name) {
+    if (defined_variables.find(name) == defined_variables.end())
+      return std::nullopt;
+    return &defined_variables[name];
+  }
+
+  llvm::AllocaInst *build_alloca_at_start(llvm::Function *fn, llvm::Type *type,
+                                          std::string name) {
+    auto tmp_builder =
+        llvm::IRBuilder<>(&fn->getEntryBlock(), fn->getEntryBlock().begin());
+    return tmp_builder.CreateAlloca(type, nullptr, name);
+  }
 
   std::expected<llvm::Function *, std::string>
   build_prototype(FnHeaderAst &header) {
@@ -124,6 +144,39 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
+  std::expected<void, std::string> build_var(VarDefStmtAst &node) {
+    if (!node.assignment && !node.type)
+      return std::unexpected("could not deduce type for var definition");
+
+    llvm::Type *var_type;
+
+    if (node.assignment) {
+      auto expr = std::visit(*this, *node.assignment);
+      var_type = expr.value()->getType();
+
+      if (node.type) {
+        auto _ty = ctx.get_type(*node.type);
+        if (_ty && var_type != _ty.value())
+          return std::unexpected(
+              "explicit type and assigment expression type mismatch");
+      }
+
+      auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
+      defined_variables[node.name] = DefinedVariable{var_type, alloca};
+      builder->CreateStore(*expr, alloca);
+    } else {
+      auto _ty = ctx.get_type(*node.type);
+      if (!_ty)
+        return std::unexpected("type undefined found for var definition");
+
+      var_type = _ty.value();
+      auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
+      defined_variables[node.name] = DefinedVariable{var_type, alloca};
+    }
+
+    return {};
+  }
+
   std::expected<void, std::string> build_external_fns() {
     for (auto ext_fn : ctx.defined_ext_fns) {
       auto r = build_prototype(*ext_fn);
@@ -134,7 +187,22 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<void, std::string> build_statement(AstStatement &statement) {
-    return build_fn(*std::get<uptr<FnDefAst>>(statement));
+    if (std::holds_alternative<uptr<FnDefAst>>(statement)) {
+      return build_fn(*std::get<uptr<FnDefAst>>(statement));
+    }
+
+    if (std::holds_alternative<uptr<VarDefStmtAst>>(statement)) {
+      return build_var(*std::get<uptr<VarDefStmtAst>>(statement));
+    }
+
+    if (std::holds_alternative<uptr<StatementExprAst>>(statement)) {
+      auto res = (*this)(std::get<uptr<StatementExprAst>>(statement));
+      if (!res)
+        return std::unexpected(res.error());
+      return {};
+    }
+
+    return std::unexpected("no statement found");
   }
 
   // Literals
@@ -142,7 +210,6 @@ struct LlvmIrGenAstVisitor {
     return llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, node->value));
   }
 
-  // BUG: Float generation is not working properly. Additions return a 0 value.
   std::expected<llvm::Value *, std::string>
   operator()(uptr<FloatExprAst> &node) {
     auto fp = llvm::ConstantFP::get(*llvm_ctx, llvm::APFloat(node->value));
@@ -150,10 +217,16 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string> operator()(uptr<VarExprAst> &node) {
-    auto var = defined_variables[node->name];
+    auto var = get_defined_var(node->name);
     if (!var)
       return std::unexpected("trying to reference an undefined variable");
-    return var;
+    return builder->CreateLoad(var.value()->type, var.value()->alloca,
+                               node->name);
+  }
+
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<StatementExprAst> &node) {
+    return std::visit(*this, node->expr);
   }
 
   std::expected<llvm::Value *, std::string>
@@ -238,23 +311,27 @@ struct LlvmIrGenAstVisitor {
 
     if (current_fn != nullptr) {
       for (auto &arg : current_fn->args()) {
-        defined_variables[std::string(arg.getName())] = &arg;
+        auto arg_alloca = build_alloca_at_start(current_fn, arg.getType(),
+                                                arg.getName().str());
+        builder->CreateStore(&arg, arg_alloca);
+        defined_variables[std::string(arg.getName())] =
+            DefinedVariable{arg.getType(), arg_alloca};
       }
     }
 
-    llvm::Value *last_val = nullptr;
-    for (auto &expr : node->exprs) {
-      auto expr_res = std::visit(*this, expr);
-      if (!expr_res)
-        return expr_res;
-      last_val = *expr_res;
+    /* llvm::Value *last_val = nullptr; */
+    for (auto &stmt : node->statements) {
+      auto stmt_expr = build_statement(stmt);
+      if (!stmt_expr)
+        return std::unexpected(stmt_expr.error());
+      /* last_val = *stmt_expr; */
     }
 
-    if (last_val == nullptr) {
-      return std::unexpected("body has no returning value");
-    }
+    /* if (last_val == nullptr) { */
+    /*   return std::unexpected("body has no returning value"); */
+    /* } */
 
-    return last_val;
+    return nullptr;
   }
 };
 
@@ -276,7 +353,7 @@ struct PrettyPrintAstVisitor {
 
   void operator()(uptr<VarExprAst> &node) { std::print("{}", node->name); }
 
-  void operator()(uptr<FieldDefAst> &node) {
+  void operator()(uptr<ArgDefAst> &node) {
     std::println("{}: {}", node->name, node->type);
   }
 
@@ -318,12 +395,17 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<BodyExprAst> &node) {
     std::println("{{");
     indent += 1;
-    for (auto &expr : node->exprs) {
+    for (auto &expr : node->statements) {
       print_indent();
       std::visit(*this, expr);
+      std::print("\n");
     }
     indent -= 1;
     std::println("\n}}");
+  }
+
+  void operator()(uptr<StatementExprAst> &node) {
+    std::visit(*this, node->expr);
   }
 
   void operator()(uptr<FnDefAst> &node) {
@@ -342,5 +424,17 @@ struct PrettyPrintAstVisitor {
       std::visit(*this, expr);
       std::print(", ");
     }
+  }
+
+  void operator()(uptr<VarDefStmtAst> &node) {
+    std::print("{} := ", node->name);
+    if (node->assignment)
+      std::visit(*this, *node->assignment);
+  }
+
+  void operator()(uptr<ReturnStmtAst> &node) {
+    std::print("return ");
+    if (node->expr.has_value())
+      std::visit(*this, *node->expr);
   }
 };

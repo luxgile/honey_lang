@@ -163,7 +163,7 @@ struct Parser {
     return {};
   }
 
-  std::optional<uptr<MetaDefAst>> handle_meta_def(int& offset) {
+  std::optional<uptr<MetaDefAst>> handle_meta_def(int &offset) {
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
       offset += 1;
@@ -227,6 +227,43 @@ struct Parser {
     }
 
     return {};
+  }
+
+  std::optional<AstStatement> handle_statement(int &offset) {
+    LOG("starting statement parsing");
+
+    // Var declaration
+    if (check_tokens({Id, Colon, Eq}, offset)) {
+      auto id = get_tk(offset)->value;
+      offset += 3;
+      auto expr = handle_expr(offset);
+      LOG("var definition expr found");
+      return std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
+    }
+
+    // If nothing else found, try to find a expression like a call function.
+    // This handles the line expressions in case prefixed arguments are found.
+    while (!check_tokens({NewLine}, offset)) {
+      auto expr = handle_expr(offset);
+      if (!expr)
+        return {};
+      line_expressions.push_back(std::move(*expr));
+    }
+    offset += 1; // To account for the new line.
+
+    if (line_expressions.size() == 0)
+      return {};
+
+    auto last_expr = std::move(line_expressions.back());
+    line_expressions.pop_back();
+
+    if (line_expressions.size() > 0)
+      std::println("!! line expressions unnused: {}", line_expressions.size());
+    line_expressions.clear();
+
+    LOG("statement expr found");
+    auto stmt_expr = std::make_unique<StatementExprAst>(std::move(last_expr));
+    return stmt_expr;
   }
 
   std::optional<AstExpression> handle_expr(int &offset) {
@@ -301,7 +338,7 @@ struct Parser {
     }
 
     if (check_tokens({Float}, offset)) {
-      LOG("int found");
+      LOG("float found");
       std::string f = tk_queue[offset].value;
       offset += 1;
       return std::make_unique<FloatExprAst>(std::stof(f));
@@ -320,33 +357,25 @@ struct Parser {
     }
 
     LOG("starting fn body");
-    std::vector<AstExpression> exprs{};
+    std::vector<AstStatement> stmts{};
+    // TODO: Move statement creation and line expressions to a different place.
+    // So lines and whole body parsing is separated and less of a mess.
     while (!check_tokens({RBrace}, offset)) {
-      auto expr = handle_expr(offset);
-      if (!expr) {
-        line_expressions.clear();
+      auto stmt = handle_statement(offset);
+      if (!stmt)
         return {};
-      }
+      stmts.push_back(std::move(*stmt));
 
-      std::println(" >>> adding expr to line expression");
-      line_expressions.push_back(std::move(*expr));
-
-      if (check_tokens({NewLine}, offset)) { // Ignore new line
-
-        std::println(" >>> clearing new line from body");
-        // Unused expressions are treated as normal expressions.
-        for (auto &expr : line_expressions) {
-          std::println(" >>> adding line expression to body");
-          exprs.push_back(std::move(expr));
-        }
-        line_expressions.clear();
-
+      // Skip all new lines
+      while (check_tokens({NewLine}, offset))
         offset += 1;
-      }
     }
+    std::println("Clearing line expressions with a size of {}",
+                 line_expressions.size());
+    line_expressions.clear();
 
     LOG("got fn body");
-    return std::make_unique<BodyExprAst>(std::move(exprs));
+    return std::make_unique<BodyExprAst>(std::move(stmts));
   }
 
   std::optional<std::unique_ptr<FnHeaderAst>>
@@ -384,9 +413,9 @@ struct Parser {
         header_id, ret_type, false, std::move(*prefix), std::move(*suffix));
   }
 
-  std::optional<std::vector<uptr<FieldDefAst>>> handle_fn_args(int &offset) {
+  std::optional<std::vector<uptr<ArgDefAst>>> handle_fn_args(int &offset) {
     LOG("getting fn arguments");
-    auto args = std::vector<uptr<FieldDefAst>>();
+    auto args = std::vector<uptr<ArgDefAst>>();
 
     if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
         check_tokens({NewLine}, offset)) {
@@ -424,9 +453,9 @@ struct Parser {
     return args;
   }
 
-  std::optional<uptr<FieldDefAst>> handle_field_def(int &offset) {
+  std::optional<uptr<ArgDefAst>> handle_field_def(int &offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
-      auto field = std::make_unique<FieldDefAst>(
+      auto field = std::make_unique<ArgDefAst>(
           tk_queue[offset].value, tk_queue[offset + 2].value, false);
       offset += 3;
       return field;
@@ -435,7 +464,7 @@ struct Parser {
     // Varadic argument
     if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
       auto field =
-          std::make_unique<FieldDefAst>(tk_queue[offset].value, "Void", true);
+          std::make_unique<ArgDefAst>(tk_queue[offset].value, "Void", true);
       offset += 5;
       return field;
     }
