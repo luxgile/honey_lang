@@ -1,12 +1,18 @@
 #pragma once
 
 #include "helpers.h"
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <print>
 #include <string>
 #include <variant>
 #include <vector>
+
+/* struct AstType { */
+/*   int id; */
+/*   std::string name; */
+/* }; */
 
 struct IntExprAst;
 struct FloatExprAst;
@@ -15,13 +21,13 @@ struct CallExprAst;
 struct BodyExprAst;
 struct FnDefAst;
 struct VarExprAst;
-struct MetaDefAst;
+struct MetaDefExprAst;
 struct StatementExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>,
-                 uptr<MetaDefAst>, uptr<StatementExprAst>>;
+                 uptr<MetaDefExprAst>, uptr<StatementExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -45,7 +51,7 @@ struct MetaFunction {
   int arg_num() { return num_args; }
 };
 
-struct MetaDefAst {
+struct MetaDefExprAst {
   std::string name;
   std::vector<AstExpression> args;
 };

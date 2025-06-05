@@ -206,7 +206,7 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<void, std::string> build_external_fns() {
-    for (auto ext_fn : ctx.defined_ext_fns) {
+    for (auto ext_fn : ctx.get_all_ext_fn()) {
       auto r = build_prototype(*ext_fn);
       if (!r)
         return std::unexpected(r.error());
@@ -307,7 +307,8 @@ struct LlvmIrGenAstVisitor {
     return builder->CreateCall(callee_fn, args, "calltmp");
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<MetaDefAst> &node) {
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<MetaDefExprAst> &node) {
     auto meta_fn = ctx.get_meta(node->name);
 
     if (!meta_fn)
@@ -451,7 +452,7 @@ struct PrettyPrintAstVisitor {
     std::visit(*this, *node->body);
   }
 
-  void operator()(uptr<MetaDefAst> &node) {
+  void operator()(uptr<MetaDefExprAst> &node) {
     std::print("@{} ", node->name);
     for (auto &expr : node->args) {
       std::visit(*this, expr);
