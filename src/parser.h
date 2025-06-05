@@ -229,20 +229,9 @@ struct Parser {
     return {};
   }
 
-  std::optional<AstStatement> handle_statement(int &offset) {
-    LOG("starting statement parsing");
-
-    // Var declaration
-    if (check_tokens({Id, Colon, Eq}, offset)) {
-      auto id = get_tk(offset)->value;
-      offset += 3;
-      auto expr = handle_expr(offset);
-      LOG("var definition expr found");
-      return std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
-    }
-
-    // If nothing else found, try to find a expression like a call function.
-    // This handles the line expressions in case prefixed arguments are found.
+  /// Will read all expressions in a line and merge unused ones into prefix
+  /// arguments.
+  std::optional<AstExpression> consume_expressions(int &offset) {
     while (!check_tokens({NewLine}, offset)) {
       auto expr = handle_expr(offset);
       if (!expr)
@@ -253,16 +242,34 @@ struct Parser {
 
     if (line_expressions.size() == 0)
       return {};
-
     auto last_expr = std::move(line_expressions.back());
     line_expressions.pop_back();
-
     if (line_expressions.size() > 0)
       std::println("!! line expressions unnused: {}", line_expressions.size());
     line_expressions.clear();
+    return std::move(last_expr);
+  }
+
+  std::optional<AstStatement> handle_statement(int &offset) {
+    LOG("starting statement parsing");
+
+    // Var declaration
+    if (check_tokens({Id, Colon, Eq}, offset)) {
+      auto id = get_tk(offset)->value;
+      offset += 3;
+      auto expr = consume_expressions(offset);
+      LOG("var definition expr found");
+      return std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
+    }
+
+    // If nothing else found, try to find a expression like a call function.
+    // This handles the line expressions in case prefixed arguments are found.
+    auto last_expr = consume_expressions(offset);
+    if (!last_expr)
+      return {};
 
     LOG("statement expr found");
-    auto stmt_expr = std::make_unique<StatementExprAst>(std::move(last_expr));
+    auto stmt_expr = std::make_unique<StatementExprAst>(std::move(*last_expr));
     return stmt_expr;
   }
 
@@ -380,7 +387,7 @@ struct Parser {
 
   std::optional<std::unique_ptr<FnHeaderAst>>
   handle_fn_header(std::string header_id, int &offset) {
-    std::string ret_type = "void";
+    std::optional<std::string> ret_type = std::nullopt;
 
     // Prev arguments
     auto prefix = handle_fn_args(offset);

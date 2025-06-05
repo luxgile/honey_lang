@@ -19,6 +19,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Alignment.h"
+#include <cassert>
 #include <ctime>
 #include <expected>
 #include <functional>
@@ -93,8 +94,15 @@ struct LlvmIrGenAstVisitor {
       args_types.pop_back();
     }
 
-    auto fn_type = llvm::FunctionType::get(llvm::Type::getVoidTy(*llvm_ctx),
-                                           args_types, header.is_vararic());
+    llvm::Type *ret_type = llvm::Type::getVoidTy(*llvm_ctx);
+    if (header.ret_type) {
+      auto explicit_ret_type = ctx.get_type(*header.ret_type);
+      if (explicit_ret_type)
+        ret_type = *explicit_ret_type;
+    }
+
+    auto fn_type =
+        llvm::FunctionType::get(ret_type, args_types, header.is_vararic());
 
     auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
                                      header.name, module.get());
@@ -135,7 +143,20 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected(body_ret.error());
       }
 
-      builder->CreateRet(*body_ret);
+      if (node.fn_header->ret_type) {
+        auto expected_ret_type = ctx.get_type(*node.fn_header->ret_type);
+        if (!expected_ret_type)
+          return std::unexpected("undefined return type");
+
+        if (*expected_ret_type != body_ret.value()->getType())
+          return std::unexpected(
+              "trying to return a value different than specified");
+
+        builder->CreateRet(*body_ret);
+      } else {
+        builder->CreateRetVoid();
+      }
+
     } else {
       fn_header.value()->setCallingConv(llvm::CallingConv::C);
     }
@@ -161,6 +182,9 @@ struct LlvmIrGenAstVisitor {
               "explicit type and assigment expression type mismatch");
       }
 
+      if (var_type->isVoidTy())
+        return std::unexpected("trying to allocate a void type");
+
       auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
       defined_variables[node.name] = DefinedVariable{var_type, alloca};
       builder->CreateStore(*expr, alloca);
@@ -170,6 +194,10 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected("type undefined found for var definition");
 
       var_type = _ty.value();
+
+      if (var_type->isVoidTy())
+        return std::unexpected("trying to allocate a void type");
+
       auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
       defined_variables[node.name] = DefinedVariable{var_type, alloca};
     }
@@ -186,20 +214,27 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
-  std::expected<void, std::string> build_statement(AstStatement &statement) {
+  std::expected<llvm::Value *, std::string>
+  build_statement(AstStatement &statement) {
     if (std::holds_alternative<uptr<FnDefAst>>(statement)) {
-      return build_fn(*std::get<uptr<FnDefAst>>(statement));
+      auto fn = build_fn(*std::get<uptr<FnDefAst>>(statement));
+      if (!fn)
+        return std::unexpected(fn.error());
+      return nullptr;
     }
 
     if (std::holds_alternative<uptr<VarDefStmtAst>>(statement)) {
-      return build_var(*std::get<uptr<VarDefStmtAst>>(statement));
+      auto var = build_var(*std::get<uptr<VarDefStmtAst>>(statement));
+      if (!var)
+        return std::unexpected(var.error());
+      return nullptr;
     }
 
     if (std::holds_alternative<uptr<StatementExprAst>>(statement)) {
       auto res = (*this)(std::get<uptr<StatementExprAst>>(statement));
       if (!res)
         return std::unexpected(res.error());
-      return {};
+      return *res;
     }
 
     return std::unexpected("no statement found");
@@ -294,10 +329,10 @@ struct LlvmIrGenAstVisitor {
     if (meta_fn.value()->kind == MetaFunctionKind::AddFloat) {
       auto lhs = std::visit(*this, node->args[0]);
       if (!lhs)
-        return std::unexpected("error generating lhs of int add");
+        return std::unexpected("error generating lhs of float add");
       auto rhs = std::visit(*this, node->args[1]);
       if (!rhs)
-        return std::unexpected("error generating rhs of int add");
+        return std::unexpected("error generating rhs of float add");
       return builder->CreateFAdd(*lhs, *rhs, "addf32tmp");
     }
 
@@ -319,19 +354,17 @@ struct LlvmIrGenAstVisitor {
       }
     }
 
-    /* llvm::Value *last_val = nullptr; */
+    llvm::Value *last_val = nullptr;
     for (auto &stmt : node->statements) {
       auto stmt_expr = build_statement(stmt);
       if (!stmt_expr)
         return std::unexpected(stmt_expr.error());
-      /* last_val = *stmt_expr; */
+
+      if (*stmt_expr != nullptr)
+        last_val = *stmt_expr;
     }
 
-    /* if (last_val == nullptr) { */
-    /*   return std::unexpected("body has no returning value"); */
-    /* } */
-
-    return nullptr;
+    return last_val;
   }
 };
 
@@ -385,7 +418,7 @@ struct PrettyPrintAstVisitor {
       (*this)(arg);
     }
 
-    std::print("|{}|", node->type);
+    std::print("|{}|", node->ret_type ? *node->ret_type : " Void ");
 
     for (auto &arg : node->suffix_args) {
       (*this)(arg);

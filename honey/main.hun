@@ -5,9 +5,13 @@ related_to := lhs: RawString | | rhs: RawString {
   printf "%s is related to %s \n" lhs rhs
 }
 
++ := lhs: Int | Int | rhs: Int {
+  @i+ lhs rhs
+} 
+
 main := | | {
   "Guille" related_to "Ichi"
-  my_int := @i+ 5 3
+  my_int := 5 + 3
   printf "5 + 3 = %d \n" my_int
   
   add := @f+ 3.2 6.5

@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include <cctype>
 #include <iostream>
 #include <string>
 
@@ -31,6 +32,11 @@ Token Lexer::create_token(TokenKind kind, bool consume) {
   return token;
 }
 
+auto ALLOWED_ID_CHARS = std::string("+-<>\\/~!$%^;?");
+bool is_allowed_id_char(char c) {
+  return std::isalpha(c) || ALLOWED_ID_CHARS.contains(c);
+}
+
 std::expected<Token, std::string> Lexer::get_token() {
   if (src_index >= (int)source.size() - 1)
     return create_token(EoF);
@@ -44,7 +50,7 @@ std::expected<Token, std::string> Lexer::get_token() {
     last_char = next_char();
 
   // Identifier
-  if (std::isalpha(last_char)) {
+  if (is_allowed_id_char(last_char)) {
     temp_id = last_char;
 
     capturing = true;

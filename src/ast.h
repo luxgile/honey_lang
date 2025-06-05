@@ -100,7 +100,7 @@ struct CallExprAst {
 /// 'main := prev | ret | next '
 struct FnHeaderAst {
   std::string name;
-  std::string type;
+  std::optional<std::string> ret_type;
   bool is_external;
   std::vector<uptr<ArgDefAst>> prefix_args;
   std::vector<uptr<ArgDefAst>> suffix_args;

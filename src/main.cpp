@@ -53,9 +53,15 @@ int main() {
   parser.ctx.define_type("Void", llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_type(
       "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
+  parser.ctx.define_type(
+      "Float", llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type(
+      "Int", llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
 
-  parser.ctx.define_meta("i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
-  parser.ctx.define_meta("f+", std::make_unique<MetaFunction>(MetaFunctionKind::AddFloat, 2));
+  parser.ctx.define_meta(
+      "i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
+  parser.ctx.define_meta(
+      "f+", std::make_unique<MetaFunction>(MetaFunctionKind::AddFloat, 2));
 
   auto ext_fn_res = llvm_gen.build_external_fns();
   if (!ext_fn_res) {
@@ -84,6 +90,8 @@ int main() {
     statements.push_back(std::move(*statement));
 
   } while (token.kind != TokenKind::EoF && token.kind != TokenKind::Undefined);
+
+  std::println("\nparsing completed");
 
   // Code gen
   for (auto &stmt : statements) {
