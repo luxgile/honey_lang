@@ -2,6 +2,10 @@
 
 #include "ast.h"
 #include "lexer.h"
+#include "parser.h"
+#include "program_ctx.h"
+#include "v_expr_type.h"
+#include "v_pretty_print.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/Value.h"
 #include <algorithm>
@@ -17,216 +21,7 @@
 #include <variant>
 #include <vector>
 
-/// Holds a group of functions with the same name but different definitions
-struct OverloadFnGroup {
-  std::vector<FnHeaderAst *> fns;
-
-  // TODO: Terribly inneficient. Start using types as ids instead of strings to
-  // improve checks.
-
-  bool eq_arg_types(std::vector<uptr<ArgDefAst>> &lhs,
-                    std::vector<std::string> &rhs) {
-    if (lhs.size() != rhs.size())
-      return false;
-
-    if (lhs.size() != rhs.size())
-      return false;
-
-    for (int i = 0; i < (int)lhs.size(); i++) {
-      if (lhs[i]->type != rhs[i])
-        return false;
-    }
-
-    return true;
-  }
-
-  /// Returns the fn and the index it was found.
-  std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn(std::vector<std::string> pre, std::vector<std::string> suf) {
-    for (int i = 0; i < (int)fns.size(); i++) {
-      auto fn = fns[i];
-
-      if (!eq_arg_types(fn->prefix_args, pre))
-        continue;
-
-      if (!eq_arg_types(fn->suffix_args, suf))
-        continue;
-
-      return std::tuple(i, fn);
-    }
-    return {};
-  }
-};
-
 /// Not sure if this is context for llvm ir gen or parsing...
-struct ProgramCtx {
-  /* std::vector<FnHeaderAst *> defined_ext_fns; */
-  /* std::vector<FnDefAst *> defined_fns; */
-
-private:
-  std::map<std::string, uptr<OverloadFnGroup>> fns;
-  std::map<std::string, uptr<OverloadFnGroup>> ext_fns;
-  std::map<std::string, llvm::Type *> types;
-  std::map<std::string, uptr<VarExprAst>> variables;
-  std::map<std::string, uptr<MetaFunction>> defined_meta;
-
-public:
-  std::map<std::string, VarDefStmtAst *> defined_vars;
-
-  void define_fn(std::string name, FnHeaderAst *fn) {
-    auto overloads = fns[name].get();
-    if (overloads == nullptr) {
-      fns[name] = std::make_unique<OverloadFnGroup>();
-      overloads = fns[name].get();
-    }
-    overloads->fns.push_back(fn);
-  }
-
-  std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn(std::string name, std::vector<std::string> pre,
-         std::vector<std::string> suf) {
-    auto overloads = fns[name].get();
-    if (overloads == nullptr)
-      return std::nullopt;
-    return overloads->get_fn(pre, suf);
-  }
-
-  void define_fn_ext(std::string name, FnHeaderAst *fn) {
-    auto overloads = ext_fns[name].get();
-    if (overloads == nullptr) {
-      fns[name] = std::make_unique<OverloadFnGroup>();
-      overloads = ext_fns[name].get();
-    }
-    overloads->fns.push_back(fn);
-  }
-
-  std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn_ext(std::string name, std::vector<std::string> pre,
-             std::vector<std::string> suf) {
-    auto overloads = ext_fns[name].get();
-    if (overloads == nullptr)
-      return std::nullopt;
-    return overloads->get_fn(pre, suf);
-  }
-
-  std::optional<OverloadFnGroup *> get_overloads(std::string name) {
-    auto fn = fns[name].get();
-    if (fn != nullptr)
-      return fn;
-
-    auto fn_ext = ext_fns[name].get();
-    if (fn_ext != nullptr)
-      return fn_ext;
-
-    return std::nullopt;
-  }
-
-  std::vector<FnHeaderAst *> get_all_ext_fn() {
-    std::vector<FnHeaderAst *> fns;
-    for (auto it = ext_fns.begin(); it != ext_fns.end(); it++) {
-      for (auto fn : it->second.get()->fns) {
-        fns.push_back(fn);
-      }
-    }
-    return fns;
-  }
-
-  void define_type(std::string name, llvm::Type *type) { types[name] = type; }
-
-  std::optional<llvm::Type *> get_type(std::string name) {
-    auto type = types[name];
-    if (type == nullptr)
-      return std::nullopt;
-    return type;
-  }
-
-  void define_var(std::string name, uptr<VarExprAst> &value) {
-    variables[name] = std::move(value);
-  }
-
-  std::optional<VarExprAst *> get_var(std::string name) {
-    auto var = &variables[name];
-    if (var == nullptr)
-      return std::nullopt;
-    return var->get();
-  }
-
-  void define_meta(std::string name, uptr<MetaFunction> meta) {
-    defined_meta[name] = std::move(meta);
-  }
-
-  std::optional<MetaFunction *> get_meta(std::string name) {
-    auto meta = &defined_meta[name];
-    if (meta->get() == nullptr)
-      return std::nullopt;
-    return meta->get();
-  }
-};
-
-struct AstExprTypeVisitor {
-  ProgramCtx *ctx;
-
-  const std::string UNDEFINED = "Undefined";
-
-  std::string operator()(uptr<IntExprAst> &node) { return "Int"; }
-
-  std::string operator()(uptr<FloatExprAst> &node) { return "Float"; }
-
-  std::string operator()(uptr<StringExprAst> &node) { return "RawString"; }
-
-  std::string operator()(uptr<VarExprAst> &node) {
-    auto def_var = ctx->defined_vars[node->name];
-    if (!def_var)
-      return UNDEFINED;
-
-    if (def_var->type)
-      return *def_var->type;
-
-    if (def_var->assignment)
-      return std::visit(*this, *def_var->assignment);
-
-    return UNDEFINED;
-  }
-
-  std::string operator()(uptr<ArgDefAst> &node) { return node->type; }
-
-  // Expressions
-  std::string operator()(uptr<CallExprAst> &node) {
-    auto overloads = ctx->get_overloads(node->fn_name);
-    if (!overloads)
-      return UNDEFINED;
-    std::vector<std::string> prefix_types;
-    for (auto &pre : node->prefix_args) {
-      prefix_types.push_back(std::visit(*this, pre));
-    }
-    std::vector<std::string> suffix_types;
-    for (auto &suf : node->suffix_args) {
-      suffix_types.push_back(std::visit(*this, suf));
-    }
-
-    auto fn = overloads.value()->get_fn(prefix_types, suffix_types);
-    auto ret_type = std::get<1>(*fn)->ret_type;
-    return ret_type ? *ret_type : "Void";
-  }
-
-  std::string operator()(uptr<BodyExprAst> &node) { return "Void"; }
-
-  std::string operator()(uptr<StatementExprAst> &node) {
-    return std::visit(*this, node->expr);
-  }
-
-  std::string operator()(uptr<MetaDefExprAst> &node) {
-    auto meta = ctx->get_meta(node->name);
-    switch (meta.value()->kind) {
-    case MetaFunctionKind::AddInt:
-      return "Int";
-    case MetaFunctionKind::AddFloat:
-      return "Float";
-    default:
-      return UNDEFINED;
-    }
-  }
-};
 
 struct Parser {
   bool debug_scan = false;
@@ -383,15 +178,26 @@ struct Parser {
       auto fn_id = *get_tk(offset);
       offset += 3;
       auto header = handle_fn_header(fn_id.value, offset);
-      if (header)
-        header->get()->is_external = is_external;
+      if (!header)
+        return {};
+
+      header->get()->is_external = is_external;
 
       std::optional<uptr<BodyExprAst>> body = {};
+
+      for (auto &prefix : header.value()->prefix_args) {
+        ctx.defined_vars[prefix->name] =
+            new VarDefStmtAst{prefix->name, prefix->type, std::nullopt};
+      }
+      for (auto &suffix : header.value()->suffix_args) {
+        ctx.defined_vars[suffix->name] =
+            new VarDefStmtAst{suffix->name, suffix->type, std::nullopt};
+      }
 
       if (!is_external)
         body = handle_fn_body(offset);
 
-      if (header && (body || is_external)) {
+      if (body || is_external) {
         tk_queue.clear();
         LOG("got fn expression");
         auto fn =

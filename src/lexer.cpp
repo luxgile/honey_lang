@@ -48,6 +48,15 @@ std::expected<Token, std::string> Lexer::get_token() {
   // Skip whitespace
   while (std::isspace(last_char))
     last_char = next_char();
+  
+  // Ignore comments
+  // TODO: Worth to return comments as tokens for documentation
+  if (last_char == '#') {
+    last_char = next_char();
+    while (last_char != '\n')
+      last_char = next_char();
+    return create_token(NewLine, true);
+  }
 
   // Identifier
   if (is_allowed_id_char(last_char)) {

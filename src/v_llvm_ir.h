@@ -2,7 +2,8 @@
 
 #include "ast.h"
 #include "helpers.h"
-#include "parser.h"
+#include "program_ctx.h"
+#include "v_expr_type.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/STLExtras.h"
@@ -104,8 +105,16 @@ struct LlvmIrGenAstVisitor {
     auto fn_type =
         llvm::FunctionType::get(ret_type, args_types, header.is_vararic());
 
+    auto fn_overloads = ctx.get_overloads(header.name);
+    if (!fn_overloads)
+      return std::unexpected("no overloads found for fn header");
+
+    auto mangled_name = fn_overloads.value()->get_mangled_name(&header);
+    if (!mangled_name)
+      return std::unexpected("unexpected issue generating mangled name");
+
     auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-                                     header.name, module.get());
+                                     *mangled_name, module.get());
 
     int i = 0;
     for (auto &arg : header.prefix_args) {
@@ -278,7 +287,22 @@ struct LlvmIrGenAstVisitor {
   // Expressions
   std::expected<llvm::Value *, std::string>
   operator()(uptr<CallExprAst> &node) {
-    auto callee_fn = module->getFunction(node->fn_name);
+    // TODO: LLVM IR is getting the function from the generated module rather
+    // than the context. Get it from the context and, if it has overloads, just
+    // add a index to it.
+
+    auto overloads = ctx.get_overloads(node->fn_name);
+    if (!overloads)
+      return std::unexpected("no overloads found for call");
+
+    AstExprTypeVisitor visitor = {&ctx};
+    auto mangled_name =
+        overloads.value()->get_mangled_name(node.get(), &visitor);
+
+    if (!mangled_name)
+      return std::unexpected("issue getting mangled name for call");
+
+    auto callee_fn = module->getFunction(*mangled_name);
 
     if (!callee_fn)
       return std::unexpected("tried to call unknown fn");
@@ -366,109 +390,5 @@ struct LlvmIrGenAstVisitor {
     }
 
     return last_val;
-  }
-};
-
-struct PrettyPrintAstVisitor {
-  int indent = 0;
-
-  void print_indent() {
-    for (int i = 0; i < indent; i++) {
-      std::print("  ");
-    }
-  }
-
-  // Literals
-  void operator()(uptr<IntExprAst> &node) { std::print("{}", node->value); }
-
-  void operator()(uptr<FloatExprAst> &node) { std::print("{}", node->value); }
-
-  void operator()(uptr<StringExprAst> &node) { std::print("{}", node->value); }
-
-  void operator()(uptr<VarExprAst> &node) { std::print("{}", node->name); }
-
-  void operator()(uptr<ArgDefAst> &node) {
-    std::println("{}: {}", node->name, node->type);
-  }
-
-  // Expressions
-  void operator()(uptr<CallExprAst> &node) {
-
-    std::print("( ");
-    for (auto &arg : node->prefix_args) {
-      std::visit(*this, arg);
-      std::print(", ");
-    }
-    std::print(" )");
-
-    std::print(" |{}| ", node->fn_name);
-
-    std::print("( ");
-    for (auto &arg : node->suffix_args) {
-      std::visit(*this, arg);
-      std::print(", ");
-    }
-    std::print(" )");
-  }
-
-  // Function
-  void operator()(uptr<FnHeaderAst> &node) {
-    std::print("{} := ", node->name);
-
-    for (auto &arg : node->prefix_args) {
-      (*this)(arg);
-    }
-
-    std::print("|{}|", node->ret_type ? *node->ret_type : " Void ");
-
-    for (auto &arg : node->suffix_args) {
-      (*this)(arg);
-    }
-  }
-
-  void operator()(uptr<BodyExprAst> &node) {
-    std::println("{{");
-    indent += 1;
-    for (auto &expr : node->statements) {
-      print_indent();
-      std::visit(*this, expr);
-      std::print("\n");
-    }
-    indent -= 1;
-    std::println("\n}}");
-  }
-
-  void operator()(uptr<StatementExprAst> &node) {
-    std::visit(*this, node->expr);
-  }
-
-  void operator()(uptr<FnDefAst> &node) {
-    (*this)(node->fn_header);
-    if (node->fn_header->is_external) {
-      std::print("\n");
-      return;
-    }
-
-    std::visit(*this, *node->body);
-  }
-
-  void operator()(uptr<MetaDefExprAst> &node) {
-    std::print("@{} ", node->name);
-    for (auto &expr : node->args) {
-      std::visit(*this, expr);
-      std::print(", ");
-    }
-  }
-
-  void operator()(uptr<VarDefStmtAst> &node) {
-    std::print("{} := ", node->name);
-    if (node->assignment)
-      std::visit(*this, *node->assignment);
-  }
-
-  void operator()(uptr<ReturnStmtAst> &node) {
-    std::print("return ");
-    if (node->expr.has_value())
-      std::visit(*this, *node->expr);
   }
 };
