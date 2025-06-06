@@ -179,6 +179,10 @@ std::expected<Token, std::string> Lexer::get_token() {
     return create_token(LBrace, true);
   case '}':
     return create_token(RBrace, true);
+  case '(':
+    return create_token(LPar, true);
+  case ')':
+    return create_token(RPar, true);
   }
 
   return create_token(Undefined);
@@ -200,6 +204,10 @@ std::string token_kind_to_string(TokenKind kind) {
     return "LBrace";
   case RBrace:
     return "RBrace";
+  case LPar:
+    return "LPar";
+  case RPar:
+    return "RBar";
   case Bar:
     return "Bar";
   case Id:

@@ -212,8 +212,9 @@ struct Parser {
 
   /// Will read all expressions in a line and merge unused ones into prefix
   /// arguments.
-  std::optional<AstExpression> consume_expressions(int &offset) {
-    while (!check_tokens({NewLine}, offset)) {
+  std::optional<AstExpression> consume_expressions(int &offset,
+                                                   TokenKind halt_token) {
+    while (!check_tokens({halt_token}, offset)) {
       auto expr = handle_expr(offset);
       if (!expr)
         return {};
@@ -238,7 +239,7 @@ struct Parser {
     if (check_tokens({Id, Colon, Eq}, offset)) {
       auto id = get_tk(offset)->value;
       offset += 3;
-      auto expr = consume_expressions(offset);
+      auto expr = consume_expressions(offset, NewLine);
       LOG("var definition expr found");
       auto def_var =
           std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
@@ -248,7 +249,7 @@ struct Parser {
 
     // If nothing else found, try to find a expression like a call function.
     // This handles the line expressions in case prefixed arguments are found.
-    auto last_expr = consume_expressions(offset);
+    auto last_expr = consume_expressions(offset, NewLine);
     if (!last_expr)
       return {};
 
@@ -271,6 +272,14 @@ struct Parser {
       LOG("var expression found");
       offset += 1;
       return var;
+    }
+
+    if (check_tokens({LPar}, offset)) {
+      offset += 1;
+      auto expr = consume_expressions(offset, TokenKind::RPar);
+      if (!expr)
+        return {};
+      return std::make_unique<GroupExprAst>(std::move(*expr));
     }
 
     if (check_tokens({Meta}, offset)) {

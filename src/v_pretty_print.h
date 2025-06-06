@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include <print>
 
 struct PrettyPrintAstVisitor {
   int indent = 0;
@@ -11,7 +12,6 @@ struct PrettyPrintAstVisitor {
     }
   }
 
-  // Literals
   void operator()(uptr<IntExprAst> &node);
 
   void operator()(uptr<FloatExprAst> &node);
@@ -22,10 +22,8 @@ struct PrettyPrintAstVisitor {
 
   void operator()(uptr<ArgDefAst> &node);
 
-  // Expressions
   void operator()(uptr<CallExprAst> &node);
 
-  // Function
   void operator()(uptr<FnHeaderAst> &node);
 
   void operator()(uptr<BodyExprAst> &node);
@@ -39,4 +37,6 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<VarDefStmtAst> &node);
 
   void operator()(uptr<ReturnStmtAst> &node);
+
+  void operator()(uptr<GroupExprAst> &node);
 };

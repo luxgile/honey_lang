@@ -23,11 +23,13 @@ struct FnDefAst;
 struct VarExprAst;
 struct MetaDefExprAst;
 struct StatementExprAst;
+struct GroupExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>,
-                 uptr<MetaDefExprAst>, uptr<StatementExprAst>>;
+                 uptr<MetaDefExprAst>, uptr<StatementExprAst>,
+                 uptr<GroupExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -103,6 +105,10 @@ struct StringExprAst {
 
 struct VarExprAst {
   std::string name;
+};
+
+struct GroupExprAst {
+  AstExpression expr;
 };
 
 struct CallExprAst {

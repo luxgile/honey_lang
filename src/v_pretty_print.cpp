@@ -99,3 +99,9 @@ void PrettyPrintAstVisitor::operator()(uptr<ReturnStmtAst> &node) {
     std::visit(*this, *node->expr);
 }
 
+void PrettyPrintAstVisitor::operator()(uptr<GroupExprAst> &node) {
+  std::print("(");
+  std::visit(*this, node->expr);
+  std::print(")");
+}
+

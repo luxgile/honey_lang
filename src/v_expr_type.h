@@ -55,6 +55,10 @@ struct AstExprTypeVisitor {
     return std::visit(*this, node->expr);
   }
 
+  std::string operator()(uptr<GroupExprAst> &node) {
+    return std::visit(*this, node->expr);
+  }
+
   std::string operator()(uptr<MetaDefExprAst> &node) {
     auto meta = ctx->get_meta(node->name);
     switch (meta.value()->kind) {

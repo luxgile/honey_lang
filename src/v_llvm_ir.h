@@ -274,6 +274,11 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
+  operator()(uptr<GroupExprAst> &node) {
+    return std::visit(*this, node->expr);
+  }
+
+  std::expected<llvm::Value *, std::string>
   operator()(uptr<StringExprAst> &node) {
     auto str_const =
         llvm::ConstantDataArray::getString(*llvm_ctx, node->value, true);

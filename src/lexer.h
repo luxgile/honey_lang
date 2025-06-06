@@ -13,6 +13,8 @@ enum TokenKind {
   Eq,
   LBrace,
   RBrace,
+  LPar,
+  RPar,
   Bar,
   Id,
   Int,
