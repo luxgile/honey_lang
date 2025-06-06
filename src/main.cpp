@@ -54,15 +54,29 @@ int main() {
   parser.ctx.define_type("Void", llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_type(
       "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
-  parser.ctx.define_type(
-      "Float", llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
-  parser.ctx.define_type(
-      "Int", llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type("Float", llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type("Int", llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
 
   parser.ctx.define_meta(
       "i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
   parser.ctx.define_meta(
+      "i-", std::make_unique<MetaFunction>(MetaFunctionKind::SubInt, 2));
+  parser.ctx.define_meta(
+      "i*", std::make_unique<MetaFunction>(MetaFunctionKind::MulInt, 2));
+  parser.ctx.define_meta(
+      "i/", std::make_unique<MetaFunction>(MetaFunctionKind::DivInt, 2));
+  parser.ctx.define_meta(
+      "i%", std::make_unique<MetaFunction>(MetaFunctionKind::ModInt, 2));
+  parser.ctx.define_meta(
       "f+", std::make_unique<MetaFunction>(MetaFunctionKind::AddFloat, 2));
+  parser.ctx.define_meta(
+      "f-", std::make_unique<MetaFunction>(MetaFunctionKind::SubFloat, 2));
+  parser.ctx.define_meta(
+      "f*", std::make_unique<MetaFunction>(MetaFunctionKind::MulFloat, 2));
+  parser.ctx.define_meta(
+      "f/", std::make_unique<MetaFunction>(MetaFunctionKind::DivFloat, 2));
+  parser.ctx.define_meta(
+      "f%", std::make_unique<MetaFunction>(MetaFunctionKind::ModFloat, 2));
 
   auto ext_fn_res = llvm_gen.build_external_fns();
   if (!ext_fn_res) {

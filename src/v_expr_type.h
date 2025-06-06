@@ -59,9 +59,19 @@ struct AstExprTypeVisitor {
     auto meta = ctx->get_meta(node->name);
     switch (meta.value()->kind) {
     case MetaFunctionKind::AddInt:
+    case MetaFunctionKind::SubInt:
+    case MetaFunctionKind::MulInt:
+    case MetaFunctionKind::DivInt:
+    case MetaFunctionKind::ModInt:
       return "Int";
+
     case MetaFunctionKind::AddFloat:
+    case MetaFunctionKind::SubFloat:
+    case MetaFunctionKind::MulFloat:
+    case MetaFunctionKind::DivFloat:
+    case MetaFunctionKind::ModFloat:
       return "Float";
+
     default:
       return UNDEFINED;
     }

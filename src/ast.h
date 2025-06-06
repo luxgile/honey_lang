@@ -40,7 +40,15 @@ using AstStatement = std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>,
 
 enum struct MetaFunctionKind {
   AddInt,
+  SubInt,
+  MulInt,
+  DivInt,
+  ModInt,
   AddFloat,
+  SubFloat,
+  MulFloat,
+  DivFloat,
+  ModFloat,
 };
 
 /// Cannot be defined on Honey code, only internal implementation.

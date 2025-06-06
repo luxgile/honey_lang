@@ -341,25 +341,36 @@ struct LlvmIrGenAstVisitor {
     if (meta_fn.value()->arg_num() != (int)node->args.size())
       return std::unexpected("incorrect number of arguments used for meta fn.");
 
-    if (meta_fn.value()->kind == MetaFunctionKind::AddInt) {
-      auto lhs = std::visit(*this, node->args[0]);
-      if (!lhs)
-        return std::unexpected("error generating lhs of int add");
-      auto rhs = std::visit(*this, node->args[1]);
-      if (!rhs)
-        return std::unexpected("error generating rhs of int add");
-      return builder->CreateAdd(*lhs, *rhs, "addi32tmp");
-    }
+    // TODO: As soon as additional meta fn are defined, they might have
+    // different number of arguments
+    auto lhs = std::visit(*this, node->args[0]);
+    if (!lhs)
+      return std::unexpected("error generating lhs of int add");
+    auto rhs = std::visit(*this, node->args[1]);
+    if (!rhs)
+      return std::unexpected("error generating rhs of int add");
 
-    if (meta_fn.value()->kind == MetaFunctionKind::AddFloat) {
-      auto lhs = std::visit(*this, node->args[0]);
-      if (!lhs)
-        return std::unexpected("error generating lhs of float add");
-      auto rhs = std::visit(*this, node->args[1]);
-      if (!rhs)
-        return std::unexpected("error generating rhs of float add");
+    if (meta_fn.value()->kind == MetaFunctionKind::AddInt)
+      return builder->CreateAdd(*lhs, *rhs, "addi32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::SubInt)
+      return builder->CreateSub(*lhs, *rhs, "subi32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::MulInt)
+      return builder->CreateMul(*lhs, *rhs, "muli32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::DivInt)
+      return builder->CreateSDiv(*lhs, *rhs, "divi32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::ModInt)
+      return builder->CreateSRem(*lhs, *rhs, "modi32tmp");
+
+    if (meta_fn.value()->kind == MetaFunctionKind::AddFloat)
       return builder->CreateFAdd(*lhs, *rhs, "addf32tmp");
-    }
+    if (meta_fn.value()->kind == MetaFunctionKind::SubFloat)
+      return builder->CreateFSub(*lhs, *rhs, "subf32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::MulFloat)
+      return builder->CreateFMul(*lhs, *rhs, "mulf32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::DivFloat)
+      return builder->CreateFDiv(*lhs, *rhs, "divf32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::ModFloat)
+      return builder->CreateFRem(*lhs, *rhs, "modf32tmp");
 
     return {};
   }
