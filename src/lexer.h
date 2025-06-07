@@ -24,7 +24,7 @@ enum TokenKind {
   Extern,
   If,
   Else,
-  For,
+  Loop,
   NewLine,
   Meta,
   Undefined,

@@ -381,7 +381,7 @@ struct Parser {
   }
 
   std::optional<uptr<ForExprAst>> handle_for_expr(int &offset) {
-    if (check_tokens({For}, offset)) {
+    if (check_tokens({Loop}, offset)) {
       LOG("parsing for expression");
       offset += 1;
 

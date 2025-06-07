@@ -87,6 +87,10 @@ int main() {
   parser.ctx.define_meta(
       "b>", std::make_unique<MetaFunction>(MetaFunctionKind::GtBool, 2));
   parser.ctx.define_meta(
+      "b<=", std::make_unique<MetaFunction>(MetaFunctionKind::LtEqBool, 2));
+  parser.ctx.define_meta(
+      "b>=", std::make_unique<MetaFunction>(MetaFunctionKind::GtEqBool, 2));
+  parser.ctx.define_meta(
       "b&&", std::make_unique<MetaFunction>(MetaFunctionKind::AndBool, 2));
   parser.ctx.define_meta(
       "b||", std::make_unique<MetaFunction>(MetaFunctionKind::OrBool, 2));

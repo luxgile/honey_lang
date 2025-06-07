@@ -79,8 +79,8 @@ std::expected<Token, std::string> Lexer::get_token() {
     if (temp_id == "else")
       return create_token(Else);
 
-    if (temp_id == "for")
-      return create_token(For);
+    if (temp_id == "loop")
+      return create_token(Loop);
 
     if (temp_id == "extern")
       return create_token(Extern);
@@ -238,8 +238,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "If";
   case Else:
     return "Else";
-  case For:
-    return "For";
+  case Loop:
+    return "Loop";
   case NewLine:
     return "NewLine";
   case Meta:

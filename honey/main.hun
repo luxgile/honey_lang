@@ -24,6 +24,14 @@ related_to := lhs: RawString | | rhs: RawString {
   @b!= lhs rhs
 }
 
+< := lhs: Int | Bool | rhs: Int {
+  @b< lhs rhs
+}
+
+<= := lhs: Int | Bool | rhs: Int {
+  @b<= lhs rhs
+}
+
 ! := | Bool | rhs: Bool {
   @b== rhs false
 }
@@ -38,7 +46,7 @@ main := | | {
   }
 
   i := 0
-  for @b< i 10 {
+  loop i <= 10 {
     printf "loop %d\n" i
     i = i + 1
   }
