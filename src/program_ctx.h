@@ -15,7 +15,7 @@ struct OverloadFnGroup {
   // improve checks.
 
   bool eq_arg_types(std::vector<uptr<ArgDefAst>> &lhs,
-                    std::vector<std::string> &rhs, bool is_varadic = false) {
+                    std::vector<AstType> &rhs, bool is_varadic = false) {
     if (lhs.size() != rhs.size() && !is_varadic)
       return false;
 
@@ -29,7 +29,7 @@ struct OverloadFnGroup {
 
   /// Returns the fn and the index it was found.
   std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn(std::vector<std::string> pre, std::vector<std::string> suf) {
+  get_fn(std::vector<AstType> pre, std::vector<AstType> suf) {
     for (int i = 0; i < (int)fns.size(); i++) {
       auto fn = fns[i];
 
@@ -49,12 +49,12 @@ struct OverloadFnGroup {
     if (fns.size() == 0 || fns[0]->name != eq_fn->name)
       return std::nullopt;
 
-    std::vector<std::string> prefix_args;
+    std::vector<AstType> prefix_args;
     for (auto &prefix : eq_fn->prefix_args) {
       prefix_args.push_back(prefix->type);
     }
 
-    std::vector<std::string> suffix_args;
+    std::vector<AstType> suffix_args;
     for (auto &suffix : eq_fn->suffix_args) {
       suffix_args.push_back(suffix->type);
     }
@@ -72,7 +72,7 @@ struct ProgramCtx {
 private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
   std::map<std::string, uptr<OverloadFnGroup>> ext_fns;
-  std::map<std::string, llvm::Type *> types;
+  std::map<AstTypeId, llvm::Type *> types;
   std::map<std::string, uptr<VarExprAst>> variables;
   std::map<std::string, uptr<MetaFunction>> defined_meta;
 
@@ -119,10 +119,12 @@ public:
     return fns;
   }
 
-  void define_type(std::string name, llvm::Type *type) { types[name] = type; }
+  void define_type(AstType ast_type, llvm::Type *type) {
+    types[ast_type.id] = type;
+  }
 
-  std::optional<llvm::Type *> get_type(std::string name) {
-    auto type = types[name];
+  std::optional<llvm::Type *> get_type(AstType &name) {
+    auto type = types[name.id];
     if (type == nullptr)
       return std::nullopt;
     return type;

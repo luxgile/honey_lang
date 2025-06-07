@@ -97,11 +97,9 @@ struct LlvmIrGenAstVisitor {
     }
 
     llvm::Type *ret_type = llvm::Type::getVoidTy(*llvm_ctx);
-    if (header.ret_type) {
-      auto explicit_ret_type = ctx.get_type(*header.ret_type);
-      if (explicit_ret_type)
-        ret_type = *explicit_ret_type;
-    }
+    auto explicit_ret_type = ctx.get_type(header.ret_type);
+    if (explicit_ret_type)
+      ret_type = *explicit_ret_type;
 
     auto fn_type =
         llvm::FunctionType::get(ret_type, args_types, header.is_vararic());
@@ -156,8 +154,8 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected(body_ret.error());
       }
 
-      if (node.fn_header->ret_type) {
-        auto expected_ret_type = ctx.get_type(*node.fn_header->ret_type);
+      if (node.fn_header->ret_type.is_void()) {
+        auto expected_ret_type = ctx.get_type(node.fn_header->ret_type);
         if (!expected_ret_type)
           return std::unexpected("undefined return type");
 

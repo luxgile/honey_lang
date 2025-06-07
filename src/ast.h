@@ -1,6 +1,9 @@
 #pragma once
 
 #include "helpers.h"
+#include "llvm/IR/Type.h"
+#include <cstddef>
+#include <functional>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -9,10 +12,26 @@
 #include <variant>
 #include <vector>
 
-/* struct AstType { */
-/*   int id; */
-/*   std::string name; */
-/* }; */
+using AstTypeId = std::size_t;
+
+struct AstType {
+  AstTypeId id;
+  std::string name;
+
+  AstType(std::string name) : name(name) {
+    id = std::hash<std::string>{}(name);
+  }
+
+  bool operator==(const AstType &rhs) const { return id == rhs.id; }
+
+  bool is_void();
+};
+
+const AstType VOID_TYPE = AstType{"Void"};
+const AstType BOOL_TYPE = AstType{"Bool"};
+const AstType INT_TYPE = AstType{"Int"};
+const AstType FLOAT_TYPE = AstType{"Float"};
+const AstType RAW_STRING_TYPE = AstType{"RawString"};
 
 struct IntExprAst;
 struct FloatExprAst;
@@ -91,7 +110,7 @@ struct VarDefStmtAst {
   std::string name;
 
   /// It can be implicit based on the expression.
-  std::optional<std::string> type;
+  std::optional<AstType> type;
 
   std::optional<AstExpression> assignment;
 };
@@ -107,7 +126,7 @@ struct ReturnStmtAst {
 
 struct ArgDefAst {
   std::string name;
-  std::string type;
+  AstType type;
   bool is_varadic;
 };
 
@@ -155,7 +174,7 @@ struct CallExprAst {
 /// 'main := prev | ret | next '
 struct FnHeaderAst {
   std::string name;
-  std::optional<std::string> ret_type;
+  AstType ret_type;
   bool is_external;
   std::vector<uptr<ArgDefAst>> prefix_args;
   std::vector<uptr<ArgDefAst>> suffix_args;

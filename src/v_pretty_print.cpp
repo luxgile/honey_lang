@@ -19,7 +19,7 @@ void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<ArgDefAst> &node) {
-  std::print("{}: {}", node->name, node->type);
+  std::print("{}: {}", node->name, node->type.name);
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<CallExprAst> &node) {
@@ -47,7 +47,7 @@ void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
     (*this)(arg);
   }
 
-  std::print("|{}|", node->ret_type ? *node->ret_type : " Void ");
+  std::print("|{}|", node->ret_type.name);
 
   for (auto &arg : node->suffix_args) {
     (*this)(arg);
@@ -132,4 +132,3 @@ void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
   std::print("{} = ", node->id);
   std::visit(*this, node->rvalue);
 }
-

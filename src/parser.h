@@ -2,23 +2,15 @@
 
 #include "ast.h"
 #include "lexer.h"
-#include "parser.h"
 #include "program_ctx.h"
 #include "v_expr_type.h"
-#include "v_pretty_print.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Value.h"
-#include <algorithm>
-#include <cstddef>
 #include <expected>
-#include <functional>
 #include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
 #include <print>
 #include <string>
-#include <tuple>
 #include <variant>
 #include <vector>
 
@@ -225,8 +217,10 @@ struct Parser {
                                                    TokenKind halt_token) {
     while (!check_tokens({halt_token}, offset)) {
       auto expr = handle_expr(offset);
-      if (!expr)
+      if (!expr) {
+        line_expressions.clear();
         return {};
+      }
       line_expressions.push_back(std::move(*expr));
     }
     offset += 1; // To account for the halt token.
@@ -290,6 +284,11 @@ struct Parser {
       // Call expr
       if (auto call = handle_call_expr(offset))
         return call;
+
+      // If the identifier is a fn but the previous call failed because not all
+      // args are parsed yet, avoid creating a variable below
+      if (auto overloads = ctx.get_overloads(identifier))
+        return {};
 
       // Variable
       auto var = std::make_unique<VarExprAst>(identifier);
@@ -531,7 +530,7 @@ struct Parser {
   std::optional<std::unique_ptr<FnHeaderAst>>
   handle_fn_header(std::string header_id, int &offset) {
     LOG("parsing fn header");
-    std::optional<std::string> ret_type = std::nullopt;
+    auto ret_type = VOID_TYPE;
 
     // Prev arguments
     LOG("prefix args:");
@@ -620,7 +619,7 @@ struct Parser {
     // Varadic argument
     if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
       auto field =
-          std::make_unique<ArgDefAst>(tk_queue[offset].value, "Void", true);
+          std::make_unique<ArgDefAst>(tk_queue[offset].value, VOID_TYPE, true);
       offset += 5;
       return field;
     }

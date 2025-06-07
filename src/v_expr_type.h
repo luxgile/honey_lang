@@ -2,24 +2,23 @@
 
 #include "ast.h"
 #include "program_ctx.h"
+#include <exception>
 
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
 
-  const std::string UNDEFINED = "Undefined";
+  AstType operator()(uptr<IntExprAst> &_) { return INT_TYPE; }
 
-  std::string operator()(uptr<IntExprAst> &_) { return "Int"; }
+  AstType operator()(uptr<FloatExprAst> &_) { return FLOAT_TYPE; }
 
-  std::string operator()(uptr<FloatExprAst> &_) { return "Float"; }
+  AstType operator()(uptr<BoolExprAst> &_) { return BOOL_TYPE; }
 
-  std::string operator()(uptr<BoolExprAst> &_) { return "Bool"; }
+  AstType operator()(uptr<StringExprAst> &_) { return RAW_STRING_TYPE; }
 
-  std::string operator()(uptr<StringExprAst> &_) { return "RawString"; }
-
-  std::string operator()(uptr<VarExprAst> &node) {
+  AstType operator()(uptr<VarExprAst> &node) {
     auto def_var = ctx->defined_vars[node->name];
     if (!def_var)
-      return UNDEFINED;
+      throw "defined var not found";
 
     if (def_var->type)
       return *def_var->type;
@@ -27,53 +26,52 @@ struct AstExprTypeVisitor {
     if (def_var->assignment)
       return std::visit(*this, *def_var->assignment);
 
-    return UNDEFINED;
+    throw "unreacheable code";
   }
 
-  std::string operator()(uptr<ArgDefAst> &node) { return node->type; }
+  AstType operator()(uptr<ArgDefAst> &node) { return node->type; }
 
   // Expressions
-  std::string operator()(uptr<CallExprAst> &node) {
+  AstType operator()(uptr<CallExprAst> &node) {
     auto overloads = ctx->get_overloads(node->fn_name);
     if (!overloads)
-      return UNDEFINED;
+      throw "no overloads found";
 
-    std::vector<std::string> prefix_types;
+    std::vector<AstType> prefix_types;
     for (auto &pre : node->prefix_args) {
       prefix_types.push_back(std::visit(*this, pre));
     }
-    std::vector<std::string> suffix_types;
+    std::vector<AstType> suffix_types;
     for (auto &suf : node->suffix_args) {
       suffix_types.push_back(std::visit(*this, suf));
     }
 
     auto fn = overloads.value()->get_fn(prefix_types, suffix_types);
     if (!fn)
-      return UNDEFINED;
+      throw "no fn found in overloads";
 
-    auto ret_type = std::get<1>(*fn)->ret_type;
-    return ret_type ? *ret_type : "Void";
+    return std::get<1>(*fn)->ret_type;
   }
 
-  std::string operator()(uptr<BodyExprAst> &_) { return "Void"; }
+  AstType operator()(uptr<BodyExprAst> &_) { return VOID_TYPE; }
 
-  std::string operator()(uptr<StatementExprAst> &node) {
+  AstType operator()(uptr<StatementExprAst> &node) {
     return std::visit(*this, node->expr);
   }
 
-  std::string operator()(uptr<GroupExprAst> &node) {
+  AstType operator()(uptr<GroupExprAst> &node) {
     return std::visit(*this, node->expr);
   }
 
-  std::string operator()(uptr<IfExprAst> &node) {
+  AstType operator()(uptr<IfExprAst> &node) {
     return std::visit(*this, node->then_expr);
   }
 
-  std::string operator()(uptr<ForExprAst> &node) {
+  AstType operator()(uptr<ForExprAst> &node) {
     return std::visit(*this, node->for_body);
   }
 
-  std::string operator()(uptr<MetaDefExprAst> &node) {
+  AstType operator()(uptr<MetaDefExprAst> &node) {
     auto meta = ctx->get_meta(node->name);
     switch (meta.value()->kind) {
     case MetaFunctionKind::AddInt:
@@ -81,14 +79,14 @@ struct AstExprTypeVisitor {
     case MetaFunctionKind::MulInt:
     case MetaFunctionKind::DivInt:
     case MetaFunctionKind::ModInt:
-      return "Int";
+      return INT_TYPE;
 
     case MetaFunctionKind::AddFloat:
     case MetaFunctionKind::SubFloat:
     case MetaFunctionKind::MulFloat:
     case MetaFunctionKind::DivFloat:
     case MetaFunctionKind::ModFloat:
-      return "Float";
+      return FLOAT_TYPE;
 
     case MetaFunctionKind::EqBool:
     case MetaFunctionKind::NotEqBool:
@@ -98,10 +96,10 @@ struct AstExprTypeVisitor {
     case MetaFunctionKind::GtEqBool:
     case MetaFunctionKind::AndBool:
     case MetaFunctionKind::OrBool:
-      return "Bool";
+      return BOOL_TYPE;
 
     default:
-      return UNDEFINED;
+      throw "no type found for meta fn";
     }
   }
 };

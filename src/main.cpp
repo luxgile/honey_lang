@@ -51,12 +51,14 @@ int main() {
   /* parser.ctx.defined_ext_fns.push_back(print_fn.get()); */
 
   // Register basic types
-  parser.ctx.define_type("Void", llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type(VOID_TYPE, llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_type(
-      "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
-  parser.ctx.define_type("Float", llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
-  parser.ctx.define_type("Int", llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
-  parser.ctx.define_type("Bool", llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
+      RAW_STRING_TYPE,
+      llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
+  parser.ctx.define_type(FLOAT_TYPE,
+                         llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type(INT_TYPE, llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type(BOOL_TYPE, llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
 
   parser.ctx.define_meta(
       "i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
