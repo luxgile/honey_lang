@@ -32,7 +32,7 @@ Token Lexer::create_token(TokenKind kind, bool consume) {
   return token;
 }
 
-auto ALLOWED_ID_CHARS = std::string("+-<>\\/~!$%^;?");
+auto ALLOWED_ID_CHARS = std::string("+-<>=_\\/*~!$%^;?");
 bool is_allowed_id_char(char c) {
   return std::isalpha(c) || ALLOWED_ID_CHARS.contains(c);
 }
@@ -48,7 +48,7 @@ std::expected<Token, std::string> Lexer::get_token() {
   // Skip whitespace
   while (std::isspace(last_char))
     last_char = next_char();
-  
+
   // Ignore comments
   // TODO: Worth to return comments as tokens for documentation
   if (last_char == '#') {
@@ -64,11 +64,23 @@ std::expected<Token, std::string> Lexer::get_token() {
 
     capturing = true;
     last_char = next_char();
-    while (std::isalpha(last_char) || last_char == '_') {
+    while (is_allowed_id_char(last_char)) {
       temp_id += last_char;
       last_char = next_char();
     }
     capturing = false;
+
+    if (temp_id == "true" || temp_id == "false")
+      return create_token(Bool);
+
+    if (temp_id == "if")
+      return create_token(If);
+
+    if (temp_id == "else")
+      return create_token(Else);
+
+    if (temp_id == "for")
+      return create_token(For);
 
     if (temp_id == "extern")
       return create_token(Extern);
@@ -171,8 +183,8 @@ std::expected<Token, std::string> Lexer::get_token() {
     return create_token(Dot, true);
   case ',':
     return create_token(Comma, true);
-  case '=':
-    return create_token(Eq, true);
+  /* case '=': */
+  /*   return create_token(Eq, true); */
   case '|':
     return create_token(Bar, true);
   case '{':
@@ -198,8 +210,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Dot";
   case Comma:
     return "Comma";
-  case Eq:
-    return "Eq";
+  /* case Eq: */
+  /*   return "Eq"; */
   case LBrace:
     return "LBrace";
   case RBrace:
@@ -216,10 +228,18 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Int";
   case Float:
     return "Float";
+  case Bool:
+    return "Bool";
   case String:
     return "String";
   case Extern:
     return "Extern";
+  case If:
+    return "If";
+  case Else:
+    return "Else";
+  case For:
+    return "For";
   case NewLine:
     return "NewLine";
   case Meta:

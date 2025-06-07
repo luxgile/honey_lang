@@ -56,6 +56,7 @@ int main() {
       "RawString", llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
   parser.ctx.define_type("Float", llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_type("Int", llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
+  parser.ctx.define_type("Bool", llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
 
   parser.ctx.define_meta(
       "i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
@@ -77,6 +78,18 @@ int main() {
       "f/", std::make_unique<MetaFunction>(MetaFunctionKind::DivFloat, 2));
   parser.ctx.define_meta(
       "f%", std::make_unique<MetaFunction>(MetaFunctionKind::ModFloat, 2));
+  parser.ctx.define_meta(
+      "b==", std::make_unique<MetaFunction>(MetaFunctionKind::EqBool, 2));
+  parser.ctx.define_meta(
+      "b!=", std::make_unique<MetaFunction>(MetaFunctionKind::NotEqBool, 2));
+  parser.ctx.define_meta(
+      "b<", std::make_unique<MetaFunction>(MetaFunctionKind::LtBool, 2));
+  parser.ctx.define_meta(
+      "b>", std::make_unique<MetaFunction>(MetaFunctionKind::GtBool, 2));
+  parser.ctx.define_meta(
+      "b&&", std::make_unique<MetaFunction>(MetaFunctionKind::AndBool, 2));
+  parser.ctx.define_meta(
+      "b||", std::make_unique<MetaFunction>(MetaFunctionKind::OrBool, 2));
 
   auto ext_fn_res = llvm_gen.build_external_fns();
   if (!ext_fn_res) {

@@ -1,4 +1,6 @@
 #include "v_pretty_print.h"
+#include <print>
+#include <variant>
 
 void PrettyPrintAstVisitor::operator()(uptr<IntExprAst> &node) {
   std::print("{}", node->value);
@@ -17,26 +19,25 @@ void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<ArgDefAst> &node) {
-  std::println("{}: {}", node->name, node->type);
+  std::print("{}: {}", node->name, node->type);
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<CallExprAst> &node) {
-
-  std::print("( ");
+  std::print(" (");
   for (auto &arg : node->prefix_args) {
     std::visit(*this, arg);
     std::print(", ");
   }
-  std::print(" )");
+  std::print(") ");
 
   std::print(" |{}| ", node->fn_name);
 
-  std::print("( ");
+  std::print(" (");
   for (auto &arg : node->suffix_args) {
     std::visit(*this, arg);
     std::print(", ");
   }
-  std::print(" )");
+  std::print(") ");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
@@ -62,7 +63,7 @@ void PrettyPrintAstVisitor::operator()(uptr<BodyExprAst> &node) {
     std::print("\n");
   }
   indent -= 1;
-  std::println("\n}}");
+  std::println("}}");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StatementExprAst> &node) {
@@ -103,5 +104,32 @@ void PrettyPrintAstVisitor::operator()(uptr<GroupExprAst> &node) {
   std::print("(");
   std::visit(*this, node->expr);
   std::print(")");
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<IfExprAst> &node) {
+  std::print("if ");
+  std::visit(*this, node->condition);
+  std::print("\n");
+  std::visit(*this, node->then_expr);
+  if (node->else_expr) {
+    std::print("else ");
+    std::visit(*this, *node->else_expr);
+  }
+  std::print("\n");
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<BoolExprAst> &node) {
+  std::print("{}", node->value);
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<ForExprAst> &node) {
+  std::print("for ");
+  std::visit(*this, node->condition);
+  std::visit(*this, node->for_body);
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
+  std::print("{} = ", node->id);
+  std::visit(*this, node->rvalue);
 }
 

@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include <print>
+#include <variant>
 
 struct PrettyPrintAstVisitor {
   int indent = 0;
@@ -17,6 +18,8 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<FloatExprAst> &node);
 
   void operator()(uptr<StringExprAst> &node);
+
+  void operator()(uptr<BoolExprAst> &node);
 
   void operator()(uptr<VarExprAst> &node);
 
@@ -39,4 +42,10 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<ReturnStmtAst> &node);
 
   void operator()(uptr<GroupExprAst> &node);
+
+  void operator()(uptr<IfExprAst> &node);
+
+  void operator()(uptr<ForExprAst> &node);
+
+  void operator()(uptr<VarAssignStmtAst> &node);
 };

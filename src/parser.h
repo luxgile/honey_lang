@@ -10,6 +10,7 @@
 #include "llvm/IR/Value.h"
 #include <algorithm>
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <map>
@@ -65,7 +66,7 @@ struct Parser {
   bool check_tokens(std::initializer_list<TokenKind> tokens, int offset = 0) {
     if (tokens.size() + offset > tk_queue.size()) {
       if (debug_checks) {
-        std::print("> failed check [+{}]: ", offset);
+        std::print("> [x] check [+{}]: ", offset);
         for (auto tk : tokens) {
           std::print("{} ", token_kind_to_string(tk));
         }
@@ -78,7 +79,7 @@ struct Parser {
     for (TokenKind tk : tokens) {
       if (tk != tk_queue[i + offset].kind) {
         if (debug_checks) {
-          std::print("> failed check [+{}]: ", offset);
+          std::print("> [x] check [+{}]: ", offset);
           for (auto tk : tokens) {
             std::print("{} ", token_kind_to_string(tk));
           }
@@ -89,6 +90,13 @@ struct Parser {
       i += 1;
     }
 
+    if (debug_checks) {
+      std::print("> [O] check [+{}]: ", offset);
+      for (auto tk : tokens) {
+        std::print("{} ", token_kind_to_string(tk));
+      }
+      std::print("\n");
+    }
     return true;
   }
 
@@ -173,7 +181,8 @@ struct Parser {
       offset += 1;
     }
 
-    if (check_tokens({Id, Colon, Eq}, offset)) {
+    if (check_tokens({Id, Colon, Id}, offset) &&
+        tk_queue[offset + 2].value == "=") {
       LOG("fn decl found");
       auto fn_id = *get_tk(offset);
       offset += 3;
@@ -220,7 +229,7 @@ struct Parser {
         return {};
       line_expressions.push_back(std::move(*expr));
     }
-    offset += 1; // To account for the new line.
+    offset += 1; // To account for the halt token.
 
     if (line_expressions.size() == 0)
       return {};
@@ -236,7 +245,8 @@ struct Parser {
     LOG("starting statement parsing");
 
     // Var declaration
-    if (check_tokens({Id, Colon, Eq}, offset)) {
+    if (check_tokens({Id, Colon, Id}, offset) &&
+        tk_queue[offset + 2].value == "=") {
       auto id = get_tk(offset)->value;
       offset += 3;
       auto expr = consume_expressions(offset, NewLine);
@@ -244,6 +254,19 @@ struct Parser {
       auto def_var =
           std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
       ctx.defined_vars[id] = def_var.get();
+      return def_var;
+    }
+
+    // Var assigment
+    if (check_tokens({Id, Id}, offset) && tk_queue[offset + 1].value == "=") {
+      auto id = get_tk(offset)->value;
+      offset += 2;
+      auto expr = consume_expressions(offset, NewLine);
+      if (!expr)
+        return {};
+
+      LOG("var assignment found");
+      auto def_var = std::make_unique<VarAssignStmtAst>(id, std::move(*expr));
       return def_var;
     }
 
@@ -260,6 +283,7 @@ struct Parser {
 
   std::optional<AstExpression> handle_expr(int &offset) {
     LOG("parsing expression");
+
     if (check_tokens({Id}, offset)) {
       auto identifier = get_tk(offset).value().value;
 
@@ -274,6 +298,9 @@ struct Parser {
       return var;
     }
 
+    if (auto body = handle_fn_body(offset))
+      return body;
+
     if (check_tokens({LPar}, offset)) {
       offset += 1;
       auto expr = consume_expressions(offset, TokenKind::RPar);
@@ -281,6 +308,12 @@ struct Parser {
         return {};
       return std::make_unique<GroupExprAst>(std::move(*expr));
     }
+
+    if (auto if_expr = handle_if_expr(offset))
+      return if_expr;
+
+    if (auto for_expr = handle_for_expr(offset))
+      return for_expr;
 
     if (check_tokens({Meta}, offset)) {
       auto meta = handle_meta_def(offset);
@@ -292,6 +325,13 @@ struct Parser {
       std::string str = tk_queue[offset].value;
       offset += 1;
       return std::make_unique<StringExprAst>(str);
+    }
+
+    if (check_tokens({Bool}, offset)) {
+      LOG("bool found");
+      std::string i = tk_queue[offset].value;
+      offset += 1;
+      return std::make_unique<BoolExprAst>(i == "true" ? true : false);
     }
 
     if (check_tokens({Int}, offset)) {
@@ -309,6 +349,57 @@ struct Parser {
     }
 
     LOG("no expression found");
+    return {};
+  }
+
+  std::optional<uptr<IfExprAst>> handle_if_expr(int &offset) {
+    if (check_tokens({If}, offset)) {
+      LOG("parsing if expression");
+      offset += 1;
+
+      auto condition = consume_expressions(offset, LBrace);
+      if (!condition)
+        return {};
+
+      offset -= 1;
+
+      auto then_expr = handle_expr(offset);
+      if (!then_expr)
+        return {};
+
+      std::optional<AstExpression> else_expr = std::nullopt;
+      if (check_tokens({Else}, offset)) {
+        offset += 1;
+        else_expr = handle_expr(offset);
+      }
+
+      LOG("if expression found");
+      return std::make_unique<IfExprAst>(
+          std::move(*condition), std::move(*then_expr), std::move(else_expr));
+    }
+    return {};
+  }
+
+  std::optional<uptr<ForExprAst>> handle_for_expr(int &offset) {
+    if (check_tokens({For}, offset)) {
+      LOG("parsing for expression");
+      offset += 1;
+
+      auto for_cond_expr = consume_expressions(offset, LBrace);
+      if (!for_cond_expr)
+        return {};
+
+      offset -= 1;
+
+      auto for_body = handle_expr(offset);
+      if (!for_body)
+        return {};
+
+      LOG("for expression found");
+      return std::make_unique<ForExprAst>(std::move(*for_cond_expr),
+                                          std::move(*for_body));
+    }
+
     return {};
   }
 
@@ -427,6 +518,8 @@ struct Parser {
       while (check_tokens({NewLine}, offset))
         offset += 1;
     }
+    // Skip RBrace
+    offset += 1;
     std::println("Clearing line expressions with a size of {}",
                  line_expressions.size());
     line_expressions.clear();
@@ -437,9 +530,11 @@ struct Parser {
 
   std::optional<std::unique_ptr<FnHeaderAst>>
   handle_fn_header(std::string header_id, int &offset) {
+    LOG("parsing fn header");
     std::optional<std::string> ret_type = std::nullopt;
 
     // Prev arguments
+    LOG("prefix args:");
     auto prefix = handle_fn_args(offset);
     if (!prefix)
       return {};
@@ -447,8 +542,11 @@ struct Parser {
     // Return type
     if (check_tokens({Bar}, offset)) {
       if (check_tokens({Id}, offset + 1)) {
+        LOG("getting fn return type");
         ret_type = tk_queue[offset + 1].value;
         offset += 1;
+      } else {
+        LOG("no return type for fn");
       }
 
       if (!check_tokens({Bar}, offset + 1)) {
@@ -461,6 +559,7 @@ struct Parser {
     }
 
     // Next arguments
+    LOG("suffix args:");
     auto suffix = handle_fn_args(offset);
     if (!suffix)
       return {};
@@ -471,7 +570,7 @@ struct Parser {
   }
 
   std::optional<std::vector<uptr<ArgDefAst>>> handle_fn_args(int &offset) {
-    LOG("getting fn arguments");
+    LOG("parsing fn arguments");
     auto args = std::vector<uptr<ArgDefAst>>();
 
     if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||

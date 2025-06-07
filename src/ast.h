@@ -17,6 +17,7 @@
 struct IntExprAst;
 struct FloatExprAst;
 struct StringExprAst;
+struct BoolExprAst;
 struct CallExprAst;
 struct BodyExprAst;
 struct FnDefAst;
@@ -24,21 +25,25 @@ struct VarExprAst;
 struct MetaDefExprAst;
 struct StatementExprAst;
 struct GroupExprAst;
+struct IfExprAst;
+struct ForExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
-                 uptr<CallExprAst>, uptr<BodyExprAst>, uptr<VarExprAst>,
-                 uptr<MetaDefExprAst>, uptr<StatementExprAst>,
-                 uptr<GroupExprAst>>;
+                 uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
+                 uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
+                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
 struct VarDefStmtAst;
 struct ReturnStmtAst;
+struct VarAssignStmtAst;
 
-using AstStatement = std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>,
-                                  uptr<FnDefAst>, uptr<StatementExprAst>,
-                                  uptr<VarDefStmtAst>, uptr<ReturnStmtAst>>;
+using AstStatement =
+    std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>,
+                 uptr<StatementExprAst>, uptr<VarDefStmtAst>,
+                 uptr<ReturnStmtAst>, uptr<VarAssignStmtAst>>;
 
 enum struct MetaFunctionKind {
   AddInt,
@@ -46,11 +51,21 @@ enum struct MetaFunctionKind {
   MulInt,
   DivInt,
   ModInt,
+
   AddFloat,
   SubFloat,
   MulFloat,
   DivFloat,
   ModFloat,
+
+  EqBool,
+  NotEqBool,
+  AndBool,
+  OrBool,
+  LtBool,
+  GtBool,
+  LtEqBool,
+  GtEqBool,
 };
 
 /// Cannot be defined on Honey code, only internal implementation.
@@ -81,6 +96,11 @@ struct VarDefStmtAst {
   std::optional<AstExpression> assignment;
 };
 
+struct VarAssignStmtAst {
+  std::string id;
+  AstExpression rvalue;
+};
+
 struct ReturnStmtAst {
   std::optional<AstExpression> expr;
 };
@@ -99,6 +119,10 @@ struct FloatExprAst {
   double value;
 };
 
+struct BoolExprAst {
+  bool value;
+};
+
 struct StringExprAst {
   std::string value;
 };
@@ -109,6 +133,17 @@ struct VarExprAst {
 
 struct GroupExprAst {
   AstExpression expr;
+};
+
+struct IfExprAst {
+  AstExpression condition;
+  AstExpression then_expr;
+  std::optional<AstExpression> else_expr;
+};
+
+struct ForExprAst {
+  AstExpression condition;
+  AstExpression for_body;
 };
 
 struct CallExprAst {

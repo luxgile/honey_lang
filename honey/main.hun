@@ -8,15 +8,42 @@ related_to := lhs: RawString | | rhs: RawString {
 + := lhs: Int | Int | rhs: Int {
   @i+ lhs rhs
 } 
+* := lhs: Int | Int | rhs: Int {
+  @i* lhs rhs
+} 
 
 + := lhs: Float | Float | rhs: Float {
   @f+ lhs rhs
 }
 
+== := lhs: Int | Bool | rhs: Int { 
+  @b== lhs rhs
+} 
+
+!= := lhs: Int | Bool | rhs: Int {
+  @b!= lhs rhs
+}
+
+! := | Bool | rhs: Bool {
+  @b== rhs false
+}
+
 main := | | {
   "Guille" related_to "Ichi"
-  my_int := @i* 3 (5 + 3)
-  printf "5 + 3 = %d \n" my_int
+  my_int := 3 * 5 + 3
+
+  my_bool := ! (my_int != 18)
+  if my_bool {
+    printf "if called!\n"
+  }
+
+  i := 0
+  for @b< i 10 {
+    printf "loop %d\n" i
+    i = i + 1
+  }
+    
+  printf "3 * 5 + 3 = %d \n" my_int
   
   add := 3.2 + 6.5
   printf "3.2 + 6.5 = %.1f\n" add
