@@ -154,7 +154,7 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected(body_ret.error());
       }
 
-      if (node.fn_header->ret_type.is_void()) {
+      if (!node.fn_header->ret_type.is_void()) {
         auto expected_ret_type = ctx.get_type(node.fn_header->ret_type);
         if (!expected_ret_type)
           return std::unexpected("undefined return type");

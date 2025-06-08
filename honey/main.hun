@@ -1,4 +1,5 @@
 
+# TODO: Parser has a bug with extern functions at the end of the file
 extern printf := | | format: RawString, args: ...
 
 related_to := lhs: RawString | | rhs: RawString {
@@ -8,6 +9,7 @@ related_to := lhs: RawString | | rhs: RawString {
 + := lhs: Int | Int | rhs: Int {
   @i+ lhs rhs
 } 
+
 * := lhs: Int | Int | rhs: Int {
   @i* lhs rhs
 } 
@@ -45,8 +47,9 @@ main := | | {
     printf "if called!\n"
   }
 
+  # TODO: Print not working here?
   i := 0
-  loop i <= 10 {
+  loop i < 10 {
     printf "loop %d\n" i
     i = i + 1
   }
@@ -56,4 +59,3 @@ main := | | {
   add := 3.2 + 6.5
   printf "3.2 + 6.5 = %.1f\n" add
 }
-
