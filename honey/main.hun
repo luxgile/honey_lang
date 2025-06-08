@@ -36,6 +36,17 @@ related_to := lhs: RawString | | rhs: RawString {
   @b== rhs false
 }
 
+Dog := struct {
+  name: RawString,
+  age: Int,
+
+  bite : | | enemy: Enemy 
+  
+  bark := | | {
+    printf "i have %d years, bark!" age  
+  }
+}
+
 main := | | {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
@@ -45,7 +56,6 @@ main := | | {
     printf "if called!\n"
   }
 
-  # TODO: Print not working here?
   i := 0
   loop i < 10 {
     printf "loop %d\n" i
