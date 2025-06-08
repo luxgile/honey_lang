@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "program_ctx.h"
 #include "v_expr_type.h"
+#include <cstdio>
 #include <expected>
 #include <initializer_list>
 #include <map>
@@ -594,7 +595,7 @@ struct Parser {
       }
 
       if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
-          check_tokens({NewLine}, offset)) {
+          check_tokens({NewLine}, offset) || check_tokens({EoF}, offset)) {
         if (check_tokens({NewLine}, offset))
           offset += 1;
 

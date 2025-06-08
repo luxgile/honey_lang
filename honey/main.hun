@@ -1,5 +1,3 @@
-
-# TODO: Parser has a bug with extern functions at the end of the file
 extern printf := | | format: RawString, args: ...
 
 related_to := lhs: RawString | | rhs: RawString {
