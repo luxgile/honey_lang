@@ -111,6 +111,10 @@ struct Parser {
   std::optional<AstStatement> handle_queue() {
     LOG("starting parsing...");
 
+    if (auto _struct = handle_struct_def()) {
+      return _struct;
+    }
+
     if (auto fn = handle_fn_def()) {
       return fn;
     }
@@ -128,6 +132,53 @@ struct Parser {
       return {};
     }
 
+    return {};
+  }
+
+  std::optional<uptr<StructDefAst>> handle_struct_def() {
+    LOG("parsing struct");
+    int offset = 0;
+
+    // Skip all new lines
+    while (check_tokens({NewLine}, offset))
+      offset += 1;
+
+    if (check_tokens({Id, Colon, Id, Struct, LBrace}, offset) &&
+        tk_queue[offset + 2].value == "=") {
+      LOG("struct def found");
+      auto struct_name = get_tk(offset).value().value;
+      offset += 5;
+
+      // Skip new lines
+      while (check_tokens({NewLine}, offset))
+        offset += 1;
+
+      // Get struct fields
+      std::vector<uptr<ArgDefAst>> fields;
+      while (!check_tokens({RBrace}, offset)) {
+
+        auto field = handle_arg_def(offset);
+        if (!field)
+          return {};
+
+        if (!check_tokens({Comma}, offset))
+          return {};
+        offset += 1;
+
+        // Skip new lines
+        while (check_tokens({NewLine}, offset))
+          offset += 1;
+
+        fields.push_back(std::move(*field));
+      }
+      offset += 1;
+
+      LOG("struct parsing successfull");
+      tk_queue.clear();
+      return std::make_unique<StructDefAst>(struct_name, std::move(fields));
+    }
+
+    LOG("struct parsing failed");
     return {};
   }
 

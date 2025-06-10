@@ -176,6 +176,22 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
+  std::expected<void, std::string> build_struct(StructDefAst &node) {
+    std::vector<llvm::Type *> field_types;
+    for (auto &field : node.fields) {
+      auto type = ctx.get_type(field->type);
+      if (!type)
+        return std::unexpected("undefined type in struct");
+      field_types.push_back(*type);
+    }
+
+    auto struct_type =
+        llvm::StructType::create(*llvm_ctx, field_types, node.name);
+    ctx.define_type(AstType{node.name}, struct_type);
+
+    return {};
+  }
+
   std::expected<void, std::string> build_var(VarDefStmtAst &node) {
     if (!node.assignment && !node.type)
       return std::unexpected("could not deduce type for var definition");
@@ -243,6 +259,13 @@ struct LlvmIrGenAstVisitor {
       auto fn = build_fn(*std::get<uptr<FnDefAst>>(statement));
       if (!fn)
         return std::unexpected(fn.error());
+      return nullptr;
+    }
+
+    if (std::holds_alternative<uptr<StructDefAst>>(statement)) {
+      auto stc = build_struct(*std::get<uptr<StructDefAst>>(statement));
+      if (!stc)
+        return std::unexpected(stc.error());
       return nullptr;
     }
 

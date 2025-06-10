@@ -22,6 +22,7 @@ enum TokenKind {
   String,
   Bool,
   Extern,
+  Struct,
   If,
   Else,
   Loop,

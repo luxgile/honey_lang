@@ -1,6 +1,7 @@
 #pragma once
 
 #include "helpers.h"
+#include "lexer.h"
 #include "llvm/IR/Type.h"
 #include <cstddef>
 #include <functional>
@@ -58,11 +59,12 @@ struct FnHeaderAst;
 struct VarDefStmtAst;
 struct ReturnStmtAst;
 struct VarAssignStmtAst;
+struct StructDefAst;
 
 using AstStatement =
     std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>,
                  uptr<StatementExprAst>, uptr<VarDefStmtAst>,
-                 uptr<ReturnStmtAst>, uptr<VarAssignStmtAst>>;
+                 uptr<ReturnStmtAst>, uptr<VarAssignStmtAst>, uptr<StructDefAst>>;
 
 enum struct MetaFunctionKind {
   AddInt,
@@ -118,6 +120,11 @@ struct VarDefStmtAst {
 struct VarAssignStmtAst {
   std::string id;
   AstExpression rvalue;
+};
+
+struct StructDefAst {
+  std::string name;
+  std::vector<uptr<ArgDefAst>> fields;
 };
 
 struct ReturnStmtAst {

@@ -85,6 +85,9 @@ std::expected<Token, std::string> Lexer::get_token() {
     if (temp_id == "extern")
       return create_token(Extern);
 
+    if (temp_id == "struct")
+      return create_token(Struct);
+
     return create_token(Id);
   }
 
@@ -234,6 +237,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "String";
   case Extern:
     return "Extern";
+  case Struct:
+    return "Struct";
   case If:
     return "If";
   case Else:
