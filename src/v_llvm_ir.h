@@ -192,57 +192,9 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
-  std::expected<void, std::string> build_var(VarDefStmtAst &node) {
-    if (!node.assignment && !node.type)
-      return std::unexpected("could not deduce type for var definition");
+  std::expected<void, std::string> build_var(VarDefStmtAst &node);
 
-    llvm::Type *var_type;
-
-    if (node.assignment) {
-      auto expr = std::visit(*this, *node.assignment);
-      var_type = expr.value()->getType();
-
-      if (node.type) {
-        auto _ty = ctx.get_type(*node.type);
-        if (_ty && var_type != _ty.value())
-          return std::unexpected(
-              "explicit type and assigment expression type mismatch");
-      }
-
-      if (var_type->isVoidTy())
-        return std::unexpected("trying to allocate a void type");
-
-      auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
-      defined_variables[node.name] = DefinedVariable{var_type, alloca};
-      builder->CreateStore(*expr, alloca);
-    } else {
-      auto _ty = ctx.get_type(*node.type);
-      if (!_ty)
-        return std::unexpected("type undefined found for var definition");
-
-      var_type = _ty.value();
-
-      if (var_type->isVoidTy())
-        return std::unexpected("trying to allocate a void type");
-
-      auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
-      defined_variables[node.name] = DefinedVariable{var_type, alloca};
-    }
-
-    return {};
-  }
-
-  std::expected<void, std::string>
-  build_var_assignment(VarAssignStmtAst &node) {
-
-    auto var = get_defined_var(node.id);
-    if (!var)
-      return std::unexpected("no variable found for assigment");
-
-    auto expr = std::visit(*this, node.rvalue);
-    builder->CreateStore(*expr, var.value()->alloca);
-    return {};
-  }
+  std::expected<void, std::string> build_var_assignment(VarAssignStmtAst &node);
 
   std::expected<void, std::string> build_external_fns() {
     for (auto ext_fn : ctx.get_all_ext_fn()) {
@@ -562,5 +514,68 @@ struct LlvmIrGenAstVisitor {
     }
 
     return last_val;
+  }
+};
+
+struct LlvmStoreAllocaVisitor {
+  llvm::IRBuilder<> *builder;
+  llvm::AllocaInst *alloca;
+  LlvmIrGenAstVisitor *llvm_gen;
+
+  template <class T>
+  std::expected<void, std::string> simple_alloca(uptr<T> &node) {
+    auto expr = (*llvm_gen)(node);
+    if (!expr)
+      return std::unexpected(expr.error());
+    builder->CreateStore(*expr, alloca);
+    return {};
+  }
+
+  std::expected<void, std::string> operator()(uptr<IntExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<FloatExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<StringExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<BoolExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<VarExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<CallExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<BodyExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<StatementExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<MetaDefExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<GroupExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<IfExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<ForExprAst> &node) {
+    return simple_alloca(node);
   }
 };

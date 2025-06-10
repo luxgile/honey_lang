@@ -61,10 +61,10 @@ struct ReturnStmtAst;
 struct VarAssignStmtAst;
 struct StructDefAst;
 
-using AstStatement =
-    std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>,
-                 uptr<StatementExprAst>, uptr<VarDefStmtAst>,
-                 uptr<ReturnStmtAst>, uptr<VarAssignStmtAst>, uptr<StructDefAst>>;
+using AstStatement = std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>,
+                                  uptr<FnDefAst>, uptr<StatementExprAst>,
+                                  uptr<VarDefStmtAst>, uptr<ReturnStmtAst>,
+                                  uptr<VarAssignStmtAst>, uptr<StructDefAst>>;
 
 enum struct MetaFunctionKind {
   AddInt,
@@ -120,6 +120,11 @@ struct VarDefStmtAst {
 struct VarAssignStmtAst {
   std::string id;
   AstExpression rvalue;
+};
+
+struct StructExprAst {
+  AstType type;
+  std::vector<VarAssignStmtAst> fields;
 };
 
 struct StructDefAst {
