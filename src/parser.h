@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "program_ctx.h"
 #include "v_expr_type.h"
+#include <algorithm>
 #include <cstdio>
 #include <expected>
 #include <initializer_list>
@@ -55,6 +56,42 @@ struct Parser {
   /**/
   /*   return {}; */
   /* } */
+
+  bool check_any_tokens(std::initializer_list<TokenKind> tokens,
+                        int offset = 0) {
+    if (tokens.size() + offset > tk_queue.size()) {
+      if (debug_checks) {
+        std::print("> [x] or check [+{}]: ", offset);
+        for (auto tk : tokens) {
+          std::print("{} ", token_kind_to_string(tk));
+        }
+        std::print("\n");
+      }
+      return false;
+    }
+
+    for (TokenKind tk : tokens) {
+      if (tk == tk_queue[offset].kind) {
+        if (debug_checks) {
+          std::print("> [O] or check [+{}]: ", offset);
+          for (auto tk : tokens) {
+            std::print("{} ", token_kind_to_string(tk));
+          }
+          std::print("\n");
+        }
+        return true;
+      }
+    }
+
+    if (debug_checks) {
+      std::print("> [x] or check [+{}]: ", offset);
+      for (auto tk : tokens) {
+        std::print("{} ", token_kind_to_string(tk));
+      }
+      std::print("\n");
+    }
+    return false;
+  }
 
   bool check_tokens(std::initializer_list<TokenKind> tokens, int offset = 0) {
     if (tokens.size() + offset > tk_queue.size()) {
@@ -155,8 +192,8 @@ struct Parser {
 
       // Get struct fields
       std::vector<uptr<ArgDefAst>> fields;
+      std::vector<AstStructField> field_types;
       while (!check_tokens({RBrace}, offset)) {
-
         auto field = handle_arg_def(offset);
         if (!field)
           return {};
@@ -169,13 +206,18 @@ struct Parser {
         while (check_tokens({NewLine}, offset))
           offset += 1;
 
+        field_types.push_back(
+            AstStructField{field.value()->name, &field.value()->type});
         fields.push_back(std::move(*field));
       }
       offset += 1;
 
       LOG("struct parsing successfull");
       tk_queue.clear();
-      return std::make_unique<StructDefAst>(struct_name, std::move(fields));
+      auto s_type = AstType(struct_name, field_types);
+      auto s = std::make_unique<StructDefAst>(s_type, std::move(fields));
+      ctx.define_struct(struct_name, s.get());
+      return s;
     }
 
     LOG("struct parsing failed");
@@ -265,9 +307,11 @@ struct Parser {
 
   /// Will read all expressions in a line and merge unused ones into prefix
   /// arguments.
-  std::optional<AstExpression> consume_expressions(int &offset,
-                                                   TokenKind halt_token) {
-    while (!check_tokens({halt_token}, offset)) {
+  std::optional<AstExpression>
+  consume_expressions(int &offset,
+                      std::initializer_list<TokenKind> halt_tokens) {
+    while (!check_any_tokens(halt_tokens, offset)) {
+
       auto expr = handle_expr(offset);
       if (!expr) {
         line_expressions.clear();
@@ -287,6 +331,23 @@ struct Parser {
     return std::move(last_expr);
   }
 
+  std::optional<uptr<VarAssignStmtAst>>
+  handle_var_assign(int &offset, std::initializer_list<TokenKind> halt_tokens) {
+    LOG("parsing var assigment");
+    if (check_tokens({Id, Id}, offset) && tk_queue[offset + 1].value == "=") {
+      auto id = get_tk(offset)->value;
+      offset += 2;
+      auto expr = consume_expressions(offset, halt_tokens);
+      if (!expr)
+        return {};
+
+      LOG("var assignment found");
+      auto def_var = std::make_unique<VarAssignStmtAst>(id, std::move(*expr));
+      return def_var;
+    }
+    return {};
+  }
+
   std::optional<AstStatement> handle_statement(int &offset) {
     LOG("starting statement parsing");
 
@@ -295,7 +356,7 @@ struct Parser {
         tk_queue[offset + 2].value == "=") {
       auto id = get_tk(offset)->value;
       offset += 3;
-      auto expr = consume_expressions(offset, NewLine);
+      auto expr = consume_expressions(offset, {NewLine});
       LOG("var definition expr found");
       auto def_var =
           std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
@@ -304,21 +365,13 @@ struct Parser {
     }
 
     // Var assigment
-    if (check_tokens({Id, Id}, offset) && tk_queue[offset + 1].value == "=") {
-      auto id = get_tk(offset)->value;
-      offset += 2;
-      auto expr = consume_expressions(offset, NewLine);
-      if (!expr)
-        return {};
-
-      LOG("var assignment found");
-      auto def_var = std::make_unique<VarAssignStmtAst>(id, std::move(*expr));
-      return def_var;
+    if (auto var_assign = handle_var_assign(offset, {NewLine})) {
+      return var_assign;
     }
 
     // If nothing else found, try to find a expression like a call function.
     // This handles the line expressions in case prefixed arguments are found.
-    auto last_expr = consume_expressions(offset, NewLine);
+    auto last_expr = consume_expressions(offset, {NewLine});
     if (!last_expr)
       return {};
 
@@ -342,6 +395,9 @@ struct Parser {
       if (auto overloads = ctx.get_overloads(identifier))
         return {};
 
+      if (auto struct_expr = handle_struct_expr(offset))
+        return struct_expr;
+
       // Variable
       auto var = std::make_unique<VarExprAst>(identifier);
       LOG("var expression found");
@@ -354,7 +410,7 @@ struct Parser {
 
     if (check_tokens({LPar}, offset)) {
       offset += 1;
-      auto expr = consume_expressions(offset, TokenKind::RPar);
+      auto expr = consume_expressions(offset, {TokenKind::RPar});
       if (!expr)
         return {};
       return std::make_unique<GroupExprAst>(std::move(*expr));
@@ -408,7 +464,7 @@ struct Parser {
       LOG("parsing if expression");
       offset += 1;
 
-      auto condition = consume_expressions(offset, LBrace);
+      auto condition = consume_expressions(offset, {LBrace});
       if (!condition)
         return {};
 
@@ -436,7 +492,7 @@ struct Parser {
       LOG("parsing for expression");
       offset += 1;
 
-      auto for_cond_expr = consume_expressions(offset, LBrace);
+      auto for_cond_expr = consume_expressions(offset, {LBrace});
       if (!for_cond_expr)
         return {};
 
@@ -544,6 +600,42 @@ struct Parser {
 
     LOG("parsing call failed");
     return {};
+  }
+
+  std::optional<std::unique_ptr<StructExprAst>>
+  handle_struct_expr(int &offset) {
+    LOG("parsing struct expr");
+    auto identifier = get_tk(offset).value().value;
+    auto s = ctx.get_struct(identifier);
+    if (!s) {
+      LOG("parsing struct failed - no struct found");
+      return {};
+    }
+
+    // Consume the identifier
+    int tmp_offset = offset;
+    tmp_offset += 1;
+
+    std::vector<uptr<VarAssignStmtAst>> field_assigns;
+    if (check_tokens({Dot, LBrace}, tmp_offset)) {
+      tmp_offset += 2;
+      while (!check_tokens({RBrace}, tmp_offset)) {
+        auto assign = handle_var_assign(tmp_offset, {RBrace, Comma});
+        if (!assign)
+          return {};
+        field_assigns.push_back(std::move(*assign));
+
+        if (check_tokens({RBrace}, tmp_offset - 1))
+          break;
+      }
+      tmp_offset += 1;
+    }
+
+    offset = tmp_offset;
+
+    LOG("struct expr found");
+    return std::make_unique<StructExprAst>(s.value()->type,
+                                           std::move(field_assigns));
   }
 
   std::optional<std::unique_ptr<BodyExprAst>> handle_fn_body(int &offset) {

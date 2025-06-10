@@ -48,5 +48,8 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<ForExprAst> &node);
 
   void operator()(uptr<VarAssignStmtAst> &node);
+
   void operator()(uptr<StructDefAst> &node);
+
+  void operator()(uptr<StructExprAst> &node);
 };

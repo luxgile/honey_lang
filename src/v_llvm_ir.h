@@ -72,7 +72,7 @@ struct LlvmIrGenAstVisitor {
     auto args_types = std::vector<llvm::Type *>{};
 
     for (auto &arg : header.prefix_args) {
-      auto type = ctx.get_type(arg->type);
+      auto type = ctx.get_llvm_type(arg->type);
 
       if (!type)
         return std::unexpected("no prefix found");
@@ -81,7 +81,7 @@ struct LlvmIrGenAstVisitor {
     }
 
     for (auto &arg : header.suffix_args) {
-      auto type = ctx.get_type(arg->type);
+      auto type = ctx.get_llvm_type(arg->type);
 
       if (!type)
         return std::unexpected("no suffix found");
@@ -97,7 +97,7 @@ struct LlvmIrGenAstVisitor {
     }
 
     llvm::Type *ret_type = llvm::Type::getVoidTy(*llvm_ctx);
-    auto explicit_ret_type = ctx.get_type(header.ret_type);
+    auto explicit_ret_type = ctx.get_llvm_type(header.ret_type);
     if (explicit_ret_type)
       ret_type = *explicit_ret_type;
 
@@ -155,7 +155,7 @@ struct LlvmIrGenAstVisitor {
       }
 
       if (!node.fn_header->ret_type.is_void()) {
-        auto expected_ret_type = ctx.get_type(node.fn_header->ret_type);
+        auto expected_ret_type = ctx.get_llvm_type(node.fn_header->ret_type);
         if (!expected_ret_type)
           return std::unexpected("undefined return type");
 
@@ -179,15 +179,15 @@ struct LlvmIrGenAstVisitor {
   std::expected<void, std::string> build_struct(StructDefAst &node) {
     std::vector<llvm::Type *> field_types;
     for (auto &field : node.fields) {
-      auto type = ctx.get_type(field->type);
+      auto type = ctx.get_llvm_type(field->type);
       if (!type)
         return std::unexpected("undefined type in struct");
       field_types.push_back(*type);
     }
 
     auto struct_type =
-        llvm::StructType::create(*llvm_ctx, field_types, node.name);
-    ctx.define_type(AstType{node.name}, struct_type);
+        llvm::StructType::create(*llvm_ctx, field_types, node.type.name);
+    ctx.define_llvm_type(node.type, struct_type);
 
     return {};
   }
@@ -278,6 +278,12 @@ struct LlvmIrGenAstVisitor {
   std::expected<llvm::Value *, std::string>
   operator()(uptr<GroupExprAst> &node) {
     return std::visit(*this, node->expr);
+  }
+
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<StructExprAst> &node) {
+    struct Unreachable {};
+    throw Unreachable{};
   }
 
   std::expected<llvm::Value *, std::string> operator()(uptr<ForExprAst> &node) {
@@ -519,7 +525,7 @@ struct LlvmIrGenAstVisitor {
 
 struct LlvmStoreAllocaVisitor {
   llvm::IRBuilder<> *builder;
-  llvm::AllocaInst *alloca;
+  llvm::Value *alloca;
   LlvmIrGenAstVisitor *llvm_gen;
 
   template <class T>
@@ -577,5 +583,26 @@ struct LlvmStoreAllocaVisitor {
 
   std::expected<void, std::string> operator()(uptr<ForExprAst> &node) {
     return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<StructExprAst> &node) {
+    auto struct_ty = llvm_gen->ctx.get_llvm_type(node->type);
+    if (!struct_ty)
+      return std::unexpected("failed to get struct type");
+
+    for (auto &field : node->fields) {
+      auto field_idx = node->type.get_field_index_by_name(field->id);
+      if (!field_idx)
+        return std::unexpected(field_idx.error());
+
+      auto field_ptr =
+          builder->CreateStructGEP(*struct_ty, alloca, *field_idx, field->id);
+      LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
+      auto ir_res = std::visit(store_visitor, field->rvalue);
+      if (!ir_res)
+        return std::unexpected(ir_res.error());
+    }
+
+    return {};
   }
 };

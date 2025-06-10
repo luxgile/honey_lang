@@ -48,6 +48,7 @@ my_dog_fn := | | dog: Dog {
 main := | | {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
+  dog := Dog .{ name = "Copper", age = 8 }
 
   my_bool := ! (my_int != 18)
   if my_bool {

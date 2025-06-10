@@ -4,6 +4,7 @@
 #include "lexer.h"
 #include "llvm/IR/Type.h"
 #include <cstddef>
+#include <expected>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -14,18 +15,72 @@
 #include <vector>
 
 using AstTypeId = std::size_t;
+struct AstType;
+
+struct AstStructField {
+  std::string name;
+  AstType *type;
+};
 
 struct AstType {
+private:
+  bool _is_struct;
+
+public:
   AstTypeId id;
   std::string name;
+  std::vector<AstStructField> fields;
 
-  AstType(std::string name) : name(name) {
+  AstType(std::string name) : _is_struct(false), name(name) {
+    id = std::hash<std::string>{}(name);
+  }
+
+  AstType(std::string name, std::vector<AstStructField> fields)
+      : _is_struct(true), name(name), fields(fields) {
     id = std::hash<std::string>{}(name);
   }
 
   bool operator==(const AstType &rhs) const { return id == rhs.id; }
 
   bool is_void();
+  bool is_struct() { return _is_struct; }
+
+  std::expected<AstStructField *, std::string> get_field_by_idx(int idx) {
+    if (!is_struct())
+      return std::unexpected("trying to get field from a non-struct type");
+
+    if (idx < 0 || idx >= (int)fields.size())
+      return std::unexpected("trying to get field out of bounds from a type");
+
+    return &fields[idx];
+  }
+
+  std::expected<AstStructField *, std::string>
+  get_field_by_name(std::string name) {
+    if (!is_struct())
+      return std::unexpected("trying to get field from a non-struct type");
+
+    for (auto &field : fields) {
+      if (field.name == name)
+        return &field;
+    }
+
+    return std::unexpected("no field found in struct");
+  }
+
+  std::expected<int, std::string> get_field_index_by_name(std::string name) {
+    if (!is_struct())
+      return std::unexpected("trying to get field from a non-struct type");
+
+    int idx = 0;
+    for (auto &field : fields) {
+      if (field.name == name)
+        return idx;
+      idx += 1;
+    }
+
+    return std::unexpected("no field found in struct");
+  }
 };
 
 const AstType VOID_TYPE = AstType{"Void"};
@@ -47,12 +102,14 @@ struct StatementExprAst;
 struct GroupExprAst;
 struct IfExprAst;
 struct ForExprAst;
+struct StructExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
                  uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
-                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>>;
+                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
+                 uptr<StructExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -124,11 +181,11 @@ struct VarAssignStmtAst {
 
 struct StructExprAst {
   AstType type;
-  std::vector<VarAssignStmtAst> fields;
+  std::vector<uptr<VarAssignStmtAst>> fields;
 };
 
 struct StructDefAst {
-  std::string name;
+  AstType type;
   std::vector<uptr<ArgDefAst>> fields;
 };
 

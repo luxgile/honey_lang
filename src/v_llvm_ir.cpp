@@ -12,10 +12,10 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
   if (node.assignment) {
     AstExprTypeVisitor type_visitor = {&ctx};
     auto ast_type = std::visit(type_visitor, *node.assignment);
-    var_type = ctx.get_type(ast_type).value();
+    var_type = ctx.get_llvm_type(ast_type).value();
 
     if (node.type) {
-      auto _ty = ctx.get_type(*node.type);
+      auto _ty = ctx.get_llvm_type(*node.type);
       if (_ty && var_type != _ty.value())
         return std::unexpected(
             "explicit type and assigment expression type mismatch");
@@ -33,7 +33,7 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
       return std::unexpected(ir_res.error());
 
   } else {
-    auto _ty = ctx.get_type(*node.type);
+    auto _ty = ctx.get_llvm_type(*node.type);
     if (!_ty)
       return std::unexpected("type undefined found for var definition");
 

@@ -132,10 +132,20 @@ void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
   std::print("{} = ", node->id);
   std::visit(*this, node->rvalue);
 }
+
 void PrettyPrintAstVisitor::operator()(uptr<StructDefAst> &node) {
-  std::println("{} := struct {{", node->name);
+  std::println("{} := struct {{", node->type.name);
   for (auto &field : node->fields) {
     std::println("{}: {},", field->name, field->type.name);
+  }
+  std::println("}}");
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
+  std::println("{} .{{", node->type.name);
+  for (auto &field : node->fields) {
+    (*this)(field);
+    std::print("\n");
   }
   std::println("}}");
 }

@@ -73,7 +73,7 @@ private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
   std::map<std::string, uptr<OverloadFnGroup>> ext_fns;
   std::map<AstTypeId, llvm::Type *> types;
-  std::map<std::string, uptr<VarExprAst>> variables;
+  std::map<std::string, StructDefAst *> structs;
   std::map<std::string, uptr<MetaFunction>> defined_meta;
 
 public:
@@ -119,26 +119,26 @@ public:
     return fns;
   }
 
-  void define_type(AstType ast_type, llvm::Type *type) {
+  void define_llvm_type(AstType ast_type, llvm::Type *type) {
     types[ast_type.id] = type;
   }
 
-  std::optional<llvm::Type *> get_type(AstType &name) {
+  std::optional<llvm::Type *> get_llvm_type(AstType &name) {
     auto type = types[name.id];
     if (type == nullptr)
       return std::nullopt;
     return type;
   }
 
-  void define_var(std::string name, uptr<VarExprAst> &value) {
-    variables[name] = std::move(value);
+  void define_struct(std::string name, StructDefAst *value) {
+    structs[name] = value;
   }
 
-  std::optional<VarExprAst *> get_var(std::string name) {
-    auto var = &variables[name];
-    if (var == nullptr)
+  std::optional<StructDefAst *> get_struct(std::string name) {
+    auto s = structs[name];
+    if (s == nullptr)
       return std::nullopt;
-    return var->get();
+    return s;
   }
 
   void define_meta(std::string name, uptr<MetaFunction> meta) {

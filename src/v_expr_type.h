@@ -15,6 +15,8 @@ struct AstExprTypeVisitor {
 
   AstType operator()(uptr<StringExprAst> &_) { return RAW_STRING_TYPE; }
 
+  AstType operator()(uptr<StructExprAst> &node) { return node->type; }
+
   AstType operator()(uptr<VarExprAst> &node) {
     auto def_var = ctx->defined_vars[node->name];
     if (!def_var)
