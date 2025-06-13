@@ -149,3 +149,8 @@ void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
   }
   std::println("}}");
 }
+void PrettyPrintAstVisitor::operator()(uptr<MemberAccesorExprAst> &node) {
+  std::visit(*this, node->base);
+  std::print(".{}", node->member);
+}
+

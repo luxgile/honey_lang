@@ -103,13 +103,14 @@ struct GroupExprAst;
 struct IfExprAst;
 struct ForExprAst;
 struct StructExprAst;
+struct MemberAccesorExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
                  uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
                  uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
-                 uptr<StructExprAst>>;
+                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -177,6 +178,11 @@ struct VarDefStmtAst {
 struct VarAssignStmtAst {
   std::string id;
   AstExpression rvalue;
+};
+
+struct MemberAccesorExprAst {
+  AstExpression base;
+  std::string member;
 };
 
 struct StructExprAst {

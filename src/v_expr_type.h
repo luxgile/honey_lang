@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "program_ctx.h"
 #include <exception>
+#include <variant>
 
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
@@ -16,6 +17,14 @@ struct AstExprTypeVisitor {
   AstType operator()(uptr<StringExprAst> &_) { return RAW_STRING_TYPE; }
 
   AstType operator()(uptr<StructExprAst> &node) { return node->type; }
+
+  AstType operator()(uptr<MemberAccesorExprAst> &node) {
+    auto base_type = std::visit(*this, node->base);
+    auto member = base_type.get_field_by_name(node->member);
+    if (!member)
+      throw "no member found on type";
+    return *member.value()->type;
+  }
 
   AstType operator()(uptr<VarExprAst> &node) {
     auto def_var = ctx->defined_vars[node->name];

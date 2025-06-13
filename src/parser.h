@@ -44,19 +44,6 @@ struct Parser {
     return tk_queue[offset];
   }
 
-  /* std::optional<std::reference_wrapper<FnHeaderAst>> */
-  /* get_function(std::string &fn_name) { */
-  /*   for (auto &fn : ctx.defined_ext_fns) */
-  /*     if (fn->name == fn_name) */
-  /*       return std::ref(*fn); */
-  /**/
-  /*   for (auto &fn : ctx.defined_fns) */
-  /*     if (fn->fn_header->name == fn_name) */
-  /*       return std::ref(*fn->fn_header); */
-  /**/
-  /*   return {}; */
-  /* } */
-
   bool check_any_tokens(std::initializer_list<TokenKind> tokens,
                         int offset = 0) {
     if (tokens.size() + offset > tk_queue.size()) {
@@ -310,16 +297,18 @@ struct Parser {
   std::optional<AstExpression>
   consume_expressions(int &offset,
                       std::initializer_list<TokenKind> halt_tokens) {
+    LOG("starting consuming expressions");
     while (!check_any_tokens(halt_tokens, offset)) {
-
       auto expr = handle_expr(offset);
       if (!expr) {
         line_expressions.clear();
+        LOG("stopped consuming expressions due to error");
         return {};
       }
       line_expressions.push_back(std::move(*expr));
     }
     offset += 1; // To account for the halt token.
+    LOG("finished consuming expressions");
 
     if (line_expressions.size() == 0)
       return {};
@@ -381,6 +370,18 @@ struct Parser {
   }
 
   std::optional<AstExpression> handle_expr(int &offset) {
+    auto inner_expr = handle_inner_expr(offset);
+    if(!inner_expr)
+      return {};
+    
+    if (auto mem_acc = handle_member_access_expr(offset, *inner_expr)) {
+      return mem_acc;
+    }
+
+    return inner_expr;
+  }
+
+  std::optional<AstExpression> handle_inner_expr(int &offset) {
     LOG("parsing expression");
 
     if (check_tokens({Id}, offset)) {
@@ -456,6 +457,23 @@ struct Parser {
     }
 
     LOG("no expression found");
+    return {};
+  }
+
+  std::optional<uptr<MemberAccesorExprAst>>
+  handle_member_access_expr(int &offset, AstExpression& base_expr) {
+    LOG("starting parsing access member");
+
+    if (check_tokens({Dot, Id}, offset)) {
+      offset += 2;
+
+      auto id = get_tk(offset - 1).value().value;
+
+      LOG("member access parsed");
+      return std::make_unique<MemberAccesorExprAst>(std::move(base_expr), id);
+    }
+
+    LOG("failed to parse access member");
     return {};
   }
 
@@ -628,7 +646,7 @@ struct Parser {
         if (check_tokens({RBrace}, tmp_offset - 1))
           break;
       }
-      tmp_offset += 1;
+      // No need to increase offset by one, as inside the loop we are checking if the previous line is RBrace
     }
 
     offset = tmp_offset;

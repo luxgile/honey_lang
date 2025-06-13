@@ -52,4 +52,6 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<StructDefAst> &node);
 
   void operator()(uptr<StructExprAst> &node);
+
+  void operator()(uptr<MemberAccesorExprAst> &node);
 };

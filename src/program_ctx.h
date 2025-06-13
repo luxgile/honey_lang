@@ -98,9 +98,9 @@ public:
   }
 
   std::optional<OverloadFnGroup *> get_overloads(std::string name) {
-    auto fn = fns[name].get();
-    if (fn != nullptr)
-      return fn;
+    auto fn = &fns[name];
+    if (fn->get() != nullptr)
+      return fn->get();
 
     auto fn_ext = ext_fns[name].get();
     if (fn_ext != nullptr)

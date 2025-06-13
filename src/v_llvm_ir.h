@@ -20,6 +20,7 @@
 #include "llvm/IR/Value.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/Alignment.h"
+#include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
 #include <ctime>
@@ -47,6 +48,7 @@ struct LlvmIrGenAstVisitor {
   // State
   std::map<std::string, DefinedVariable> defined_variables;
   llvm::Function *current_fn;
+  bool rvalue_mode;
 
   LlvmIrGenAstVisitor(ProgramCtx &ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
@@ -266,6 +268,10 @@ struct LlvmIrGenAstVisitor {
     auto var = get_defined_var(node->name);
     if (!var)
       return std::unexpected("trying to reference an undefined variable");
+
+    if(var.value()->type->isStructTy() || var.value()->type->isArrayTy())
+      return var.value()->alloca;
+
     return builder->CreateLoad(var.value()->type, var.value()->alloca,
                                node->name);
   }
@@ -388,13 +394,47 @@ struct LlvmIrGenAstVisitor {
     return builder->CreateConstGEP2_32(str_const->getType(), global_str, 0, 0);
   }
 
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<MemberAccesorExprAst> &node) {
+    auto base_expr = std::visit(*this, node->base);
+    if (!base_expr)
+      return std::unexpected(base_expr.error());
+
+    AstExprTypeVisitor type_visitor = {&ctx};
+    auto base_expr_type = std::visit(type_visitor, node->base);
+
+    auto member_idx = base_expr_type.get_field_index_by_name(node->member);
+    if (!member_idx)
+      return std::unexpected(member_idx.error());
+
+    auto member_type = base_expr_type.get_field_by_idx(*member_idx).value();
+    auto member_llvm_type = ctx.get_llvm_type(*member_type->type);
+    if (!member_llvm_type)
+      return std::unexpected("no llvm type found for member accessor");
+
+    /* std::vector<llvm::Value *> indices; */
+    /* indices.push_back(llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, 0))); */
+    /* indices.push_back( */
+    /*     llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, *member_idx))); */
+
+    auto base_expr_llvm_type = ctx.get_llvm_type(base_expr_type);
+    if (!base_expr_llvm_type)
+      return std::unexpected("no type found for base expr");
+
+    auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
+    auto member_ptr =
+        builder->CreateStructGEP(struct_type, *base_expr, *member_idx, node->member);
+
+    if (!rvalue_mode) {
+      return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
+    }
+
+    return member_ptr;
+  }
+
   // Expressions
   std::expected<llvm::Value *, std::string>
   operator()(uptr<CallExprAst> &node) {
-    // TODO: LLVM IR is getting the function from the generated module rather
-    // than the context. Get it from the context and, if it has overloads, just
-    // add a index to it.
-
     auto overloads = ctx.get_overloads(node->fn_name);
     if (!overloads)
       return std::unexpected("no overloads found for call");
@@ -530,7 +570,9 @@ struct LlvmStoreAllocaVisitor {
 
   template <class T>
   std::expected<void, std::string> simple_alloca(uptr<T> &node) {
+    llvm_gen->rvalue_mode = true;
     auto expr = (*llvm_gen)(node);
+    llvm_gen->rvalue_mode = false;
     if (!expr)
       return std::unexpected(expr.error());
     builder->CreateStore(*expr, alloca);
@@ -582,6 +624,10 @@ struct LlvmStoreAllocaVisitor {
   }
 
   std::expected<void, std::string> operator()(uptr<ForExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<MemberAccesorExprAst> &node) {
     return simple_alloca(node);
   }
 
