@@ -5,7 +5,6 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <variant>
 
 struct AstExprTypeVisitor;
 
@@ -73,7 +72,7 @@ struct OverloadFnGroup {
 struct ProgramCtx {
 private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
-  std::map<std::string, uptr<OverloadFnGroup>> ext_fns;
+  /* std::map<std::string, uptr<OverloadFnGroup>> ext_fns; */
   std::map<AstTypeId, llvm::Type *> llvm_types;
   std::map<std::string, StructDefAst *> structs;
   std::map<std::string, AstType> primitives;
@@ -114,36 +113,36 @@ public:
     overloads->fns.push_back(fn);
   }
 
-  void define_fn_ext(std::string name, FnHeaderAst *fn) {
-    auto overloads = ext_fns[name].get();
-    if (overloads == nullptr) {
-      fns[name] = std::make_unique<OverloadFnGroup>();
-      overloads = ext_fns[name].get();
-    }
-    overloads->fns.push_back(fn);
-  }
+  /* void define_fn_ext(std::string name, FnHeaderAst *fn) { */
+  /*   auto overloads = ext_fns[name].get(); */
+  /*   if (overloads == nullptr) { */
+  /*     fns[name] = std::make_unique<OverloadFnGroup>(); */
+  /*     overloads = ext_fns[name].get(); */
+  /*   } */
+  /*   overloads->fns.push_back(fn); */
+  /* } */
 
   std::optional<OverloadFnGroup *> get_overloads(std::string name) {
     auto fn = &fns[name];
     if (fn->get() != nullptr)
       return fn->get();
 
-    auto fn_ext = ext_fns[name].get();
-    if (fn_ext != nullptr)
-      return fn_ext;
+    /* auto fn_ext = ext_fns[name].get(); */
+    /* if (fn_ext != nullptr) */
+    /*   return fn_ext; */
 
     return std::nullopt;
   }
 
-  std::vector<FnHeaderAst *> get_all_ext_fn() {
-    std::vector<FnHeaderAst *> fns;
-    for (auto it = ext_fns.begin(); it != ext_fns.end(); it++) {
-      for (auto fn : it->second.get()->fns) {
-        fns.push_back(fn);
-      }
-    }
-    return fns;
-  }
+  /* std::vector<FnHeaderAst *> get_all_ext_fn() { */
+  /*   std::vector<FnHeaderAst *> fns; */
+  /*   for (auto it = ext_fns.begin(); it != ext_fns.end(); it++) { */
+  /*     for (auto fn : it->second.get()->fns) { */
+  /*       fns.push_back(fn); */
+  /*     } */
+  /*   } */
+  /*   return fns; */
+  /* } */
 
   void define_llvm_type(AstType ast_type, llvm::Type *type) {
     llvm_types[ast_type.get_id()] = type;

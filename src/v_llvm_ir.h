@@ -35,7 +35,7 @@
 #include <vector>
 
 struct LlvmIrGenAstVisitor {
-  ProgramCtx &ctx;
+  ProgramCtx *ctx;
   uptr<llvm::LLVMContext> llvm_ctx;
   uptr<llvm::IRBuilder<>> builder;
   uptr<llvm::Module> module;
@@ -50,7 +50,7 @@ struct LlvmIrGenAstVisitor {
   llvm::Function *current_fn;
   bool rvalue_mode;
 
-  LlvmIrGenAstVisitor(ProgramCtx &ctx) : ctx(ctx) {
+  LlvmIrGenAstVisitor(ProgramCtx *ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
     module = std::make_unique<llvm::Module>("honey jit", *llvm_ctx);
     builder = std::make_unique<llvm::IRBuilder<>>(*llvm_ctx);
@@ -74,7 +74,7 @@ struct LlvmIrGenAstVisitor {
     auto args_types = std::vector<llvm::Type *>{};
 
     for (auto &arg : header.prefix_args) {
-      auto type = ctx.get_llvm_type(arg->type);
+      auto type = ctx->get_llvm_type(arg->type);
 
       if (!type)
         return std::unexpected("no prefix found");
@@ -83,7 +83,7 @@ struct LlvmIrGenAstVisitor {
     }
 
     for (auto &arg : header.suffix_args) {
-      auto type = ctx.get_llvm_type(arg->type);
+      auto type = ctx->get_llvm_type(arg->type);
 
       if (!type)
         return std::unexpected("no suffix found");
@@ -99,14 +99,14 @@ struct LlvmIrGenAstVisitor {
     }
 
     llvm::Type *ret_type = llvm::Type::getVoidTy(*llvm_ctx);
-    auto explicit_ret_type = ctx.get_llvm_type(header.ret_type);
+    auto explicit_ret_type = ctx->get_llvm_type(header.ret_type);
     if (explicit_ret_type)
       ret_type = *explicit_ret_type;
 
     auto fn_type =
         llvm::FunctionType::get(ret_type, args_types, header.is_vararic());
 
-    auto fn_overloads = ctx.get_overloads(header.name);
+    auto fn_overloads = ctx->get_overloads(header.name);
     if (!fn_overloads)
       return std::unexpected("no overloads found for fn header");
 
@@ -157,7 +157,7 @@ struct LlvmIrGenAstVisitor {
       }
 
       if (!node.fn_header->ret_type.is_void()) {
-        auto expected_ret_type = ctx.get_llvm_type(node.fn_header->ret_type);
+        auto expected_ret_type = ctx->get_llvm_type(node.fn_header->ret_type);
         if (!expected_ret_type)
           return std::unexpected("undefined return type");
 
@@ -181,7 +181,7 @@ struct LlvmIrGenAstVisitor {
   std::expected<void, std::string> build_struct(StructDefAst &node) {
     std::vector<llvm::Type *> field_types;
     for (auto &field : node.fields) {
-      auto type = ctx.get_llvm_type(field->type);
+      auto type = ctx->get_llvm_type(field->type);
       if (!type)
         return std::unexpected("undefined type in struct");
       field_types.push_back(*type);
@@ -189,7 +189,7 @@ struct LlvmIrGenAstVisitor {
 
     auto struct_type =
         llvm::StructType::create(*llvm_ctx, field_types, node.type.get_name());
-    ctx.define_llvm_type(node.type, struct_type);
+    ctx->define_llvm_type(node.type, struct_type);
 
     return {};
   }
@@ -198,14 +198,14 @@ struct LlvmIrGenAstVisitor {
 
   std::expected<void, std::string> build_var_assignment(VarAssignStmtAst &node);
 
-  std::expected<void, std::string> build_external_fns() {
-    for (auto ext_fn : ctx.get_all_ext_fn()) {
-      auto r = build_prototype(*ext_fn);
-      if (!r)
-        return std::unexpected(r.error());
-    }
-    return {};
-  }
+  /* std::expected<void, std::string> build_external_fns() { */
+  /*   for (auto ext_fn : ctx->get_all_ext_fn()) { */
+  /*     auto r = build_prototype(*ext_fn); */
+  /*     if (!r) */
+  /*       return std::unexpected(r.error()); */
+  /*   } */
+  /*   return {}; */
+  /* } */
 
   std::expected<llvm::Value *, std::string>
   build_statement(AstStatement &statement) {
@@ -400,7 +400,7 @@ struct LlvmIrGenAstVisitor {
     if (!base_expr)
       return std::unexpected(base_expr.error());
 
-    AstExprTypeVisitor type_visitor = {&ctx};
+    AstExprTypeVisitor type_visitor = {ctx};
     auto base_expr_type = std::visit(type_visitor, node->base);
 
     auto member_idx = base_expr_type.get_field_index_by_name(node->member);
@@ -408,11 +408,11 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected(member_idx.error());
 
     auto member_type = base_expr_type.get_field_by_idx(*member_idx).value();
-    auto member_llvm_type = ctx.get_llvm_type(*member_type->type);
+    auto member_llvm_type = ctx->get_llvm_type(*member_type->type);
     if (!member_llvm_type)
       return std::unexpected("no llvm type found for member accessor");
 
-    auto base_expr_llvm_type = ctx.get_llvm_type(base_expr_type);
+    auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type);
     if (!base_expr_llvm_type)
       return std::unexpected("no type found for base expr");
 
@@ -429,11 +429,11 @@ struct LlvmIrGenAstVisitor {
   // Expressions
   std::expected<llvm::Value *, std::string>
   operator()(uptr<CallExprAst> &node) {
-    auto overloads = ctx.get_overloads(node->fn_name);
+    auto overloads = ctx->get_overloads(node->fn_name);
     if (!overloads)
       return std::unexpected("no overloads found for call");
 
-    AstExprTypeVisitor visitor = {&ctx};
+    AstExprTypeVisitor visitor = {ctx};
     auto mangled_name =
         overloads.value()->get_mangled_name(node.get(), &visitor);
 
@@ -471,7 +471,7 @@ struct LlvmIrGenAstVisitor {
 
   std::expected<llvm::Value *, std::string>
   operator()(uptr<MetaDefExprAst> &node) {
-    auto meta_fn = ctx.get_meta(node->name);
+    auto meta_fn = ctx->get_meta(node->name);
 
     if (!meta_fn)
       return std::unexpected("tried to call unknown meta fn");
@@ -627,7 +627,7 @@ struct LlvmStoreAllocaVisitor {
   }
 
   std::expected<void, std::string> operator()(uptr<StructExprAst> &node) {
-    auto struct_ty = llvm_gen->ctx.get_llvm_type(node->type);
+    auto struct_ty = llvm_gen->ctx->get_llvm_type(node->type);
     if (!struct_ty)
       return std::unexpected("failed to get struct type");
 

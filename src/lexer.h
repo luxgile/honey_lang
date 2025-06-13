@@ -57,7 +57,9 @@ struct Lexer {
   int last_char = ' ';
   std::string temp_id;
 
-  Lexer(std::string source) {
+  Lexer() { src_index = -1; }
+
+  void set_source(std::string source) {
     this->source = source;
     src_index = -1;
   }

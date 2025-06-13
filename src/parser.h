@@ -21,7 +21,7 @@
 struct Parser {
   bool debug_scan = false;
   bool debug_checks = false;
-  ProgramCtx ctx;
+  ProgramCtx *ctx;
   AstExprTypeVisitor type_visitor;
 
   std::vector<Token> tk_queue;
@@ -32,7 +32,7 @@ struct Parser {
   /// Meta tags fn defined and not used
   std::vector<uptr<MetaDefExprAst>> line_meta_def;
 
-  Parser() { type_visitor.ctx = &ctx; }
+  Parser() { type_visitor.ctx = ctx; }
 
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
@@ -203,7 +203,7 @@ struct Parser {
       tk_queue.clear();
       auto s_type = AstType(struct_name, field_types);
       auto s = std::make_unique<StructDefAst>(s_type, std::move(fields));
-      ctx.define_struct(struct_name, s.get());
+      ctx->define_struct(struct_name, s.get());
       return s;
     }
 
@@ -221,7 +221,7 @@ struct Parser {
       auto meta_tk = get_tk(offset).value();
       offset += 1;
 
-      auto meta_fn = ctx.get_meta(meta_tk.value);
+      auto meta_fn = ctx->get_meta(meta_tk.value);
       if (!meta_fn)
         return {};
 
@@ -268,11 +268,11 @@ struct Parser {
       std::optional<uptr<BodyExprAst>> body = {};
 
       for (auto &prefix : header.value()->prefix_args) {
-        ctx.defined_vars[prefix->name] =
+        ctx->defined_vars[prefix->name] =
             new VarDefStmtAst{prefix->name, prefix->type, std::nullopt};
       }
       for (auto &suffix : header.value()->suffix_args) {
-        ctx.defined_vars[suffix->name] =
+        ctx->defined_vars[suffix->name] =
             new VarDefStmtAst{suffix->name, suffix->type, std::nullopt};
       }
 
@@ -284,7 +284,7 @@ struct Parser {
         LOG("got fn expression");
         auto fn =
             std::make_unique<FnDefAst>(std::move(*header), std::move(body));
-        ctx.define_fn(fn->fn_header->name, fn->fn_header.get());
+        ctx->define_fn(fn->fn_header->name, fn->fn_header.get());
         return fn;
       }
     }
@@ -349,7 +349,7 @@ struct Parser {
       LOG("var definition expr found");
       auto def_var =
           std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
-      ctx.defined_vars[id] = def_var.get();
+      ctx->defined_vars[id] = def_var.get();
       return def_var;
     }
 
@@ -400,7 +400,7 @@ struct Parser {
 
       // If the identifier is a fn but the previous call failed because not all
       // args are parsed yet, avoid creating a variable below
-      if (auto overloads = ctx.get_overloads(identifier))
+      if (auto overloads = ctx->get_overloads(identifier))
         return {};
 
       if (auto struct_expr = handle_struct_expr(offset))
@@ -538,7 +538,7 @@ struct Parser {
   std::optional<std::unique_ptr<CallExprAst>> handle_call_expr(int &offset) {
     LOG("parsing call");
     auto identifier = get_tk(offset).value().value;
-    auto overloads = ctx.get_overloads(identifier);
+    auto overloads = ctx->get_overloads(identifier);
     if (!overloads) {
       LOG("parsing call failed - no overload found");
       return {};
@@ -631,7 +631,7 @@ struct Parser {
   handle_struct_expr(int &offset) {
     LOG("parsing struct expr");
     auto identifier = get_tk(offset).value().value;
-    auto s = ctx.get_struct(identifier);
+    auto s = ctx->get_struct(identifier);
     if (!s) {
       LOG("parsing struct failed - no struct found");
       return {};
@@ -781,7 +781,7 @@ struct Parser {
   std::optional<uptr<ArgDefAst>> handle_arg_def(int &offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
       auto type_name = tk_queue[offset + 2].value;
-      auto ast_type = ctx.get_type_by_name(type_name);
+      auto ast_type = ctx->get_type_by_name(type_name);
       if (!ast_type)
         return {};
       auto field =
