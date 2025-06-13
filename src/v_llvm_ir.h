@@ -188,7 +188,7 @@ struct LlvmIrGenAstVisitor {
     }
 
     auto struct_type =
-        llvm::StructType::create(*llvm_ctx, field_types, node.type.name);
+        llvm::StructType::create(*llvm_ctx, field_types, node.type.get_name());
     ctx.define_llvm_type(node.type, struct_type);
 
     return {};
@@ -269,7 +269,7 @@ struct LlvmIrGenAstVisitor {
     if (!var)
       return std::unexpected("trying to reference an undefined variable");
 
-    if(var.value()->type->isStructTy() || var.value()->type->isArrayTy())
+    if (!rvalue_mode && (var.value()->type->isStructTy() || var.value()->type->isArrayTy()))
       return var.value()->alloca;
 
     return builder->CreateLoad(var.value()->type, var.value()->alloca,
@@ -412,24 +412,18 @@ struct LlvmIrGenAstVisitor {
     if (!member_llvm_type)
       return std::unexpected("no llvm type found for member accessor");
 
-    /* std::vector<llvm::Value *> indices; */
-    /* indices.push_back(llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, 0))); */
-    /* indices.push_back( */
-    /*     llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, *member_idx))); */
-
     auto base_expr_llvm_type = ctx.get_llvm_type(base_expr_type);
     if (!base_expr_llvm_type)
       return std::unexpected("no type found for base expr");
 
     auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
-    auto member_ptr =
-        builder->CreateStructGEP(struct_type, *base_expr, *member_idx, node->member);
+    auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
+                                               *member_idx, node->member);
 
-    if (!rvalue_mode) {
-      return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
-    }
+    if (rvalue_mode || member_llvm_type.value()->isStructTy())
+      return member_ptr;
 
-    return member_ptr;
+    return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
   }
 
   // Expressions
@@ -627,7 +621,8 @@ struct LlvmStoreAllocaVisitor {
     return simple_alloca(node);
   }
 
-  std::expected<void, std::string> operator()(uptr<MemberAccesorExprAst> &node) {
+  std::expected<void, std::string>
+  operator()(uptr<MemberAccesorExprAst> &node) {
     return simple_alloca(node);
   }
 

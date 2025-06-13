@@ -25,12 +25,11 @@ struct AstStructField {
 struct AstType {
 private:
   bool _is_struct;
-
-public:
   AstTypeId id;
   std::string name;
   std::vector<AstStructField> fields;
 
+public:
   AstType(std::string name) : _is_struct(false), name(name) {
     id = std::hash<std::string>{}(name);
   }
@@ -39,6 +38,10 @@ public:
       : _is_struct(true), name(name), fields(fields) {
     id = std::hash<std::string>{}(name);
   }
+
+  AstTypeId get_id() { return id; }
+  std::string get_name() { return name; }
+  std::vector<AstStructField> get_fields() { return fields; }
 
   bool operator==(const AstType &rhs) const { return id == rhs.id; }
 

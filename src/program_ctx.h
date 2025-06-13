@@ -3,6 +3,8 @@
 #include "ast.h"
 #include "llvm/IR/Type.h"
 #include <map>
+#include <optional>
+#include <string>
 #include <variant>
 
 struct AstExprTypeVisitor;
@@ -72,12 +74,36 @@ struct ProgramCtx {
 private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
   std::map<std::string, uptr<OverloadFnGroup>> ext_fns;
-  std::map<AstTypeId, llvm::Type *> types;
+  std::map<AstTypeId, llvm::Type *> llvm_types;
   std::map<std::string, StructDefAst *> structs;
+  std::map<std::string, AstType> primitives;
   std::map<std::string, uptr<MetaFunction>> defined_meta;
 
 public:
   std::map<std::string, VarDefStmtAst *> defined_vars;
+
+  void define_primitive(AstType type) {
+    primitives.insert({type.get_name(), type});
+  }
+
+  std::optional<AstType> get_type_by_name(std::string type_name) {
+    for (auto primitive : primitives) {
+      if (primitive.second.get_name() == type_name)
+        return primitive.second.get_name();
+    }
+
+    for (auto &var : defined_vars) {
+      if (var.second->type->get_name() == type_name)
+        return var.second->type;
+    }
+
+    for (auto &s : structs) {
+      if (s.second->type.get_name() == type_name)
+        return s.second->type;
+    }
+
+    return {};
+  }
 
   void define_fn(std::string name, FnHeaderAst *fn) {
     auto overloads = fns[name].get();
@@ -120,11 +146,11 @@ public:
   }
 
   void define_llvm_type(AstType ast_type, llvm::Type *type) {
-    types[ast_type.id] = type;
+    llvm_types[ast_type.get_id()] = type;
   }
 
   std::optional<llvm::Type *> get_llvm_type(AstType &name) {
-    auto type = types[name.id];
+    auto type = llvm_types[name.get_id()];
     if (type == nullptr)
       return std::nullopt;
     return type;

@@ -7,25 +7,31 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
   if (!node.assignment && !node.type)
     return std::unexpected("could not deduce type for var definition");
 
-  llvm::Type *var_type;
+  llvm::Type *assignment_llvm_type;
 
   if (node.assignment) {
     AstExprTypeVisitor type_visitor = {&ctx};
     auto ast_type = std::visit(type_visitor, *node.assignment);
-    var_type = ctx.get_llvm_type(ast_type).value();
+
+    auto assignment_llvm_type_res = ctx.get_llvm_type(ast_type);
+    if(!assignment_llvm_type_res)
+      return std::unexpected("no llvm type found for assigment in var declaration");
+    assignment_llvm_type = assignment_llvm_type_res.value();
 
     if (node.type) {
       auto _ty = ctx.get_llvm_type(*node.type);
-      if (_ty && var_type != _ty.value())
+      if (_ty && assignment_llvm_type != _ty.value())
         return std::unexpected(
             "explicit type and assigment expression type mismatch");
     }
 
-    if (var_type->isVoidTy())
+    if (assignment_llvm_type->isVoidTy())
       return std::unexpected("trying to allocate a void type");
 
-    auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
-    defined_variables[node.name] = DefinedVariable{var_type, alloca};
+    auto alloca =
+        builder->CreateAlloca(assignment_llvm_type, nullptr, node.name);
+    defined_variables[node.name] =
+        DefinedVariable{assignment_llvm_type, alloca};
 
     LlvmStoreAllocaVisitor store_visitor = {builder.get(), alloca, this};
     auto ir_res = std::visit(store_visitor, *node.assignment);
@@ -37,13 +43,15 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
     if (!_ty)
       return std::unexpected("type undefined found for var definition");
 
-    var_type = _ty.value();
+    assignment_llvm_type = _ty.value();
 
-    if (var_type->isVoidTy())
+    if (assignment_llvm_type->isVoidTy())
       return std::unexpected("trying to allocate a void type");
 
-    auto alloca = builder->CreateAlloca(var_type, nullptr, node.name);
-    defined_variables[node.name] = DefinedVariable{var_type, alloca};
+    auto alloca =
+        builder->CreateAlloca(assignment_llvm_type, nullptr, node.name);
+    defined_variables[node.name] =
+        DefinedVariable{assignment_llvm_type, alloca};
   }
 
   return {};

@@ -371,11 +371,18 @@ struct Parser {
 
   std::optional<AstExpression> handle_expr(int &offset) {
     auto inner_expr = handle_inner_expr(offset);
-    if(!inner_expr)
+    if (!inner_expr)
       return {};
-    
+
+    // TODO: This needs to be recursive
     if (auto mem_acc = handle_member_access_expr(offset, *inner_expr)) {
-      return mem_acc;
+      inner_expr = std::move(*mem_acc);
+      mem_acc = handle_member_access_expr(offset, *inner_expr);
+      while (mem_acc) {
+        inner_expr = std::move(*mem_acc);
+        mem_acc = handle_member_access_expr(offset, *inner_expr);
+      }
+      return inner_expr;
     }
 
     return inner_expr;
@@ -461,7 +468,7 @@ struct Parser {
   }
 
   std::optional<uptr<MemberAccesorExprAst>>
-  handle_member_access_expr(int &offset, AstExpression& base_expr) {
+  handle_member_access_expr(int &offset, AstExpression &base_expr) {
     LOG("starting parsing access member");
 
     if (check_tokens({Dot, Id}, offset)) {
@@ -646,7 +653,8 @@ struct Parser {
         if (check_tokens({RBrace}, tmp_offset - 1))
           break;
       }
-      // No need to increase offset by one, as inside the loop we are checking if the previous line is RBrace
+      // No need to increase offset by one, as inside the loop we are checking
+      // if the previous line is RBrace
     }
 
     offset = tmp_offset;
@@ -772,8 +780,12 @@ struct Parser {
 
   std::optional<uptr<ArgDefAst>> handle_arg_def(int &offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
-      auto field = std::make_unique<ArgDefAst>(
-          tk_queue[offset].value, tk_queue[offset + 2].value, false);
+      auto type_name = tk_queue[offset + 2].value;
+      auto ast_type = ctx.get_type_by_name(type_name);
+      if (!ast_type)
+        return {};
+      auto field =
+          std::make_unique<ArgDefAst>(tk_queue[offset].value, *ast_type, false);
       offset += 3;
       return field;
     }

@@ -51,14 +51,24 @@ int main() {
   /* parser.ctx.defined_ext_fns.push_back(print_fn.get()); */
 
   // Register basic types
-  parser.ctx.define_llvm_type(VOID_TYPE, llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
+
+  parser.ctx.define_primitive(VOID_TYPE);
+  parser.ctx.define_primitive(FLOAT_TYPE);
+  parser.ctx.define_primitive(INT_TYPE);
+  parser.ctx.define_primitive(RAW_STRING_TYPE);
+  parser.ctx.define_primitive(BOOL_TYPE);
+
+  parser.ctx.define_llvm_type(VOID_TYPE,
+                              llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   parser.ctx.define_llvm_type(
       RAW_STRING_TYPE,
       llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
   parser.ctx.define_llvm_type(FLOAT_TYPE,
-                         llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
-  parser.ctx.define_llvm_type(INT_TYPE, llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
-  parser.ctx.define_llvm_type(BOOL_TYPE, llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
+                              llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
+  parser.ctx.define_llvm_type(INT_TYPE,
+                              llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
+  parser.ctx.define_llvm_type(BOOL_TYPE,
+                              llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
 
   parser.ctx.define_meta(
       "i+", std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
@@ -119,17 +129,19 @@ int main() {
     if (!statement)
       continue;
 
-    std::visit(pretty_printer, *statement);
-
     statements.push_back(std::move(*statement));
 
   } while (token.kind != TokenKind::EoF && token.kind != TokenKind::Undefined);
 
-  std::println("\nparsing completed");
+  std::println("\nparsing completed --- result:");
 
   // Code gen
   for (auto &stmt : statements) {
+    std::visit(pretty_printer, stmt);
+    std::println("");
+
     auto gen_result = llvm_gen.build_statement(stmt);
+
     if (!gen_result)
       std::println("gen error: {}", gen_result.error());
   }

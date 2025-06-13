@@ -36,20 +36,24 @@ related_to := lhs: RawString | | rhs: RawString {
   @b== rhs false
 }
 
+Person := struct {
+  name: RawString,
+  gender: Bool,
+}
+
 Dog := struct {
   name: RawString,
   age: Int,
-}
-
-my_dog_fn := | | dog: Dog {
-  printf "lmao"
+  owner: Person,
 }
 
 main := | | {
 #  "Guille" related_to "Ichi"
 #  my_int := 3 * 5 + 3
-  dog := Dog .{ name = "Copper", age = 8 }
-  printf "my dog is %d years old" dog.age
+  person := Person .{ name = "Guille", gender = true }
+  dog := Dog .{ name = "Copper", age = 8, owner = person }
+  printf "my dog is %d years old\n" dog.age
+  printf "my owner is %s\n" dog.owner.name
 
 #  my_bool := ! (my_int != 18)
 #  if my_bool {

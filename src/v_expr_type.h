@@ -2,7 +2,6 @@
 
 #include "ast.h"
 #include "program_ctx.h"
-#include <exception>
 #include <variant>
 
 struct AstExprTypeVisitor {

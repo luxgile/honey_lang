@@ -11,7 +11,7 @@ void PrettyPrintAstVisitor::operator()(uptr<FloatExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StringExprAst> &node) {
-  std::print("{}", node->value);
+  std::print("\"{}\"", node->value);
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
@@ -19,7 +19,7 @@ void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<ArgDefAst> &node) {
-  std::print("{}: {}", node->name, node->type.name);
+  std::print("{}: {}", node->name, node->type.get_name());
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<CallExprAst> &node) {
@@ -47,7 +47,7 @@ void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
     (*this)(arg);
   }
 
-  std::print("|{}|", node->ret_type.name);
+  std::print("|{}|", node->ret_type.get_name());
 
   for (auto &arg : node->suffix_args) {
     (*this)(arg);
@@ -134,23 +134,30 @@ void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StructDefAst> &node) {
-  std::println("{} := struct {{", node->type.name);
+  std::println("{} := struct {{", node->type.get_name());
+  indent += 1;
   for (auto &field : node->fields) {
-    std::println("{}: {},", field->name, field->type.name);
+    print_indent();
+    std::println("{}: {},", field->name, field->type.get_name());
   }
+  indent -= 1;
   std::println("}}");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
-  std::println("{} .{{", node->type.name);
+  std::println("{} .{{", node->type.get_name());
+  indent += 1;
   for (auto &field : node->fields) {
+    print_indent();
     (*this)(field);
     std::print("\n");
   }
+  indent -= 1;
+  print_indent();
   std::println("}}");
 }
+
 void PrettyPrintAstVisitor::operator()(uptr<MemberAccesorExprAst> &node) {
   std::visit(*this, node->base);
   std::print(".{}", node->member);
 }
-
