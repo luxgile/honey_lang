@@ -11,7 +11,18 @@ void PrettyPrintAstVisitor::operator()(uptr<FloatExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StringExprAst> &node) {
-  std::print("\"{}\"", node->value);
+  auto str = node->value;
+  // Replace new lines to print them raw
+  size_t pos = 0;
+  while ((pos = str.find('\n', pos)) != std::string::npos) {
+    str.replace(pos, 1, "\\n");
+    pos += 2;
+  }
+  while ((pos = str.find('\t', pos)) != std::string::npos) {
+    str.replace(pos, 1, "\\t");
+    pos += 2;
+  }
+  std::print("\"{}\"", str);
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
@@ -23,35 +34,39 @@ void PrettyPrintAstVisitor::operator()(uptr<ArgDefAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<CallExprAst> &node) {
-  std::print(" (");
-  for (auto &arg : node->prefix_args) {
-    std::visit(*this, arg);
-    std::print(", ");
+  std::print("(");
+  for (int i = 0; i < (int)node->prefix_args.size(); i++) {
+    std::visit(*this, node->prefix_args[i]);
+    if (i != (int)node->prefix_args.size() - 1)
+      std::print(", ");
   }
-  std::print(") ");
+  std::print(")>");
 
-  std::print(" |{}| ", node->fn_name);
+  std::print(" {} ", node->fn_name);
 
-  std::print(" (");
-  for (auto &arg : node->suffix_args) {
-    std::visit(*this, arg);
-    std::print(", ");
+  std::print("<(");
+  for (int i = 0; i < (int)node->suffix_args.size(); i++) {
+    std::visit(*this, node->suffix_args[i]);
+    if (i != (int)node->suffix_args.size() - 1)
+      std::print(", ");
   }
-  std::print(") ");
+  std::print(")");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
-  std::print("{} := ", node->name);
+  std::print("{} :: fn (", node->name);
 
   for (auto &arg : node->prefix_args) {
     (*this)(arg);
   }
 
-  std::print("|{}|", node->ret_type.get_name());
+  std::print(" | ");
 
   for (auto &arg : node->suffix_args) {
     (*this)(arg);
   }
+  std::print(")");
+  std::print(" {} ", node->ret_type.get_name());
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<BodyExprAst> &node) {
@@ -63,6 +78,7 @@ void PrettyPrintAstVisitor::operator()(uptr<BodyExprAst> &node) {
     std::print("\n");
   }
   indent -= 1;
+  print_indent();
   std::println("}}");
 }
 
@@ -109,7 +125,7 @@ void PrettyPrintAstVisitor::operator()(uptr<GroupExprAst> &node) {
 void PrettyPrintAstVisitor::operator()(uptr<IfExprAst> &node) {
   std::print("if ");
   std::visit(*this, node->condition);
-  std::print("\n");
+  std::print(" ");
   std::visit(*this, node->then_expr);
   if (node->else_expr) {
     std::print("else ");
@@ -125,6 +141,7 @@ void PrettyPrintAstVisitor::operator()(uptr<BoolExprAst> &node) {
 void PrettyPrintAstVisitor::operator()(uptr<ForExprAst> &node) {
   std::print("for ");
   std::visit(*this, node->condition);
+  std::print(" ");
   std::visit(*this, node->for_body);
 }
 
