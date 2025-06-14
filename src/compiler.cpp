@@ -74,6 +74,13 @@ Compiler::parse_statements(std::string source) {
 
   Token last_token;
   std::vector<AstStatement> statements;
+
+  if (print_tokens) {
+    std::println();
+    std::println(" ----- LEXER RESULTS -----");
+    std::println();
+  }
+
   do {
     auto tkn_res = lexer.get_token();
     if (!tkn_res) {

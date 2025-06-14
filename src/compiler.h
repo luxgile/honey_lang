@@ -28,8 +28,9 @@ class Compiler {
   std::expected<void, std::string> compile_to_obj_file(std::string file_name);
 
 public:
-  Compiler() : llvm_gen(&ctx) {
-    parser.ctx = &ctx;
+  Compiler() : parser(&ctx), llvm_gen(&ctx) {
+    parser.debug_checks = true;
+    parser.debug_scan = true;
     add_internal_types();
   }
 

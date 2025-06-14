@@ -1,73 +1,73 @@
-extern printf := | | format: RawString, args: ...
+extern printf :: fn (|format: RawString, args: ...)
 
-related_to := lhs: RawString | | rhs: RawString {
+related_to :: fn (lhs: RawString | rhs: RawString) {
   printf "%s is related to %s \n" lhs rhs
 }
 
-+ := lhs: Int | Int | rhs: Int {
++ :: fn (lhs: Int | rhs: Int) Int {
   @i+ lhs rhs
 } 
 
-* := lhs: Int | Int | rhs: Int {
+* :: fn (lhs: Int | rhs: Int) Int {
   @i* lhs rhs
 } 
 
-+ := lhs: Float | Float | rhs: Float {
++ :: fn (lhs: Float | rhs: Float) Float {
   @f+ lhs rhs
 }
 
-== := lhs: Int | Bool | rhs: Int { 
+== :: fn (lhs: Int | rhs: Int) Bool { 
   @b== lhs rhs
 } 
 
-!= := lhs: Int | Bool | rhs: Int {
+!= :: fn (lhs: Int | rhs: Int) Bool {
   @b!= lhs rhs
 }
 
-< := lhs: Int | Bool | rhs: Int {
+< :: fn (lhs: Int | rhs: Int) Bool {
   @b< lhs rhs
 }
 
-<= := lhs: Int | Bool | rhs: Int {
+<= :: fn (lhs: Int | rhs: Int) Bool {
   @b<= lhs rhs
 }
 
-! := | Bool | rhs: Bool {
+! :: fn (| rhs: Bool) Bool {
   @b== rhs false
 }
 
-Person := struct {
+Person :: struct {
   name: RawString,
   gender: Bool,
 }
 
-Dog := struct {
+Dog :: struct {
   name: RawString,
   age: Int,
   owner: Person,
 }
 
-main := | | {
-#  "Guille" related_to "Ichi"
-#  my_int := 3 * 5 + 3
+main :: fn (|) {
+  "Guille" related_to "Ichi"
+  my_int := 3 * 5 + 3
   person := Person .{ name = "Guille", gender = true }
   dog := Dog .{ name = "Copper", age = 8, owner = person }
   printf "my dog is %d years old\n" dog.age
   printf "my owner is %s\n" dog.owner.name
 
-#  my_bool := ! (my_int != 18)
-#  if my_bool {
-#    printf "if called!\n"
-#  }
-#
-#  i := 0
-#  loop i < 10 {
-#    printf "loop %d\n" i
-#    i = i + 1
-#  }
-#    
-#  printf "3 * 5 + 3 = %d \n" my_int
-#  
-#  add := 3.2 + 6.5
-#  printf "3.2 + 6.5 = %.1f\n" add
+  my_bool := ! (my_int != 18)
+  if my_bool {
+    printf "if called!\n"
+  }
+
+  i := 0
+  loop i < 10 {
+    printf "loop %d\n" i
+    i = i + 1
+  }
+    
+  printf "3 * 5 + 3 = %d \n" my_int
+  
+  add := 3.2 + 6.5
+  printf "3.2 + 6.5 = %.1f\n" add
 }

@@ -32,7 +32,7 @@ struct Parser {
   /// Meta tags fn defined and not used
   std::vector<uptr<MetaDefExprAst>> line_meta_def;
 
-  Parser() { type_visitor.ctx = ctx; }
+  Parser(ProgramCtx *ctx) : ctx(ctx) { type_visitor.ctx = ctx; }
 
 #define LOG(msg)                                                               \
   if (debug_scan)                                                              \
@@ -167,8 +167,7 @@ struct Parser {
     while (check_tokens({NewLine}, offset))
       offset += 1;
 
-    if (check_tokens({Id, Colon, Id, Struct, LBrace}, offset) &&
-        tk_queue[offset + 2].value == "=") {
+    if (check_tokens({Id, Colon, Colon, Struct, LBrace}, offset)) {
       LOG("struct def found");
       auto struct_name = get_tk(offset).value().value;
       offset += 5;
@@ -254,11 +253,10 @@ struct Parser {
       offset += 1;
     }
 
-    if (check_tokens({Id, Colon, Id}, offset) &&
-        tk_queue[offset + 2].value == "=") {
+    if (check_tokens({Id, Colon, Colon, Fn}, offset)) {
       LOG("fn decl found");
       auto fn_id = *get_tk(offset);
-      offset += 3;
+      offset += 4;
       auto header = handle_fn_header(fn_id.value, offset);
       if (!header)
         return {};
@@ -702,36 +700,56 @@ struct Parser {
     LOG("parsing fn header");
     auto ret_type = VOID_TYPE;
 
+    if (!check_tokens({LPar}, offset))
+      return {};
+    offset += 1;
+
     // Prev arguments
     LOG("prefix args:");
     auto prefix = handle_fn_args(offset);
     if (!prefix)
       return {};
 
-    // Return type
-    if (check_tokens({Bar}, offset)) {
-      if (check_tokens({Id}, offset + 1)) {
-        LOG("getting fn return type");
-        ret_type = tk_queue[offset + 1].value;
-        offset += 1;
-      } else {
-        LOG("no return type for fn");
-      }
-
-      if (!check_tokens({Bar}, offset + 1)) {
-        return {};
-      }
-
-      offset += 2;
-    } else {
+    // Divider type
+    if (!check_tokens({Bar}, offset))
       return {};
-    }
+    offset += 1;
+    /* if (check_tokens({Bar}, offset)) { */
+    /*   if (check_tokens({Id}, offset + 1)) { */
+    /*     LOG("getting fn return type"); */
+    /*     ret_type = tk_queue[offset + 1].value; */
+    /*     offset += 1; */
+    /*   } else { */
+    /*     LOG("no return type for fn"); */
+    /*   } */
+    /**/
+    /*   if (!check_tokens({Bar}, offset + 1)) { */
+    /*     return {}; */
+    /*   } */
+    /**/
+    /*   offset += 2; */
+    /* } else { */
+    /*   return {}; */
+    /* } */
 
     // Next arguments
     LOG("suffix args:");
     auto suffix = handle_fn_args(offset);
     if (!suffix)
       return {};
+
+    if (!check_tokens({RPar}, offset))
+      return {};
+    offset += 1;
+
+    // Return type
+    if (check_tokens({Id}, offset)) {
+      LOG("getting fn return type");
+      ret_type = tk_queue[offset].value;
+      offset += 1;
+    } else {
+      LOG("no return type for fn");
+    }
 
     LOG("found fn header");
     return std::make_unique<FnHeaderAst>(
@@ -742,13 +760,9 @@ struct Parser {
     LOG("parsing fn arguments");
     auto args = std::vector<uptr<ArgDefAst>>();
 
-    if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
-        check_tokens({NewLine}, offset)) {
-      if (check_tokens({NewLine}, offset))
-        offset += 1;
-
+    // No arguments found
+    if (check_tokens({Bar}, offset) || check_tokens({RPar}, offset))
       return args;
-    }
 
     while (true) {
       auto arg = handle_arg_def(offset);
@@ -763,8 +777,7 @@ struct Parser {
         continue;
       }
 
-      if (check_tokens({Bar}, offset) || check_tokens({LBrace}, offset) ||
-          check_tokens({NewLine}, offset) || check_tokens({EoF}, offset)) {
+      if (check_tokens({Bar}, offset) || check_tokens({RPar}, offset)) {
         if (check_tokens({NewLine}, offset))
           offset += 1;
 

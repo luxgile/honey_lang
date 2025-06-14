@@ -10,7 +10,6 @@ enum TokenKind {
   Dot,
   Comma,
   Colon,
-  /* Eq, */
   LBrace,
   RBrace,
   LPar,
@@ -23,6 +22,7 @@ enum TokenKind {
   Bool,
   Extern,
   Struct,
+  Fn,
   If,
   Else,
   Loop,

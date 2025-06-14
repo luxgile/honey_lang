@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include <cctype>
 #include <iostream>
+#include <print>
 #include <string>
 
 int Lexer::next_char() {
@@ -87,6 +88,9 @@ std::expected<Token, std::string> Lexer::get_token() {
 
     if (temp_id == "struct")
       return create_token(Struct);
+
+    if (temp_id == "fn")
+      return create_token(Fn);
 
     return create_token(Id);
   }
@@ -239,6 +243,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Extern";
   case Struct:
     return "Struct";
+  case Fn:
+    return "Fn";
   case If:
     return "If";
   case Else:
@@ -256,7 +262,6 @@ std::string token_kind_to_string(TokenKind kind) {
 }
 
 void Token::print_token() {
-  std::cout << "[" << position.line << ":" << position.start << "-"
-            << position.end << "] " << token_kind_to_string(kind) << " "
-            << value << "\n";
+  std::println("[{}:{}-{}] {} {}", position.line, position.start, position.end,
+               token_kind_to_string(kind), value);
 }
