@@ -22,6 +22,7 @@ enum TokenKind {
   Bool,
   Extern,
   Struct,
+  Enum,
   Fn,
   If,
   Else,

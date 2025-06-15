@@ -89,6 +89,9 @@ std::expected<Token, std::string> Lexer::get_token() {
     if (temp_id == "struct")
       return create_token(Struct);
 
+    if (temp_id == "enum")
+      return create_token(Enum);
+
     if (temp_id == "fn")
       return create_token(Fn);
 
@@ -243,6 +246,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Extern";
   case Struct:
     return "Struct";
+  case Enum:
+    return "Enum";
   case Fn:
     return "Fn";
   case If:

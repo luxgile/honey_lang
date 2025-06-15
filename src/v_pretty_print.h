@@ -54,4 +54,15 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<StructExprAst> &node);
 
   void operator()(uptr<MemberAccesorExprAst> &node);
+
+  void operator()(uptr<EnumDefAst> &node) {
+    std::println("{} :: enum {{", node->type.get_name());
+    indent += 1;
+    for (auto value : node->values) {
+      print_indent();
+      std::println("{},", value);
+    }
+    indent -= 1;
+    std::println("}}");
+  }
 };

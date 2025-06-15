@@ -194,6 +194,28 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
+  std::expected<void, std::string> build_enum(EnumDefAst &node) {
+    std::vector<llvm::Type *> field_types;
+    int i = 0;
+    for (auto &field : node.values) {
+      auto enum_value = llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, i));
+      auto enum_value_name = node.type.get_name() + "_" + field;
+      auto global_enum_val = new llvm::GlobalVariable(
+          *module, enum_value->getType(), true,
+          llvm::GlobalValue::PrivateLinkage, enum_value, enum_value_name);
+      builder->CreateConstGEP2_32(global_enum_val->getType(), global_enum_val,
+                                  0, 0);
+      i += 1;
+    }
+
+    /* auto enum_type = */
+    /*     llvm::StructType::create(*llvm_ctx, field_types,
+     * node.type.get_name()); */
+    /* ctx->define_llvm_type(node.type, struct_type); */
+
+    return {};
+  }
+
   std::expected<void, std::string> build_var(VarDefStmtAst &node);
 
   std::expected<void, std::string> build_var_assignment(VarAssignStmtAst &node);
@@ -218,6 +240,13 @@ struct LlvmIrGenAstVisitor {
 
     if (std::holds_alternative<uptr<StructDefAst>>(statement)) {
       auto stc = build_struct(*std::get<uptr<StructDefAst>>(statement));
+      if (!stc)
+        return std::unexpected(stc.error());
+      return nullptr;
+    }
+
+    if (std::holds_alternative<uptr<EnumDefAst>>(statement)) {
+      auto stc = build_enum(*std::get<uptr<EnumDefAst>>(statement));
       if (!stc)
         return std::unexpected(stc.error());
       return nullptr;
@@ -269,7 +298,8 @@ struct LlvmIrGenAstVisitor {
     if (!var)
       return std::unexpected("trying to reference an undefined variable");
 
-    if (!rvalue_mode && (var.value()->type->isStructTy() || var.value()->type->isArrayTy()))
+    if (!rvalue_mode &&
+        (var.value()->type->isStructTy() || var.value()->type->isArrayTy()))
       return var.value()->alloca;
 
     return builder->CreateLoad(var.value()->type, var.value()->alloca,

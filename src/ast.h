@@ -17,38 +17,46 @@
 using AstTypeId = std::size_t;
 struct AstType;
 
-struct AstStructField {
+struct AstTypeField {
   std::string name;
   AstType *type;
 };
 
+enum struct AstTypeKind {
+  Primitive,
+  Struct,
+  Enum,
+};
+
 struct AstType {
 private:
-  bool _is_struct;
+  AstTypeKind kind;
   AstTypeId id;
   std::string name;
-  std::vector<AstStructField> fields;
+  std::vector<AstTypeField> fields;
 
 public:
-  AstType(std::string name) : _is_struct(false), name(name) {
+  AstType(std::string name) : kind(AstTypeKind::Primitive), name(name) {
     id = std::hash<std::string>{}(name);
   }
 
-  AstType(std::string name, std::vector<AstStructField> fields)
-      : _is_struct(true), name(name), fields(fields) {
+  AstType(std::string name, std::vector<AstTypeField> fields)
+      : kind(AstTypeKind::Struct), name(name), fields(fields) {
     id = std::hash<std::string>{}(name);
   }
 
-  AstTypeId get_id() { return id; }
-  std::string get_name() { return name; }
-  std::vector<AstStructField> get_fields() { return fields; }
+  AstTypeId get_id() const { return id; }
+  std::string get_name() const { return name; }
+  std::vector<AstTypeField> get_fields() const { return fields; }
 
   bool operator==(const AstType &rhs) const { return id == rhs.id; }
 
   bool is_void();
-  bool is_struct() { return _is_struct; }
+  bool is_primitive() { return kind == AstTypeKind::Primitive; }
+  bool is_struct() { return kind == AstTypeKind::Struct; }
+  bool is_enum() { return kind == AstTypeKind::Enum; }
 
-  std::expected<AstStructField *, std::string> get_field_by_idx(int idx) {
+  std::expected<AstTypeField *, std::string> get_field_by_idx(int idx) {
     if (!is_struct())
       return std::unexpected("trying to get field from a non-struct type");
 
@@ -58,7 +66,7 @@ public:
     return &fields[idx];
   }
 
-  std::expected<AstStructField *, std::string>
+  std::expected<AstTypeField *, std::string>
   get_field_by_name(std::string name) {
     if (!is_struct())
       return std::unexpected("trying to get field from a non-struct type");
@@ -86,11 +94,11 @@ public:
   }
 };
 
-const AstType VOID_TYPE = AstType{"Void"};
-const AstType BOOL_TYPE = AstType{"Bool"};
-const AstType INT_TYPE = AstType{"Int"};
-const AstType FLOAT_TYPE = AstType{"Float"};
-const AstType RAW_STRING_TYPE = AstType{"RawString"};
+static AstType VOID_TYPE = AstType{"Void"};
+static AstType BOOL_TYPE = AstType{"Bool"};
+static AstType INT_TYPE = AstType{"Int"};
+static AstType FLOAT_TYPE = AstType{"Float"};
+static AstType RAW_STRING_TYPE = AstType{"RawString"};
 
 struct IntExprAst;
 struct FloatExprAst;
@@ -121,11 +129,13 @@ struct VarDefStmtAst;
 struct ReturnStmtAst;
 struct VarAssignStmtAst;
 struct StructDefAst;
+struct EnumDefAst;
 
-using AstStatement = std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>,
-                                  uptr<FnDefAst>, uptr<StatementExprAst>,
-                                  uptr<VarDefStmtAst>, uptr<ReturnStmtAst>,
-                                  uptr<VarAssignStmtAst>, uptr<StructDefAst>>;
+using AstStatement =
+    std::variant<uptr<ArgDefAst>, uptr<FnHeaderAst>, uptr<FnDefAst>,
+                 uptr<StatementExprAst>, uptr<VarDefStmtAst>,
+                 uptr<ReturnStmtAst>, uptr<VarAssignStmtAst>,
+                 uptr<StructDefAst>, uptr<EnumDefAst>>;
 
 enum struct MetaFunctionKind {
   AddInt,
@@ -191,6 +201,11 @@ struct MemberAccesorExprAst {
 struct StructExprAst {
   AstType type;
   std::vector<uptr<VarAssignStmtAst>> fields;
+};
+
+struct EnumDefAst {
+  AstType type;
+  std::vector<std::string> values;
 };
 
 struct StructDefAst {

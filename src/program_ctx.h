@@ -74,6 +74,7 @@ private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
   /* std::map<std::string, uptr<OverloadFnGroup>> ext_fns; */
   std::map<AstTypeId, llvm::Type *> llvm_types;
+  std::map<std::string, EnumDefAst *> enums;
   std::map<std::string, StructDefAst *> structs;
   std::map<std::string, AstType> primitives;
   std::map<std::string, uptr<MetaFunction>> defined_meta;
@@ -88,7 +89,7 @@ public:
   std::optional<AstType> get_type_by_name(std::string type_name) {
     for (auto primitive : primitives) {
       if (primitive.second.get_name() == type_name)
-        return primitive.second.get_name();
+        return primitive.second;
     }
 
     for (auto &var : defined_vars) {
@@ -153,6 +154,15 @@ public:
     if (type == nullptr)
       return std::nullopt;
     return type;
+  }
+
+  void define_enum(std::string name, EnumDefAst *value) { enums[name] = value; }
+
+  std::optional<EnumDefAst *> get_enum(std::string name) {
+    auto e = enums[name];
+    if (e == nullptr)
+      return std::nullopt;
+    return e;
   }
 
   void define_struct(std::string name, StructDefAst *value) {

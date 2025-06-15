@@ -47,6 +47,12 @@ Dog :: struct {
   owner: Person,
 }
 
+AnimalKind :: enum {
+  Dog,
+  Cat,
+  Spider,
+}
+
 main :: fn (|) {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3

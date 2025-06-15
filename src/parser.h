@@ -139,6 +139,10 @@ struct Parser {
       return _struct;
     }
 
+    if (auto _enum = handle_enum_def()) {
+      return _enum;
+    }
+
     if (auto fn = handle_fn_def()) {
       return fn;
     }
@@ -178,7 +182,7 @@ struct Parser {
 
       // Get struct fields
       std::vector<uptr<ArgDefAst>> fields;
-      std::vector<AstStructField> field_types;
+      std::vector<AstTypeField> field_types;
       while (!check_tokens({RBrace}, offset)) {
         auto field = handle_arg_def(offset);
         if (!field)
@@ -193,7 +197,7 @@ struct Parser {
           offset += 1;
 
         field_types.push_back(
-            AstStructField{field.value()->name, &field.value()->type});
+            AstTypeField{field.value()->name, &field.value()->type});
         fields.push_back(std::move(*field));
       }
       offset += 1;
@@ -287,6 +291,59 @@ struct Parser {
       }
     }
 
+    return {};
+  }
+
+  std::optional<uptr<EnumDefAst>> handle_enum_def() {
+    LOG("starting parsing enum");
+
+    int offset = 0;
+
+    // Skip all new lines
+    while (check_tokens({NewLine}, offset))
+      offset += 1;
+
+    if (check_tokens({Id, Colon, Colon, Enum, LBrace}, offset)) {
+      LOG("enum def found");
+      auto enum_name = get_tk(offset).value().value;
+      offset += 5;
+
+      // Skip new lines
+      while (check_tokens({NewLine}, offset))
+        offset += 1;
+
+      // Get struct fields
+      std::vector<std::string> fields;
+      std::vector<AstTypeField> field_types;
+      while (!check_tokens({RBrace}, offset)) {
+        if (!check_tokens({Id}, offset))
+          return {};
+        auto field = get_tk(offset).value().value;
+        offset += 1;
+
+        if (!check_tokens({Comma}, offset))
+          return {};
+        offset += 1;
+
+        // Skip new lines
+        while (check_tokens({NewLine}, offset))
+          offset += 1;
+
+        auto int_type = ctx->get_type_by_name("Int").value();
+        field_types.push_back(AstTypeField{field, &INT_TYPE});
+        fields.push_back(field);
+      }
+      offset += 1;
+
+      LOG("enum parsing successful");
+      tk_queue.clear();
+      auto e_type = AstType(enum_name, field_types);
+      auto e = std::make_unique<EnumDefAst>(e_type, fields);
+      ctx->define_enum(enum_name, e.get());
+      return e;
+    }
+
+    LOG("failed parsing enum");
     return {};
   }
 
