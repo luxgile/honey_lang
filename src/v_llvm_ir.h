@@ -23,8 +23,10 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cassert>
+#include <cstdio>
 #include <ctime>
 #include <expected>
+#include <format>
 #include <functional>
 #include <iostream>
 #include <memory>
@@ -45,8 +47,13 @@ struct LlvmIrGenAstVisitor {
     llvm::AllocaInst *alloca;
   };
 
+  struct EnumValues {
+    std::vector<llvm::Value *> values;
+  };
+
   // State
   std::map<std::string, DefinedVariable> defined_variables;
+  /* std::map<AstTypeId, EnumValues> enums_llvm_values; */
   llvm::Function *current_fn;
   bool rvalue_mode;
 
@@ -196,38 +203,16 @@ struct LlvmIrGenAstVisitor {
 
   std::expected<void, std::string> build_enum(EnumDefAst &node) {
     std::vector<llvm::Type *> field_types;
-    int i = 0;
-    for (auto &field : node.values) {
-      auto enum_value = llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, i));
-      auto enum_value_name = node.type.get_name() + "_" + field;
-      auto global_enum_val = new llvm::GlobalVariable(
-          *module, enum_value->getType(), true,
-          llvm::GlobalValue::PrivateLinkage, enum_value, enum_value_name);
-      builder->CreateConstGEP2_32(global_enum_val->getType(), global_enum_val,
-                                  0, 0);
-      i += 1;
-    }
-
-    /* auto enum_type = */
-    /*     llvm::StructType::create(*llvm_ctx, field_types,
-     * node.type.get_name()); */
-    /* ctx->define_llvm_type(node.type, struct_type); */
-
+    field_types.push_back(llvm::IntegerType::getInt32Ty(*llvm_ctx));
+    auto enum_type =
+        llvm::StructType::create(*llvm_ctx, field_types, node.type.get_name());
+    ctx->define_llvm_type(node.type, enum_type);
     return {};
   }
 
   std::expected<void, std::string> build_var(VarDefStmtAst &node);
 
   std::expected<void, std::string> build_var_assignment(VarAssignStmtAst &node);
-
-  /* std::expected<void, std::string> build_external_fns() { */
-  /*   for (auto ext_fn : ctx->get_all_ext_fn()) { */
-  /*     auto r = build_prototype(*ext_fn); */
-  /*     if (!r) */
-  /*       return std::unexpected(r.error()); */
-  /*   } */
-  /*   return {}; */
-  /* } */
 
   std::expected<llvm::Value *, std::string>
   build_statement(AstStatement &statement) {
@@ -296,7 +281,8 @@ struct LlvmIrGenAstVisitor {
   std::expected<llvm::Value *, std::string> operator()(uptr<VarExprAst> &node) {
     auto var = get_defined_var(node->name);
     if (!var)
-      return std::unexpected("trying to reference an undefined variable");
+      return std::unexpected(
+          std::format("variable '{}' is undefined", node->name));
 
     if (!rvalue_mode &&
         (var.value()->type->isStructTy() || var.value()->type->isArrayTy()))
@@ -316,8 +302,12 @@ struct LlvmIrGenAstVisitor {
     return std::visit(*this, node->expr);
   }
 
-  std::expected<llvm::Value *, std::string>
-  operator()(uptr<StructExprAst> &node) {
+  std::expected<llvm::Value *, std::string> operator()(uptr<StructExprAst> &_) {
+    struct Unreachable {};
+    throw Unreachable{};
+  }
+
+  std::expected<llvm::Value *, std::string> operator()(uptr<EnumExprAst> &_) {
     struct Unreachable {};
     throw Unreachable{};
   }
@@ -654,6 +644,28 @@ struct LlvmStoreAllocaVisitor {
   std::expected<void, std::string>
   operator()(uptr<MemberAccesorExprAst> &node) {
     return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<EnumExprAst> &node) {
+    auto enum_ty = llvm_gen->ctx->get_llvm_type(node->type);
+    if (!enum_ty)
+      return std::unexpected("failed to get struct type");
+
+    auto value_idx = node->type.get_field_index_by_name(node->value);
+    if (!value_idx)
+      return std::unexpected(std::format("'{}' not found in enum '{}'",
+                                         node->value, node->type.get_name()));
+
+    // Index is always the first value in an enum
+    auto field_ptr =
+        builder->CreateStructGEP(*enum_ty, alloca, 0, node->type.get_name() + "_enum_value");
+
+    LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
+    auto int_expr = std::make_unique<IntExprAst>(*value_idx);
+    auto ir_res = store_visitor(int_expr);
+    if (!ir_res)
+      return std::unexpected(ir_res.error());
+    return {};
   }
 
   std::expected<void, std::string> operator()(uptr<StructExprAst> &node) {

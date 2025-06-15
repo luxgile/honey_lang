@@ -178,3 +178,18 @@ void PrettyPrintAstVisitor::operator()(uptr<MemberAccesorExprAst> &node) {
   std::visit(*this, node->base);
   std::print(".{}", node->member);
 }
+void PrettyPrintAstVisitor::operator()(uptr<EnumDefAst> &node) {
+  std::println("{} :: enum {{", node->type.get_name());
+  indent += 1;
+  for (auto value : node->values) {
+    print_indent();
+    std::println("{},", value);
+  }
+  indent -= 1;
+  std::println("}}");
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<EnumExprAst> &node) {
+  std::print("{}.{}", node->type.get_name(), node->value);
+}
+

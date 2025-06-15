@@ -204,7 +204,7 @@ struct Parser {
 
       LOG("struct parsing successfull");
       tk_queue.clear();
-      auto s_type = AstType(struct_name, field_types);
+      auto s_type = AstType::new_struct(struct_name, field_types);
       auto s = std::make_unique<StructDefAst>(s_type, std::move(fields));
       ctx->define_struct(struct_name, s.get());
       return s;
@@ -337,7 +337,7 @@ struct Parser {
 
       LOG("enum parsing successful");
       tk_queue.clear();
-      auto e_type = AstType(enum_name, field_types);
+      auto e_type = AstType::new_enum(enum_name, field_types);
       auto e = std::make_unique<EnumDefAst>(e_type, fields);
       ctx->define_enum(enum_name, e.get());
       return e;
@@ -401,9 +401,13 @@ struct Parser {
       auto id = get_tk(offset)->value;
       offset += 3;
       auto expr = consume_expressions(offset, {NewLine});
+      if (!expr)
+        return {};
+
+      auto type = std::visit(type_visitor, *expr);
+
       LOG("var definition expr found");
-      auto def_var =
-          std::make_unique<VarDefStmtAst>(id, std::nullopt, std::move(expr));
+      auto def_var = std::make_unique<VarDefStmtAst>(id, type, std::move(expr));
       ctx->defined_vars[id] = def_var.get();
       return def_var;
     }
@@ -448,6 +452,10 @@ struct Parser {
 
     if (check_tokens({Id}, offset)) {
       auto identifier = get_tk(offset).value().value;
+
+      // Enum expr
+      if (auto enum_expr = handle_enum_expr(offset))
+        return enum_expr;
 
       // Call expr
       if (auto call = handle_call_expr(offset))
@@ -519,6 +527,26 @@ struct Parser {
     }
 
     LOG("no expression found");
+    return {};
+  }
+
+  std::optional<uptr<EnumExprAst>> handle_enum_expr(int &offset) {
+    LOG("starting parsing enum expr");
+
+    if (check_tokens({Id, Dot, Id}, offset)) {
+      auto enum_name = get_tk(offset).value().value;
+      auto enum_value = get_tk(offset + 2).value().value;
+
+      auto enum_type = ctx->get_type_by_name(enum_name);
+      if (!enum_type || !enum_type->is_enum())
+        return {};
+
+      offset += 3;
+      LOG("enum expr parsed");
+      return std::make_unique<EnumExprAst>(*enum_type, enum_value);
+    }
+
+    LOG("failed to parse enum expr");
     return {};
   }
 
@@ -771,23 +799,6 @@ struct Parser {
     if (!check_tokens({Bar}, offset))
       return {};
     offset += 1;
-    /* if (check_tokens({Bar}, offset)) { */
-    /*   if (check_tokens({Id}, offset + 1)) { */
-    /*     LOG("getting fn return type"); */
-    /*     ret_type = tk_queue[offset + 1].value; */
-    /*     offset += 1; */
-    /*   } else { */
-    /*     LOG("no return type for fn"); */
-    /*   } */
-    /**/
-    /*   if (!check_tokens({Bar}, offset + 1)) { */
-    /*     return {}; */
-    /*   } */
-    /**/
-    /*   offset += 2; */
-    /* } else { */
-    /*   return {}; */
-    /* } */
 
     // Next arguments
     LOG("suffix args:");
@@ -802,7 +813,11 @@ struct Parser {
     // Return type
     if (check_tokens({Id}, offset)) {
       LOG("getting fn return type");
-      ret_type = tk_queue[offset].value;
+      auto type_name = tk_queue[offset].value;
+      auto type = ctx->get_type_by_name(type_name);
+      if (!type)
+        return {};
+      ret_type = *type;
       offset += 1;
     } else {
       LOG("no return type for fn");

@@ -41,25 +41,32 @@ Person :: struct {
   gender: Bool,
 }
 
-Dog :: struct {
-  name: RawString,
-  age: Int,
-  owner: Person,
-}
-
 AnimalKind :: enum {
   Dog,
   Cat,
   Spider,
 }
 
+Animal :: struct {
+  kind: AnimalKind,
+  name: RawString,
+  age: Int,
+  owner: Person,
+}
+
 main :: fn (|) {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
   person := Person .{ name = "Guille", gender = true }
-  dog := Dog .{ name = "Copper", age = 8, owner = person }
-  printf "my dog is %d years old\n" dog.age
-  printf "my owner is %s\n" dog.owner.name
+  animal := Animal .{ kind = AnimalKind.Dog,  name = "Copper", age = 8, owner = person }
+  printf "my animal is %d years old\n" animal.age
+  printf "my owner is %s\n" animal.owner.name
+
+  # TODO: Need to check for eq on enums
+  # @e== animal.kind AnimalKind.Dog
+  # if animal.kind == AnimalKind.Dog {
+  #   printf "I'm a dog!\n"
+  # }
 
   my_bool := ! (my_int != 18)
   if my_bool {

@@ -35,14 +35,34 @@ private:
   std::string name;
   std::vector<AstTypeField> fields;
 
+  AstType() {}
+
 public:
-  AstType(std::string name) : kind(AstTypeKind::Primitive), name(name) {
-    id = std::hash<std::string>{}(name);
+  static AstType new_primitive(std::string name) {
+    auto type = AstType{};
+    type.kind = AstTypeKind::Primitive;
+    type.name = name;
+    type.id = std::hash<std::string>{}(name);
+    return type;
   }
 
-  AstType(std::string name, std::vector<AstTypeField> fields)
-      : kind(AstTypeKind::Struct), name(name), fields(fields) {
-    id = std::hash<std::string>{}(name);
+  static AstType new_struct(std::string name,
+                            std::vector<AstTypeField> fields) {
+    auto type = AstType{};
+    type.kind = AstTypeKind::Struct;
+    type.name = name;
+    type.id = std::hash<std::string>{}(name);
+    type.fields = fields;
+    return type;
+  }
+
+  static AstType new_enum(std::string name, std::vector<AstTypeField> fields) {
+    auto type = AstType{};
+    type.kind = AstTypeKind::Enum;
+    type.name = name;
+    type.id = std::hash<std::string>{}(name);
+    type.fields = fields;
+    return type;
   }
 
   AstTypeId get_id() const { return id; }
@@ -57,7 +77,7 @@ public:
   bool is_enum() { return kind == AstTypeKind::Enum; }
 
   std::expected<AstTypeField *, std::string> get_field_by_idx(int idx) {
-    if (!is_struct())
+    if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
 
     if (idx < 0 || idx >= (int)fields.size())
@@ -68,7 +88,7 @@ public:
 
   std::expected<AstTypeField *, std::string>
   get_field_by_name(std::string name) {
-    if (!is_struct())
+    if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
 
     for (auto &field : fields) {
@@ -76,11 +96,12 @@ public:
         return &field;
     }
 
-    return std::unexpected("no field found in struct");
+    return std::unexpected(
+        std::format("no field '{}' found in type '{}'", name, get_name()));
   }
 
   std::expected<int, std::string> get_field_index_by_name(std::string name) {
-    if (!is_struct())
+    if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
 
     int idx = 0;
@@ -90,15 +111,16 @@ public:
       idx += 1;
     }
 
-    return std::unexpected("no field found in struct");
+    return std::unexpected(
+        std::format("no field '{}' found in type '{}'", name, get_name()));
   }
 };
 
-static AstType VOID_TYPE = AstType{"Void"};
-static AstType BOOL_TYPE = AstType{"Bool"};
-static AstType INT_TYPE = AstType{"Int"};
-static AstType FLOAT_TYPE = AstType{"Float"};
-static AstType RAW_STRING_TYPE = AstType{"RawString"};
+static AstType VOID_TYPE = AstType::new_primitive("Void");
+static AstType BOOL_TYPE = AstType::new_primitive("Bool");
+static AstType INT_TYPE = AstType::new_primitive("Int");
+static AstType FLOAT_TYPE = AstType::new_primitive("Float");
+static AstType RAW_STRING_TYPE = AstType::new_primitive("RawString");
 
 struct IntExprAst;
 struct FloatExprAst;
@@ -115,13 +137,15 @@ struct IfExprAst;
 struct ForExprAst;
 struct StructExprAst;
 struct MemberAccesorExprAst;
+struct EnumExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
                  uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
                  uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
                  uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
-                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>>;
+                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>,
+                 uptr<EnumExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -183,7 +207,7 @@ struct VarDefStmtAst {
   std::string name;
 
   /// It can be implicit based on the expression.
-  std::optional<AstType> type;
+  AstType type;
 
   std::optional<AstExpression> assignment;
 };
@@ -201,6 +225,11 @@ struct MemberAccesorExprAst {
 struct StructExprAst {
   AstType type;
   std::vector<uptr<VarAssignStmtAst>> fields;
+};
+
+struct EnumExprAst {
+  AstType type;
+  std::string value;
 };
 
 struct EnumDefAst {

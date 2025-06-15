@@ -16,9 +16,13 @@ struct AstExprTypeVisitor {
   AstType operator()(uptr<StringExprAst> &_) { return RAW_STRING_TYPE; }
 
   AstType operator()(uptr<StructExprAst> &node) { return node->type; }
+  AstType operator()(uptr<EnumExprAst> &node) { return node->type; }
 
   AstType operator()(uptr<MemberAccesorExprAst> &node) {
     auto base_type = std::visit(*this, node->base);
+    if (base_type.is_enum())
+      return INT_TYPE;
+
     auto member = base_type.get_field_by_name(node->member);
     if (!member)
       throw "no member found on type";
@@ -30,13 +34,7 @@ struct AstExprTypeVisitor {
     if (!def_var)
       throw "defined var not found";
 
-    if (def_var->type)
-      return *def_var->type;
-
-    if (def_var->assignment)
-      return std::visit(*this, *def_var->assignment);
-
-    throw "unreacheable code";
+    return def_var->type;
   }
 
   AstType operator()(uptr<ArgDefAst> &node) { return node->type; }

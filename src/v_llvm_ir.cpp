@@ -4,9 +4,6 @@
 
 std::expected<void, std::string>
 LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
-  if (!node.assignment && !node.type)
-    return std::unexpected("could not deduce type for var definition");
-
   llvm::Type *assignment_llvm_type;
 
   if (node.assignment) {
@@ -14,16 +11,15 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
     auto ast_type = std::visit(type_visitor, *node.assignment);
 
     auto assignment_llvm_type_res = ctx->get_llvm_type(ast_type);
-    if(!assignment_llvm_type_res)
-      return std::unexpected("no llvm type found for assigment in var declaration");
+    if (!assignment_llvm_type_res)
+      return std::unexpected(
+          "no llvm type found for assigment in var declaration");
     assignment_llvm_type = assignment_llvm_type_res.value();
 
-    if (node.type) {
-      auto _ty = ctx->get_llvm_type(*node.type);
-      if (_ty && assignment_llvm_type != _ty.value())
-        return std::unexpected(
-            "explicit type and assigment expression type mismatch");
-    }
+    auto _ty = ctx->get_llvm_type(node.type);
+    if (_ty && assignment_llvm_type != _ty.value())
+      return std::unexpected(
+          "explicit type and assigment expression type mismatch");
 
     if (assignment_llvm_type->isVoidTy())
       return std::unexpected("trying to allocate a void type");
@@ -39,7 +35,7 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
       return std::unexpected(ir_res.error());
 
   } else {
-    auto _ty = ctx->get_llvm_type(*node.type);
+    auto _ty = ctx->get_llvm_type(node.type);
     if (!_ty)
       return std::unexpected("type undefined found for var definition");
 

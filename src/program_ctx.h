@@ -93,13 +93,18 @@ public:
     }
 
     for (auto &var : defined_vars) {
-      if (var.second->type->get_name() == type_name)
+      if (var.second->type.get_name() == type_name)
         return var.second->type;
     }
 
     for (auto &s : structs) {
       if (s.second->type.get_name() == type_name)
         return s.second->type;
+    }
+
+    for (auto &e : enums) {
+      if (e.second->type.get_name() == type_name)
+        return e.second->type;
     }
 
     return {};
@@ -114,15 +119,6 @@ public:
     overloads->fns.push_back(fn);
   }
 
-  /* void define_fn_ext(std::string name, FnHeaderAst *fn) { */
-  /*   auto overloads = ext_fns[name].get(); */
-  /*   if (overloads == nullptr) { */
-  /*     fns[name] = std::make_unique<OverloadFnGroup>(); */
-  /*     overloads = ext_fns[name].get(); */
-  /*   } */
-  /*   overloads->fns.push_back(fn); */
-  /* } */
-
   std::optional<OverloadFnGroup *> get_overloads(std::string name) {
     auto fn = &fns[name];
     if (fn->get() != nullptr)
@@ -134,16 +130,6 @@ public:
 
     return std::nullopt;
   }
-
-  /* std::vector<FnHeaderAst *> get_all_ext_fn() { */
-  /*   std::vector<FnHeaderAst *> fns; */
-  /*   for (auto it = ext_fns.begin(); it != ext_fns.end(); it++) { */
-  /*     for (auto fn : it->second.get()->fns) { */
-  /*       fns.push_back(fn); */
-  /*     } */
-  /*   } */
-  /*   return fns; */
-  /* } */
 
   void define_llvm_type(AstType ast_type, llvm::Type *type) {
     llvm_types[ast_type.get_id()] = type;
@@ -170,10 +156,9 @@ public:
   }
 
   std::optional<StructDefAst *> get_struct(std::string name) {
-    auto s = structs[name];
-    if (s == nullptr)
+    if (!structs.contains(name))
       return std::nullopt;
-    return s;
+    return structs[name];
   }
 
   void define_meta(std::string name, uptr<MetaFunction> meta) {
