@@ -9,6 +9,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
@@ -163,7 +164,7 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected(body_ret.error());
       }
 
-      if (!node.fn_header->ret_type.is_void()) {
+      if (!ctx->type_db.get_type(node.fn_header->ret_type).value()->is_void()) {
         auto expected_ret_type = ctx->get_llvm_type(node.fn_header->ret_type);
         if (!expected_ret_type)
           return std::unexpected("undefined return type");
@@ -194,18 +195,47 @@ struct LlvmIrGenAstVisitor {
       field_types.push_back(*type);
     }
 
+    auto struct_name = ctx->type_db.get_type(node.type).value()->get_fullname();
     auto struct_type =
-        llvm::StructType::create(*llvm_ctx, field_types, node.type.get_name());
+        llvm::StructType::create(*llvm_ctx, field_types, struct_name);
     ctx->define_llvm_type(node.type, struct_type);
 
     return {};
   }
 
   std::expected<void, std::string> build_enum(EnumDefAst &node) {
+    // Generate inner structs members
+    for (auto &stmt : node.values) {
+      auto stmt_res = build_statement(stmt);
+      if (!stmt_res)
+        return std::unexpected(stmt_res.error());
+      if (*stmt_res != nullptr)
+        std::println("ignored llmv value generated while creating an enum");
+    }
+
     std::vector<llvm::Type *> field_types;
     field_types.push_back(llvm::IntegerType::getInt32Ty(*llvm_ctx));
-    auto enum_type =
-        llvm::StructType::create(*llvm_ctx, field_types, node.type.get_name());
+
+    auto node_type = ctx->type_db.get_type(node.type).value();
+
+    // Get the biggest member size
+    auto data_layout = llvm::DataLayout{module.get()};
+    uint union_size = 0;
+    for (auto &field : node_type->get_fields()) {
+      auto llvm_type = ctx->get_llvm_type(field.type);
+      if (!llvm_type)
+        return std::unexpected(
+            std::format("no llvm type '{}' found",
+                        ctx->type_db.get_type(field.type).value()->get_name()));
+      auto size = data_layout.getTypeAllocSize(*llvm_type);
+      if (size > union_size)
+        union_size = size;
+    }
+
+    field_types.push_back(
+        llvm::ArrayType::get(llvm::IntegerType::get(*llvm_ctx, 8), union_size));
+    auto enum_type = llvm::StructType::create(*llvm_ctx, field_types,
+                                              node_type->get_fullname());
     ctx->define_llvm_type(node.type, enum_type);
     return {};
   }
@@ -421,18 +451,19 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected(base_expr.error());
 
     AstExprTypeVisitor type_visitor = {ctx};
-    auto base_expr_type = std::visit(type_visitor, node->base);
+    auto base_expr_type_id = std::visit(type_visitor, node->base);
+    auto base_expr_type = ctx->type_db.get_type(base_expr_type_id).value();
 
-    auto member_idx = base_expr_type.get_field_index_by_name(node->member);
+    auto member_idx = base_expr_type->get_field_index_by_name(node->member);
     if (!member_idx)
       return std::unexpected(member_idx.error());
 
-    auto member_type = base_expr_type.get_field_by_idx(*member_idx).value();
-    auto member_llvm_type = ctx->get_llvm_type(*member_type->type);
+    auto member_type = base_expr_type->get_field_by_idx(*member_idx).value();
+    auto member_llvm_type = ctx->get_llvm_type(member_type->type);
     if (!member_llvm_type)
       return std::unexpected("no llvm type found for member accessor");
 
-    auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type);
+    auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type_id);
     if (!base_expr_llvm_type)
       return std::unexpected("no type found for base expr");
 
@@ -651,14 +682,16 @@ struct LlvmStoreAllocaVisitor {
     if (!enum_ty)
       return std::unexpected("failed to get struct type");
 
-    auto value_idx = node->type.get_field_index_by_name(node->value);
+    auto node_type = llvm_gen->ctx->type_db.get_type(node->type).value();
+
+    auto value_idx = node_type->get_field_index_by_name(node->value);
     if (!value_idx)
       return std::unexpected(std::format("'{}' not found in enum '{}'",
-                                         node->value, node->type.get_name()));
+                                         node->value, node_type->get_name()));
 
     // Index is always the first value in an enum
-    auto field_ptr =
-        builder->CreateStructGEP(*enum_ty, alloca, 0, node->type.get_name() + "_enum_value");
+    auto field_ptr = builder->CreateStructGEP(
+        *enum_ty, alloca, 0, node_type->get_name() + "_enum_value");
 
     LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
     auto int_expr = std::make_unique<IntExprAst>(*value_idx);
@@ -674,7 +707,9 @@ struct LlvmStoreAllocaVisitor {
       return std::unexpected("failed to get struct type");
 
     for (auto &field : node->fields) {
-      auto field_idx = node->type.get_field_index_by_name(field->id);
+      auto field_idx = llvm_gen->ctx->type_db.get_type(node->type)
+                           .value()
+                           ->get_field_index_by_name(field->id);
       if (!field_idx)
         return std::unexpected(field_idx.error());
 

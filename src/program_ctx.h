@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include "types.h"
 #include "llvm/IR/Type.h"
 #include <map>
 #include <optional>
@@ -16,7 +17,7 @@ struct OverloadFnGroup {
   // improve checks.
 
   bool eq_arg_types(std::vector<uptr<ArgDefAst>> &lhs,
-                    std::vector<AstType> &rhs, bool is_varadic = false) {
+                    std::vector<AstTypeId> &rhs, bool is_varadic = false) {
     if (lhs.size() != rhs.size() && !is_varadic)
       return false;
 
@@ -30,7 +31,7 @@ struct OverloadFnGroup {
 
   /// Returns the fn and the index it was found.
   std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn(std::vector<AstType> pre, std::vector<AstType> suf) {
+  get_fn(std::vector<AstTypeId> pre, std::vector<AstTypeId> suf) {
     for (int i = 0; i < (int)fns.size(); i++) {
       auto fn = fns[i];
 
@@ -50,12 +51,12 @@ struct OverloadFnGroup {
     if (fns.size() == 0 || fns[0]->name != eq_fn->name)
       return std::nullopt;
 
-    std::vector<AstType> prefix_args;
+    std::vector<AstTypeId> prefix_args;
     for (auto &prefix : eq_fn->prefix_args) {
       prefix_args.push_back(prefix->type);
     }
 
-    std::vector<AstType> suffix_args;
+    std::vector<AstTypeId> suffix_args;
     for (auto &suffix : eq_fn->suffix_args) {
       suffix_args.push_back(suffix->type);
     }
@@ -72,42 +73,18 @@ struct OverloadFnGroup {
 struct ProgramCtx {
 private:
   std::map<std::string, uptr<OverloadFnGroup>> fns;
-  /* std::map<std::string, uptr<OverloadFnGroup>> ext_fns; */
   std::map<AstTypeId, llvm::Type *> llvm_types;
   std::map<std::string, EnumDefAst *> enums;
   std::map<std::string, StructDefAst *> structs;
-  std::map<std::string, AstType> primitives;
+  std::map<std::string, AstTypeId> primitives;
   std::map<std::string, uptr<MetaFunction>> defined_meta;
 
 public:
+  AstTypeDb type_db;
   std::map<std::string, VarDefStmtAst *> defined_vars;
 
-  void define_primitive(AstType type) {
-    primitives.insert({type.get_name(), type});
-  }
-
-  std::optional<AstType> get_type_by_name(std::string type_name) {
-    for (auto primitive : primitives) {
-      if (primitive.second.get_name() == type_name)
-        return primitive.second;
-    }
-
-    for (auto &var : defined_vars) {
-      if (var.second->type.get_name() == type_name)
-        return var.second->type;
-    }
-
-    for (auto &s : structs) {
-      if (s.second->type.get_name() == type_name)
-        return s.second->type;
-    }
-
-    for (auto &e : enums) {
-      if (e.second->type.get_name() == type_name)
-        return e.second->type;
-    }
-
-    return {};
+  void define_primitive(std::string name, AstTypeId id) {
+    primitives.insert({name, id});
   }
 
   void define_fn(std::string name, FnHeaderAst *fn) {
@@ -131,12 +108,12 @@ public:
     return std::nullopt;
   }
 
-  void define_llvm_type(AstType ast_type, llvm::Type *type) {
-    llvm_types[ast_type.get_id()] = type;
+  void define_llvm_type(AstTypeId type_id, llvm::Type *type) {
+    llvm_types[type_id] = type;
   }
 
-  std::optional<llvm::Type *> get_llvm_type(AstType &name) {
-    auto type = llvm_types[name.get_id()];
+  std::optional<llvm::Type *> get_llvm_type(AstTypeId id) {
+    auto type = llvm_types[id];
     if (type == nullptr)
       return std::nullopt;
     return type;
@@ -152,6 +129,9 @@ public:
   }
 
   void define_struct(std::string name, StructDefAst *value) {
+    /* if (structs.contains(name)) */
+    /*   throw "trying to redefine a struct"; */
+    /**/
     structs[name] = value;
   }
 

@@ -43,7 +43,7 @@ Person :: struct {
 
 AnimalKind :: enum {
   Dog,
-  Cat,
+  Cat :: struct { color: RawString, },
   Spider,
 }
 

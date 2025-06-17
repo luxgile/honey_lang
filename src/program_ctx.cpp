@@ -8,12 +8,12 @@ OverloadFnGroup::get_mangled_name(CallExprAst *call,
   if (fns.size() == 0 || fns[0]->name != call->fn_name)
     return std::nullopt;
 
-  std::vector<AstType> prefix_args;
+  std::vector<AstTypeId> prefix_args;
   for (auto &prefix : call->prefix_args) {
     prefix_args.push_back(std::visit(*type_visitor, prefix));
   }
 
-  std::vector<AstType> suffix_args;
+  std::vector<AstTypeId> suffix_args;
   for (auto &suffix : call->suffix_args) {
     suffix_args.push_back(std::visit(*type_visitor, suffix));
   }

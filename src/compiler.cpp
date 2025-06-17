@@ -16,19 +16,17 @@
 #include "llvm/TargetParser/Host.h"
 
 void Compiler::add_internal_types() {
-  ctx.define_primitive(VOID_TYPE);
-  ctx.define_primitive(FLOAT_TYPE);
-  ctx.define_primitive(INT_TYPE);
-  ctx.define_primitive(RAW_STRING_TYPE);
-  ctx.define_primitive(BOOL_TYPE);
-
-  ctx.define_llvm_type(VOID_TYPE, llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
+  ctx.define_llvm_type(VOID_TYPE.get_id(),
+                       llvm::Type::getVoidTy(*llvm_gen.llvm_ctx));
   ctx.define_llvm_type(
-      RAW_STRING_TYPE,
+      RAW_STRING_TYPE.get_id(),
       llvm::Type::getInt8Ty(*llvm_gen.llvm_ctx)->getPointerTo());
-  ctx.define_llvm_type(FLOAT_TYPE, llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
-  ctx.define_llvm_type(INT_TYPE, llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
-  ctx.define_llvm_type(BOOL_TYPE, llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
+  ctx.define_llvm_type(FLOAT_TYPE.get_id(),
+                       llvm::Type::getDoubleTy(*llvm_gen.llvm_ctx));
+  ctx.define_llvm_type(INT_TYPE.get_id(),
+                       llvm::Type::getInt32Ty(*llvm_gen.llvm_ctx));
+  ctx.define_llvm_type(BOOL_TYPE.get_id(),
+                       llvm::Type::getInt1Ty(*llvm_gen.llvm_ctx));
 
   ctx.define_meta("i+",
                   std::make_unique<MetaFunction>(MetaFunctionKind::AddInt, 2));
@@ -103,7 +101,7 @@ Compiler::parse_statements(std::string source) {
 
 std::expected<void, std::string>
 Compiler::gen_llvm_ir(std::vector<AstStatement> &statements) {
-  PrettyPrintAstVisitor pretty_printer;
+  PrettyPrintAstVisitor pretty_printer = {&ctx};
   std::println();
   std::println(" ----- PARSED CODE -----");
   std::println();

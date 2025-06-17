@@ -2,6 +2,7 @@
 
 #include "helpers.h"
 #include "lexer.h"
+#include "types.h"
 #include "llvm/IR/Type.h"
 #include <cstddef>
 #include <expected>
@@ -13,114 +14,6 @@
 #include <string>
 #include <variant>
 #include <vector>
-
-using AstTypeId = std::size_t;
-struct AstType;
-
-struct AstTypeField {
-  std::string name;
-  AstType *type;
-};
-
-enum struct AstTypeKind {
-  Primitive,
-  Struct,
-  Enum,
-};
-
-struct AstType {
-private:
-  AstTypeKind kind;
-  AstTypeId id;
-  std::string name;
-  std::vector<AstTypeField> fields;
-
-  AstType() {}
-
-public:
-  static AstType new_primitive(std::string name) {
-    auto type = AstType{};
-    type.kind = AstTypeKind::Primitive;
-    type.name = name;
-    type.id = std::hash<std::string>{}(name);
-    return type;
-  }
-
-  static AstType new_struct(std::string name,
-                            std::vector<AstTypeField> fields) {
-    auto type = AstType{};
-    type.kind = AstTypeKind::Struct;
-    type.name = name;
-    type.id = std::hash<std::string>{}(name);
-    type.fields = fields;
-    return type;
-  }
-
-  static AstType new_enum(std::string name, std::vector<AstTypeField> fields) {
-    auto type = AstType{};
-    type.kind = AstTypeKind::Enum;
-    type.name = name;
-    type.id = std::hash<std::string>{}(name);
-    type.fields = fields;
-    return type;
-  }
-
-  AstTypeId get_id() const { return id; }
-  std::string get_name() const { return name; }
-  std::vector<AstTypeField> get_fields() const { return fields; }
-
-  bool operator==(const AstType &rhs) const { return id == rhs.id; }
-
-  bool is_void();
-  bool is_primitive() { return kind == AstTypeKind::Primitive; }
-  bool is_struct() { return kind == AstTypeKind::Struct; }
-  bool is_enum() { return kind == AstTypeKind::Enum; }
-
-  std::expected<AstTypeField *, std::string> get_field_by_idx(int idx) {
-    if (!is_struct() && !is_enum())
-      return std::unexpected("trying to get field from a non-struct type");
-
-    if (idx < 0 || idx >= (int)fields.size())
-      return std::unexpected("trying to get field out of bounds from a type");
-
-    return &fields[idx];
-  }
-
-  std::expected<AstTypeField *, std::string>
-  get_field_by_name(std::string name) {
-    if (!is_struct() && !is_enum())
-      return std::unexpected("trying to get field from a non-struct type");
-
-    for (auto &field : fields) {
-      if (field.name == name)
-        return &field;
-    }
-
-    return std::unexpected(
-        std::format("no field '{}' found in type '{}'", name, get_name()));
-  }
-
-  std::expected<int, std::string> get_field_index_by_name(std::string name) {
-    if (!is_struct() && !is_enum())
-      return std::unexpected("trying to get field from a non-struct type");
-
-    int idx = 0;
-    for (auto &field : fields) {
-      if (field.name == name)
-        return idx;
-      idx += 1;
-    }
-
-    return std::unexpected(
-        std::format("no field '{}' found in type '{}'", name, get_name()));
-  }
-};
-
-static AstType VOID_TYPE = AstType::new_primitive("Void");
-static AstType BOOL_TYPE = AstType::new_primitive("Bool");
-static AstType INT_TYPE = AstType::new_primitive("Int");
-static AstType FLOAT_TYPE = AstType::new_primitive("Float");
-static AstType RAW_STRING_TYPE = AstType::new_primitive("RawString");
 
 struct IntExprAst;
 struct FloatExprAst;
@@ -207,7 +100,7 @@ struct VarDefStmtAst {
   std::string name;
 
   /// It can be implicit based on the expression.
-  AstType type;
+  AstTypeId type;
 
   std::optional<AstExpression> assignment;
 };
@@ -222,23 +115,34 @@ struct MemberAccesorExprAst {
   std::string member;
 };
 
-struct StructExprAst {
-  AstType type;
-  std::vector<uptr<VarAssignStmtAst>> fields;
-};
-
-struct EnumExprAst {
-  AstType type;
-  std::string value;
+struct FileStmtAst {
+  // TODO: imports
+  std::string filename;
+  std::vector<AstStatement> statements;
 };
 
 struct EnumDefAst {
-  AstType type;
-  std::vector<std::string> values;
+  AstTypeId type;
+  std::vector<AstStatement> values;
+};
+
+struct EnumExprAst {
+  AstTypeId type;
+  std::string value;
 };
 
 struct StructDefAst {
-  AstType type;
+  AstTypeId type;
+  std::vector<uptr<ArgDefAst>> fields;
+};
+
+struct StructExprAst {
+  AstTypeId type;
+  std::vector<uptr<VarAssignStmtAst>> fields;
+};
+
+struct TupleDefAst {
+  AstTypeId type;
   std::vector<uptr<ArgDefAst>> fields;
 };
 
@@ -248,7 +152,7 @@ struct ReturnStmtAst {
 
 struct ArgDefAst {
   std::string name;
-  AstType type;
+  AstTypeId type;
   bool is_varadic;
 };
 
@@ -296,7 +200,7 @@ struct CallExprAst {
 /// 'main := prev | ret | next '
 struct FnHeaderAst {
   std::string name;
-  AstType ret_type;
+  AstTypeId ret_type;
   bool is_external;
   std::vector<uptr<ArgDefAst>> prefix_args;
   std::vector<uptr<ArgDefAst>> suffix_args;

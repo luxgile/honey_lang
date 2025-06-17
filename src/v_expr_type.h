@@ -7,29 +7,33 @@
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
 
-  AstType operator()(uptr<IntExprAst> &_) { return INT_TYPE; }
+  AstTypeId operator()(uptr<IntExprAst> &_) const { return INT_TYPE.get_id(); }
 
-  AstType operator()(uptr<FloatExprAst> &_) { return FLOAT_TYPE; }
-
-  AstType operator()(uptr<BoolExprAst> &_) { return BOOL_TYPE; }
-
-  AstType operator()(uptr<StringExprAst> &_) { return RAW_STRING_TYPE; }
-
-  AstType operator()(uptr<StructExprAst> &node) { return node->type; }
-  AstType operator()(uptr<EnumExprAst> &node) { return node->type; }
-
-  AstType operator()(uptr<MemberAccesorExprAst> &node) {
-    auto base_type = std::visit(*this, node->base);
-    if (base_type.is_enum())
-      return INT_TYPE;
-
-    auto member = base_type.get_field_by_name(node->member);
-    if (!member)
-      throw "no member found on type";
-    return *member.value()->type;
+  AstTypeId operator()(uptr<FloatExprAst> &_) const {
+    return FLOAT_TYPE.get_id();
   }
 
-  AstType operator()(uptr<VarExprAst> &node) {
+  AstTypeId operator()(uptr<BoolExprAst> &_) const {
+    return BOOL_TYPE.get_id();
+  }
+
+  AstTypeId operator()(uptr<StringExprAst> &_) const {
+    return RAW_STRING_TYPE.get_id();
+  }
+
+  AstTypeId operator()(uptr<StructExprAst> &node) const { return node->type; }
+  AstTypeId operator()(uptr<EnumExprAst> &node) const { return node->type; }
+
+  AstTypeId operator()(uptr<MemberAccesorExprAst> &node) const {
+    auto base_type = std::visit(*this, node->base);
+    auto member = ctx->type_db.get_type(base_type).value()->get_field_by_name(
+        node->member);
+    if (!member)
+      throw "no member found on type";
+    return member.value()->type;
+  }
+
+  AstTypeId operator()(uptr<VarExprAst> &node) const {
     auto def_var = ctx->defined_vars[node->name];
     if (!def_var)
       throw "defined var not found";
@@ -37,19 +41,19 @@ struct AstExprTypeVisitor {
     return def_var->type;
   }
 
-  AstType operator()(uptr<ArgDefAst> &node) { return node->type; }
+  AstTypeId operator()(uptr<ArgDefAst> &node) const { return node->type; }
 
   // Expressions
-  AstType operator()(uptr<CallExprAst> &node) {
+  AstTypeId operator()(uptr<CallExprAst> &node) const {
     auto overloads = ctx->get_overloads(node->fn_name);
     if (!overloads)
       throw "no overloads found";
 
-    std::vector<AstType> prefix_types;
+    std::vector<AstTypeId> prefix_types;
     for (auto &pre : node->prefix_args) {
       prefix_types.push_back(std::visit(*this, pre));
     }
-    std::vector<AstType> suffix_types;
+    std::vector<AstTypeId> suffix_types;
     for (auto &suf : node->suffix_args) {
       suffix_types.push_back(std::visit(*this, suf));
     }
@@ -61,25 +65,25 @@ struct AstExprTypeVisitor {
     return std::get<1>(*fn)->ret_type;
   }
 
-  AstType operator()(uptr<BodyExprAst> &_) { return VOID_TYPE; }
+  AstTypeId operator()(uptr<BodyExprAst> &_) const { return VOID_TYPE.get_id(); }
 
-  AstType operator()(uptr<StatementExprAst> &node) {
+  AstTypeId operator()(uptr<StatementExprAst> &node) const {
     return std::visit(*this, node->expr);
   }
 
-  AstType operator()(uptr<GroupExprAst> &node) {
+  AstTypeId operator()(uptr<GroupExprAst> &node) const {
     return std::visit(*this, node->expr);
   }
 
-  AstType operator()(uptr<IfExprAst> &node) {
+  AstTypeId operator()(uptr<IfExprAst> &node) const {
     return std::visit(*this, node->then_expr);
   }
 
-  AstType operator()(uptr<ForExprAst> &node) {
+  AstTypeId operator()(uptr<ForExprAst> &node) const {
     return std::visit(*this, node->for_body);
   }
 
-  AstType operator()(uptr<MetaDefExprAst> &node) {
+  AstTypeId operator()(uptr<MetaDefExprAst> &node) const {
     auto meta = ctx->get_meta(node->name);
     switch (meta.value()->kind) {
     case MetaFunctionKind::AddInt:
@@ -87,14 +91,14 @@ struct AstExprTypeVisitor {
     case MetaFunctionKind::MulInt:
     case MetaFunctionKind::DivInt:
     case MetaFunctionKind::ModInt:
-      return INT_TYPE;
+      return INT_TYPE.get_id();
 
     case MetaFunctionKind::AddFloat:
     case MetaFunctionKind::SubFloat:
     case MetaFunctionKind::MulFloat:
     case MetaFunctionKind::DivFloat:
     case MetaFunctionKind::ModFloat:
-      return FLOAT_TYPE;
+      return FLOAT_TYPE.get_id();
 
     case MetaFunctionKind::EqBool:
     case MetaFunctionKind::NotEqBool:
@@ -104,7 +108,7 @@ struct AstExprTypeVisitor {
     case MetaFunctionKind::GtEqBool:
     case MetaFunctionKind::AndBool:
     case MetaFunctionKind::OrBool:
-      return BOOL_TYPE;
+      return BOOL_TYPE.get_id();
 
     default:
       throw "no type found for meta fn";

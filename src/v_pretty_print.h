@@ -1,16 +1,22 @@
 #pragma once
 
 #include "ast.h"
+#include "program_ctx.h"
 #include <print>
 #include <variant>
 
 struct PrettyPrintAstVisitor {
+  ProgramCtx *ctx;
   int indent = 0;
 
   void print_indent() {
     for (int i = 0; i < indent; i++) {
       std::print("  ");
     }
+  }
+
+  std::string get_type_name(AstTypeId id) {
+    return ctx->type_db.get_type(id).value()->get_name();
   }
 
   void operator()(uptr<IntExprAst> &node);

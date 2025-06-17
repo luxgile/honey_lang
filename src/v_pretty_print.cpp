@@ -30,7 +30,7 @@ void PrettyPrintAstVisitor::operator()(uptr<VarExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<ArgDefAst> &node) {
-  std::print("{}: {}", node->name, node->type.get_name());
+  std::print("{}: {}", node->name, get_type_name(node->type));
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<CallExprAst> &node) {
@@ -66,7 +66,7 @@ void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
     (*this)(arg);
   }
   std::print(")");
-  std::print(" {} ", node->ret_type.get_name());
+  std::print(" {} ", get_type_name(node->ret_type));
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<BodyExprAst> &node) {
@@ -151,18 +151,18 @@ void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StructDefAst> &node) {
-  std::println("{} := struct {{", node->type.get_name());
+  std::println("{} := struct {{", get_type_name(node->type));
   indent += 1;
   for (auto &field : node->fields) {
     print_indent();
-    std::println("{}: {},", field->name, field->type.get_name());
+    std::println("{}: {},", field->name, get_type_name(field->type));
   }
   indent -= 1;
   std::println("}}");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
-  std::println("{} .{{", node->type.get_name());
+  std::println("{} .{{", get_type_name(node->type));
   indent += 1;
   for (auto &field : node->fields) {
     print_indent();
@@ -179,17 +179,16 @@ void PrettyPrintAstVisitor::operator()(uptr<MemberAccesorExprAst> &node) {
   std::print(".{}", node->member);
 }
 void PrettyPrintAstVisitor::operator()(uptr<EnumDefAst> &node) {
-  std::println("{} :: enum {{", node->type.get_name());
+  std::println("{} :: enum {{", get_type_name(node->type));
   indent += 1;
-  for (auto value : node->values) {
+  for (auto &value : node->values) {
     print_indent();
-    std::println("{},", value);
+    std::visit(*this, value);
   }
   indent -= 1;
   std::println("}}");
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<EnumExprAst> &node) {
-  std::print("{}.{}", node->type.get_name(), node->value);
+  std::print("{}.{}", get_type_name(node->type), node->value);
 }
-

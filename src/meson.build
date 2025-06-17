@@ -1,4 +1,4 @@
-sources = ['main.cpp', 'lexer.cpp', 'parser.cpp', 'v_pretty_print.cpp', 'program_ctx.cpp', 'ast.cpp', 'v_llvm_ir.cpp', 'compiler.cpp']
+sources = ['main.cpp', 'lexer.cpp', 'parser.cpp', 'v_pretty_print.cpp', 'program_ctx.cpp', 'ast.cpp', 'v_llvm_ir.cpp', 'compiler.cpp', 'types.cpp']
 
 llvm_dep = dependency('llvm', required: true)
 

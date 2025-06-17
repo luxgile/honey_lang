@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast.h"
+#include "helpers.h"
 #include "lexer.h"
 #include "program_ctx.h"
 #include "v_expr_type.h"
@@ -31,6 +32,9 @@ struct Parser {
 
   /// Meta tags fn defined and not used
   std::vector<uptr<MetaDefExprAst>> line_meta_def;
+
+  /// Stack of types for types declared inside other types.
+  std::vector<AstTypeId> asttype_stack;
 
   Parser(ProgramCtx *ctx) : ctx(ctx) { type_visitor.ctx = ctx; }
 
@@ -129,25 +133,27 @@ struct Parser {
       std::print("]\n");
     }
 
-    return handle_queue();
+    auto offset = 0;
+    asttype_stack.clear();
+    LOG("starting parsing...");
+    return handle_file_statement(offset, true);
   }
 
-  std::optional<AstStatement> handle_queue() {
-    LOG("starting parsing...");
+  std::optional<AstStatement> handle_file_statement(int &offset,
+                                                    bool clear_tks) {
 
-    if (auto _struct = handle_struct_def()) {
+    if (auto _struct = handle_struct_def(offset, clear_tks)) {
       return _struct;
     }
 
-    if (auto _enum = handle_enum_def()) {
+    if (auto _enum = handle_enum_def(offset, clear_tks)) {
       return _enum;
     }
 
-    if (auto fn = handle_fn_def()) {
+    if (auto fn = handle_fn_def(offset)) {
       return fn;
     }
 
-    int offset = 0;
     if (auto meta = handle_meta_def(offset)) {
       // Meta functions at file level are meant to be used for the following
       // statement.
@@ -163,9 +169,9 @@ struct Parser {
     return {};
   }
 
-  std::optional<uptr<StructDefAst>> handle_struct_def() {
+  std::optional<uptr<StructDefAst>> handle_struct_def(int &offset,
+                                                      bool clear_tks) {
     LOG("parsing struct");
-    int offset = 0;
 
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
@@ -179,6 +185,9 @@ struct Parser {
       // Skip new lines
       while (check_tokens({NewLine}, offset))
         offset += 1;
+
+      auto s_id = ctx->type_db.new_struct(struct_name, {}, {});
+      asttype_stack.push_back(s_id);
 
       // Get struct fields
       std::vector<uptr<ArgDefAst>> fields;
@@ -197,15 +206,22 @@ struct Parser {
           offset += 1;
 
         field_types.push_back(
-            AstTypeField{field.value()->name, &field.value()->type});
+            AstTypeField{field.value()->name, field.value()->type});
         fields.push_back(std::move(*field));
       }
       offset += 1;
 
       LOG("struct parsing successfull");
-      tk_queue.clear();
-      auto s_type = AstType::new_struct(struct_name, field_types);
-      auto s = std::make_unique<StructDefAst>(s_type, std::move(fields));
+      if (clear_tks)
+        tk_queue.clear();
+
+      asttype_stack.pop_back();
+
+      auto s_type = ctx->type_db.get_type_mut(s_id).value();
+      s_type->set_fields(field_types);
+      if (asttype_stack.size() > 0)
+        s_type->set_parent_id(asttype_stack.back());
+      auto s = std::make_unique<StructDefAst>(s_id, std::move(fields));
       ctx->define_struct(struct_name, s.get());
       return s;
     }
@@ -224,16 +240,12 @@ struct Parser {
       auto meta_tk = get_tk(offset).value();
       offset += 1;
 
-      auto meta_fn = ctx->get_meta(meta_tk.value);
-      if (!meta_fn)
-        return {};
+      auto meta_fn = get_opt(ctx->get_meta(meta_tk.value));
 
       std::vector<AstExpression> args;
-      for (int i = 0; i < meta_fn.value()->arg_num(); i++) {
-        auto expr = handle_expr(offset);
-        if (!expr)
-          return {};
-        args.push_back(std::move(*expr));
+      for (int i = 0; i < meta_fn->arg_num(); i++) {
+        auto expr = get_opt(handle_expr(offset));
+        args.push_back(std::move(expr));
       }
 
       LOG("meta found");
@@ -244,9 +256,7 @@ struct Parser {
     return {};
   }
 
-  std::optional<uptr<FnDefAst>> handle_fn_def() {
-    int offset = 0;
-
+  std::optional<uptr<FnDefAst>> handle_fn_def(int &offset) {
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
       offset += 1;
@@ -261,19 +271,17 @@ struct Parser {
       LOG("fn decl found");
       auto fn_id = *get_tk(offset);
       offset += 4;
-      auto header = handle_fn_header(fn_id.value, offset);
-      if (!header)
-        return {};
+      auto header = get_opt(handle_fn_header(fn_id.value, offset));
 
-      header->get()->is_external = is_external;
+      header->is_external = is_external;
 
       std::optional<uptr<BodyExprAst>> body = {};
 
-      for (auto &prefix : header.value()->prefix_args) {
+      for (auto &prefix : header->prefix_args) {
         ctx->defined_vars[prefix->name] =
             new VarDefStmtAst{prefix->name, prefix->type, std::nullopt};
       }
-      for (auto &suffix : header.value()->suffix_args) {
+      for (auto &suffix : header->suffix_args) {
         ctx->defined_vars[suffix->name] =
             new VarDefStmtAst{suffix->name, suffix->type, std::nullopt};
       }
@@ -285,7 +293,7 @@ struct Parser {
         tk_queue.clear();
         LOG("got fn expression");
         auto fn =
-            std::make_unique<FnDefAst>(std::move(*header), std::move(body));
+            std::make_unique<FnDefAst>(std::move(header), std::move(body));
         ctx->define_fn(fn->fn_header->name, fn->fn_header.get());
         return fn;
       }
@@ -294,10 +302,8 @@ struct Parser {
     return {};
   }
 
-  std::optional<uptr<EnumDefAst>> handle_enum_def() {
+  std::optional<uptr<EnumDefAst>> handle_enum_def(int &offset, bool clear_tks) {
     LOG("starting parsing enum");
-
-    int offset = 0;
 
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
@@ -312,14 +318,47 @@ struct Parser {
       while (check_tokens({NewLine}, offset))
         offset += 1;
 
+      auto enum_id = ctx->type_db.new_enum(enum_name, {}, {});
+      asttype_stack.push_back(enum_id);
+
       // Get struct fields
-      std::vector<std::string> fields;
       std::vector<AstTypeField> field_types;
+      std::vector<AstStatement> field_stmts;
       while (!check_tokens({RBrace}, offset)) {
-        if (!check_tokens({Id}, offset))
+        if (check_tokens({Id, Comma}, offset)) {
+          auto field = get_tk(offset).value().value;
+          offset += 1;
+
+          // Create a unit struct to represent enum variant.
+          auto s_type = ctx->type_db.new_struct(
+              field, std::vector<AstTypeField>(), enum_id);
+          auto s = std::make_unique<StructDefAst>(
+              s_type, std::vector<uptr<ArgDefAst>>());
+          ctx->define_struct(field, s.get());
+
+          field_types.push_back(AstTypeField{field, s_type});
+          field_stmts.push_back(std::move(s));
+        } else if (auto stmt = handle_file_statement(offset, false)) {
+          // Convert the declared struct into another variant for the enum
+          auto stmt_type_id = AstTypeId{};
+          if (std::holds_alternative<uptr<StructDefAst>>(*stmt)) {
+            auto s = &std::get<uptr<StructDefAst>>(*stmt);
+            stmt_type_id = s->get()->type;
+          } else if (std::holds_alternative<uptr<EnumDefAst>>(*stmt))
+            stmt_type_id = std::get<uptr<EnumDefAst>>(*stmt)->type;
+          else {
+            LOG("failed to parse enum - unsuported statement");
+            return {};
+          }
+
+          auto stmt_type = ctx->type_db.get_type(stmt_type_id).value();
+          field_types.push_back(
+              AstTypeField{stmt_type->get_name(), stmt_type_id});
+          field_stmts.push_back(std::move(*stmt));
+        } else {
+          LOG("failed to parse enum - unit struct or other stmt not found");
           return {};
-        auto field = get_tk(offset).value().value;
-        offset += 1;
+        }
 
         if (!check_tokens({Comma}, offset))
           return {};
@@ -328,18 +367,23 @@ struct Parser {
         // Skip new lines
         while (check_tokens({NewLine}, offset))
           offset += 1;
-
-        auto int_type = ctx->get_type_by_name("Int").value();
-        field_types.push_back(AstTypeField{field, &INT_TYPE});
-        fields.push_back(field);
       }
       offset += 1;
 
       LOG("enum parsing successful");
-      tk_queue.clear();
-      auto e_type = AstType::new_enum(enum_name, field_types);
-      auto e = std::make_unique<EnumDefAst>(e_type, fields);
-      ctx->define_enum(enum_name, e.get());
+      if (clear_tks)
+        tk_queue.clear();
+
+      asttype_stack.pop_back();
+
+      auto enum_type = ctx->type_db.get_type_mut(enum_id).value();
+      enum_type->set_fields(field_types);
+      if (asttype_stack.size() > 0)
+        enum_type->set_parent_id(asttype_stack.back());
+
+      auto e = std::make_unique<EnumDefAst>(enum_id, std::move(field_stmts));
+
+      ctx->define_enum(enum_type->get_fullname(), e.get());
       return e;
     }
 
@@ -537,13 +581,14 @@ struct Parser {
       auto enum_name = get_tk(offset).value().value;
       auto enum_value = get_tk(offset + 2).value().value;
 
-      auto enum_type = ctx->get_type_by_name(enum_name);
-      if (!enum_type || !enum_type->is_enum())
+      auto enum_type_id = get_opt(ctx->type_db.get_id_by_name(enum_name));
+      auto enum_type = ctx->type_db.get_type(enum_type_id);
+      if (!enum_type || !enum_type.value()->is_enum())
         return {};
 
       offset += 3;
       LOG("enum expr parsed");
-      return std::make_unique<EnumExprAst>(*enum_type, enum_value);
+      return std::make_unique<EnumExprAst>(enum_type_id, enum_value);
     }
 
     LOG("failed to parse enum expr");
@@ -783,7 +828,7 @@ struct Parser {
   std::optional<std::unique_ptr<FnHeaderAst>>
   handle_fn_header(std::string header_id, int &offset) {
     LOG("parsing fn header");
-    auto ret_type = VOID_TYPE;
+    auto ret_type = VOID_TYPE.get_id();
 
     if (!check_tokens({LPar}, offset))
       return {};
@@ -814,7 +859,7 @@ struct Parser {
     if (check_tokens({Id}, offset)) {
       LOG("getting fn return type");
       auto type_name = tk_queue[offset].value;
-      auto type = ctx->get_type_by_name(type_name);
+      auto type = ctx->type_db.get_id_by_name(type_name);
       if (!type)
         return {};
       ret_type = *type;
@@ -866,7 +911,7 @@ struct Parser {
   std::optional<uptr<ArgDefAst>> handle_arg_def(int &offset) {
     if (check_tokens({Id, Colon, Id}, offset)) {
       auto type_name = tk_queue[offset + 2].value;
-      auto ast_type = ctx->get_type_by_name(type_name);
+      auto ast_type = ctx->type_db.get_id_by_name(type_name);
       if (!ast_type)
         return {};
       auto field =
@@ -877,8 +922,8 @@ struct Parser {
 
     // Varadic argument
     if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
-      auto field =
-          std::make_unique<ArgDefAst>(tk_queue[offset].value, VOID_TYPE, true);
+      auto field = std::make_unique<ArgDefAst>(tk_queue[offset].value,
+                                               VOID_TYPE.get_id(), true);
       offset += 5;
       return field;
     }
