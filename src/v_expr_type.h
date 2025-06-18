@@ -22,7 +22,9 @@ struct AstExprTypeVisitor {
   }
 
   AstTypeId operator()(uptr<StructExprAst> &node) const { return node->type; }
-  AstTypeId operator()(uptr<EnumExprAst> &node) const { return node->type; }
+  AstTypeId operator()(uptr<EnumExprAst> &node) const {
+    return node->enum_type;
+  }
 
   AstTypeId operator()(uptr<MemberAccesorExprAst> &node) const {
     auto base_type = std::visit(*this, node->base);
@@ -65,7 +67,9 @@ struct AstExprTypeVisitor {
     return std::get<1>(*fn)->ret_type;
   }
 
-  AstTypeId operator()(uptr<BodyExprAst> &_) const { return VOID_TYPE.get_id(); }
+  AstTypeId operator()(uptr<BodyExprAst> &_) const {
+    return VOID_TYPE.get_id();
+  }
 
   AstTypeId operator()(uptr<StatementExprAst> &node) const {
     return std::visit(*this, node->expr);

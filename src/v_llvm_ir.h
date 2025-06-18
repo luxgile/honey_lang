@@ -678,26 +678,40 @@ struct LlvmStoreAllocaVisitor {
   }
 
   std::expected<void, std::string> operator()(uptr<EnumExprAst> &node) {
-    auto enum_ty = llvm_gen->ctx->get_llvm_type(node->type);
-    if (!enum_ty)
+    auto enum_llvm_ty = llvm_gen->ctx->get_llvm_type(node->enum_type);
+    if (!enum_llvm_ty)
       return std::unexpected("failed to get struct type");
 
-    auto node_type = llvm_gen->ctx->type_db.get_type(node->type).value();
+    auto enum_type = llvm_gen->ctx->type_db.get_type(node->enum_type).value();
 
-    auto value_idx = node_type->get_field_index_by_name(node->value);
+    // Get member position from enum
+    auto value_idx = enum_type->get_field_index_by_id(node->struct_expr->type);
     if (!value_idx)
       return std::unexpected(std::format("'{}' not found in enum '{}'",
-                                         node->value, node_type->get_name()));
+                                         node->struct_expr->type,
+                                         enum_type->get_name()));
 
     // Index is always the first value in an enum
-    auto field_ptr = builder->CreateStructGEP(
-        *enum_ty, alloca, 0, node_type->get_name() + "_enum_value");
+    auto field_ptr = builder->CreateStructGEP(*enum_llvm_ty, alloca, 0,
+                                              enum_type->get_name() + "_tag");
 
+    // Store the tag value
     LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
     auto int_expr = std::make_unique<IntExprAst>(*value_idx);
     auto ir_res = store_visitor(int_expr);
     if (!ir_res)
       return std::unexpected(ir_res.error());
+
+    auto bitcast_enum =
+        builder->CreateBitCast(alloca, enum_llvm_ty.value()->getPointerTo());
+    auto bitcast_union_ptr =
+        builder->CreateStructGEP(*enum_llvm_ty, bitcast_enum, 1);
+
+    store_visitor = {builder, bitcast_union_ptr, llvm_gen};
+    ir_res = store_visitor(node->struct_expr);
+    if (!ir_res)
+      return std::unexpected(ir_res.error());
+
     return {};
   }
 

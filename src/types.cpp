@@ -54,6 +54,7 @@ AstTypeId AstTypeDb::new_enum(std::string name,
 std::optional<const AstType *> AstTypeDb::get_type(AstTypeId id) {
   if (types.contains(id))
     return &types.at(id);
+  return &types.at(id);
   return {};
 }
 
@@ -75,4 +76,16 @@ std::optional<AstTypeId> AstTypeDb::get_id_by_name(std::string name) {
       return pair.first;
   }
   return {};
+}
+
+AstType const *AstType::get_parent() const {
+  auto parent_ty = db->get_type(*parent);
+  return parent_ty.value();
+}
+
+bool AstType::is_enum_member() const {
+  if (!has_parent())
+    return false;
+  auto parent = get_parent();
+  return parent->is_enum();
 }

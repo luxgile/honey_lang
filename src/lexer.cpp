@@ -83,6 +83,9 @@ std::expected<Token, std::string> Lexer::get_token() {
     if (temp_id == "loop")
       return create_token(Loop);
 
+    if (temp_id == "match")
+      return create_token(Match);
+
     if (temp_id == "extern")
       return create_token(Extern);
 

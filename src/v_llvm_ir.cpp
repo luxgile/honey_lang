@@ -9,6 +9,10 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
   if (node.assignment) {
     AstExprTypeVisitor type_visitor = {ctx};
     auto ast_type = std::visit(type_visitor, *node.assignment);
+    /* auto assignment_type = get_opt(ctx->type_db.get_type(ast_type)); */
+    // If it's an enum, allocate the parent, not the specified type
+    /* if (assignment_type->is_enum_member()) */
+    /*   ast_type = assignment_type->get_parent_id(); */
 
     auto assignment_llvm_type_res = ctx->get_llvm_type(ast_type);
     if (!assignment_llvm_type_res)
@@ -16,7 +20,7 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
           "no llvm type found for assigment in var declaration");
     assignment_llvm_type = assignment_llvm_type_res.value();
 
-    auto _ty = ctx->get_llvm_type(node.type);
+    auto _ty = ctx->get_llvm_type(ast_type);
     if (_ty && assignment_llvm_type != _ty.value())
       return std::unexpected(
           "explicit type and assigment expression type mismatch");
@@ -25,7 +29,7 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
       return std::unexpected("trying to allocate a void type");
 
     auto alloca =
-        builder->CreateAlloca(assignment_llvm_type, nullptr, node.name);
+        builder->CreateAlloca(*_ty, nullptr, node.name);
     defined_variables[node.name] =
         DefinedVariable{assignment_llvm_type, alloca};
 

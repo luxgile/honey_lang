@@ -31,6 +31,7 @@ struct ForExprAst;
 struct StructExprAst;
 struct MemberAccesorExprAst;
 struct EnumExprAst;
+struct SingleMatchExprAst;
 
 using AstExpression =
     std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
@@ -38,7 +39,7 @@ using AstExpression =
                  uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
                  uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
                  uptr<StructExprAst>, uptr<MemberAccesorExprAst>,
-                 uptr<EnumExprAst>>;
+                 uptr<EnumExprAst>, uptr<SingleMatchExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -127,8 +128,8 @@ struct EnumDefAst {
 };
 
 struct EnumExprAst {
-  AstTypeId type;
-  std::string value;
+  AstTypeId enum_type;
+  uptr<StructExprAst> struct_expr;
 };
 
 struct StructDefAst {
@@ -178,6 +179,11 @@ struct VarExprAst {
 
 struct GroupExprAst {
   AstExpression expr;
+};
+
+struct SingleMatchExprAst {
+  AstExpression enum_expr;
+  VarDefStmtAst casted_enum_var;
 };
 
 struct IfExprAst {

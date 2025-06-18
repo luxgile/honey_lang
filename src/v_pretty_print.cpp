@@ -162,7 +162,13 @@ void PrettyPrintAstVisitor::operator()(uptr<StructDefAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
-  std::println("{} .{{", get_type_name(node->type));
+  auto struct_type = ctx->type_db.get_type(node->type).value();
+  std::print("{} .{{", struct_type->get_name());
+  if (struct_type->is_unit()) {
+    std::println("}}");
+    return;
+  }
+  std::println();
   indent += 1;
   for (auto &field : node->fields) {
     print_indent();
@@ -190,5 +196,24 @@ void PrettyPrintAstVisitor::operator()(uptr<EnumDefAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<EnumExprAst> &node) {
-  std::print("{}.{}", get_type_name(node->type), node->value);
+  std::print("{}.{}", get_type_name(node->enum_type),
+             get_type_name(node->struct_expr->type));
+  std::print(".{{");
+  auto enum_member_type =
+      ctx->type_db.get_type(node->struct_expr->type).value();
+  if (enum_member_type->is_unit()) {
+    std::println("}}");
+    return;
+  }
+  std::println();
+
+  indent += 1;
+  for (auto &field : node->struct_expr->fields) {
+    print_indent();
+    (*this)(field);
+    std::print("\n");
+  }
+  indent -= 1;
+  print_indent();
+  std::println("}}");
 }

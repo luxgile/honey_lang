@@ -27,6 +27,7 @@ enum TokenKind {
   If,
   Else,
   Loop,
+  Match,
   NewLine,
   Meta,
   Undefined,

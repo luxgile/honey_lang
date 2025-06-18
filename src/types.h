@@ -48,6 +48,7 @@ public:
   AstTypeId get_id() const { return id; }
 
   bool has_parent() const { return parent.has_value(); }
+  const AstType *get_parent() const;
   AstTypeId get_parent_id() const { return *parent; }
   void set_parent_id(AstTypeId id) { this->parent = id; }
   std::string get_fullname() const;
@@ -63,6 +64,7 @@ public:
   bool is_struct() const { return kind == AstTypeKind::Struct; }
   bool is_unit() const { return is_struct() && fields.size() == 0; }
   bool is_enum() const { return kind == AstTypeKind::Enum; }
+  bool is_enum_member() const;
 
   std::expected<const AstTypeField *, std::string>
   get_field_by_idx(int idx) const {
@@ -103,6 +105,22 @@ public:
 
     return std::unexpected(
         std::format("no field '{}' found in type '{}'", name, get_name()));
+  }
+
+  std::expected<int, std::string>
+  get_field_index_by_id(AstTypeId id) const {
+    if (!is_struct() && !is_enum())
+      return std::unexpected("trying to get field from a non-struct type");
+
+    int idx = 0;
+    for (auto &field : fields) {
+      if (field.type == id)
+        return idx;
+      idx += 1;
+    }
+
+    return std::unexpected(
+        std::format("no field '{}' found in type '{}'", id, get_name()));
   }
 };
 

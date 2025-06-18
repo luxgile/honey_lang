@@ -4,6 +4,7 @@
 #include "helpers.h"
 #include "lexer.h"
 #include "program_ctx.h"
+#include "types.h"
 #include "v_expr_type.h"
 #include <algorithm>
 #include <cstdio>
@@ -331,9 +332,14 @@ struct Parser {
 
           // Create a unit struct to represent enum variant.
           auto s_type = ctx->type_db.new_struct(
-              field, std::vector<AstTypeField>(), enum_id);
-          auto s = std::make_unique<StructDefAst>(
-              s_type, std::vector<uptr<ArgDefAst>>());
+              field,
+              std::vector<AstTypeField>(
+                  {AstTypeField{"_tag", INT_TYPE.get_id()}}),
+              enum_id);
+          auto s_vars = std::vector<uptr<ArgDefAst>>();
+          s_vars.push_back(
+              std::make_unique<ArgDefAst>("_tag", INT_TYPE.get_id(), false));
+          auto s = std::make_unique<StructDefAst>(s_type, std::move(s_vars));
           ctx->define_struct(field, s.get());
 
           field_types.push_back(AstTypeField{field, s_type});
@@ -343,10 +349,18 @@ struct Parser {
           auto stmt_type_id = AstTypeId{};
           if (std::holds_alternative<uptr<StructDefAst>>(*stmt)) {
             auto s = &std::get<uptr<StructDefAst>>(*stmt);
+            // We need to push the tag variable to the beggining both on struct
+            // def and type
+            s->get()->fields.insert(
+                s->get()->fields.begin(),
+                std::make_unique<ArgDefAst>("_tag", INT_TYPE.get_id(), false));
+            auto s_type = get_opt(ctx->type_db.get_type_mut(s->get()->type));
+            auto s_fields = s_type->get_fields();
+            s_fields.insert(s_fields.begin(),
+                            AstTypeField{"_tag", INT_TYPE.get_id()});
+            s_type->set_fields(s_fields);
             stmt_type_id = s->get()->type;
-          } else if (std::holds_alternative<uptr<EnumDefAst>>(*stmt))
-            stmt_type_id = std::get<uptr<EnumDefAst>>(*stmt)->type;
-          else {
+          } else {
             LOG("failed to parse enum - unsuported statement");
             return {};
           }
@@ -579,21 +593,49 @@ struct Parser {
 
     if (check_tokens({Id, Dot, Id}, offset)) {
       auto enum_name = get_tk(offset).value().value;
-      auto enum_value = get_tk(offset + 2).value().value;
+      auto enum_member_name = get_tk(offset + 2).value().value;
 
       auto enum_type_id = get_opt(ctx->type_db.get_id_by_name(enum_name));
       auto enum_type = ctx->type_db.get_type(enum_type_id);
       if (!enum_type || !enum_type.value()->is_enum())
         return {};
 
+      auto enum_member_id =
+          get_opt(enum_type.value()->get_field_by_name(enum_member_name))->type;
+      auto enum_member_type = get_opt(ctx->type_db.get_type(enum_member_id));
+
       offset += 3;
+      std::vector<uptr<VarAssignStmtAst>> vars;
+      if (!enum_member_type->is_unit())
+        vars = handle_struct_assigments(offset);
+
       LOG("enum expr parsed");
-      return std::make_unique<EnumExprAst>(enum_type_id, enum_value);
+      auto struct_expr =
+          std::make_unique<StructExprAst>(enum_member_id, std::move(vars));
+      return std::make_unique<EnumExprAst>(enum_type_id,
+                                           std::move(struct_expr));
     }
 
     LOG("failed to parse enum expr");
     return {};
   }
+
+  /* std::optional<uptr<SingleMatchExprAst>> */
+  /* handle_single_match_expr(int &offset) { */
+  /*   LOG("starting parsing access member"); */
+  /**/
+  /*   if (check_tokens({Dot, Id}, offset)) { */
+  /*     offset += 2; */
+  /**/
+  /*     auto id = get_tk(offset - 1).value().value; */
+  /**/
+  /*     LOG("member access parsed"); */
+  /*     return std::make_unique<MemberAccesorExprAst>(std::move(base_expr), id); */
+  /*   } */
+  /**/
+  /*   LOG("failed to parse access member"); */
+  /*   return {}; */
+  /* } */
 
   std::optional<uptr<MemberAccesorExprAst>>
   handle_member_access_expr(int &offset, AstExpression &base_expr) {
@@ -769,27 +811,32 @@ struct Parser {
     int tmp_offset = offset;
     tmp_offset += 1;
 
-    std::vector<uptr<VarAssignStmtAst>> field_assigns;
-    if (check_tokens({Dot, LBrace}, tmp_offset)) {
-      tmp_offset += 2;
-      while (!check_tokens({RBrace}, tmp_offset)) {
-        auto assign = handle_var_assign(tmp_offset, {RBrace, Comma});
-        if (!assign)
-          return {};
-        field_assigns.push_back(std::move(*assign));
-
-        if (check_tokens({RBrace}, tmp_offset - 1))
-          break;
-      }
-      // No need to increase offset by one, as inside the loop we are checking
-      // if the previous line is RBrace
-    }
+    auto field_assigns = handle_struct_assigments(tmp_offset);
 
     offset = tmp_offset;
 
     LOG("struct expr found");
     return std::make_unique<StructExprAst>(s.value()->type,
                                            std::move(field_assigns));
+  }
+
+  std::vector<uptr<VarAssignStmtAst>> handle_struct_assigments(int &offset) {
+    std::vector<uptr<VarAssignStmtAst>> field_assigns;
+    if (check_tokens({Dot, LBrace}, offset)) {
+      offset += 2;
+      while (!check_tokens({RBrace}, offset)) {
+        auto assign = handle_var_assign(offset, {RBrace, Comma});
+        if (!assign)
+          return {};
+        field_assigns.push_back(std::move(*assign));
+
+        if (check_tokens({RBrace}, offset - 1))
+          break;
+      }
+      // No need to increase offset by one, as inside the loop we are checking
+      // if the previous line is RBrace
+    }
+    return field_assigns;
   }
 
   std::optional<std::unique_ptr<BodyExprAst>> handle_fn_body(int &offset) {
