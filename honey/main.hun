@@ -67,11 +67,9 @@ main :: fn (|) {
   printf "my animal is %d years old\n" animal.age
   printf "my owner is %s\n" animal.owner.name
 
-  # TODO: Need to check for eq on enums
-  # @e== animal.kind AnimalKind.Dog
-  # if animal.kind == AnimalKind.Dog {
-  #   printf "I'm a dog!\n"
-  # }
+  match animal.kind : AnimalKind.Cat cat {
+    printf "I'm a cat with color %s" cat.color
+  }
 
   my_bool := ! (my_int != 18)
   if my_bool {

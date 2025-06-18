@@ -450,10 +450,8 @@ struct Parser {
     return {};
   }
 
-  std::optional<AstStatement> handle_statement(int &offset) {
-    LOG("starting statement parsing");
-
-    // Var declaration
+  std::optional<uptr<VarDefStmtAst>> handle_var_decl(int &offset) {
+    LOG("parsing var declaration");
     if (check_tokens({Id, Colon, Id}, offset) &&
         tk_queue[offset + 2].value == "=") {
       auto id = get_tk(offset)->value;
@@ -469,6 +467,16 @@ struct Parser {
       ctx->defined_vars[id] = def_var.get();
       return def_var;
     }
+    LOG("parsing var declaration failed");
+    return {};
+  }
+
+  std::optional<AstStatement> handle_statement(int &offset) {
+    LOG("starting statement parsing");
+
+    // Var declaration
+    if (auto var_decl = handle_var_decl(offset))
+      return var_decl;
 
     // Var assigment
     if (auto var_assign = handle_var_assign(offset, {NewLine})) {
@@ -620,23 +628,6 @@ struct Parser {
     return {};
   }
 
-  /* std::optional<uptr<SingleMatchExprAst>> */
-  /* handle_single_match_expr(int &offset) { */
-  /*   LOG("starting parsing access member"); */
-  /**/
-  /*   if (check_tokens({Dot, Id}, offset)) { */
-  /*     offset += 2; */
-  /**/
-  /*     auto id = get_tk(offset - 1).value().value; */
-  /**/
-  /*     LOG("member access parsed"); */
-  /*     return std::make_unique<MemberAccesorExprAst>(std::move(base_expr), id); */
-  /*   } */
-  /**/
-  /*   LOG("failed to parse access member"); */
-  /*   return {}; */
-  /* } */
-
   std::optional<uptr<MemberAccesorExprAst>>
   handle_member_access_expr(int &offset, AstExpression &base_expr) {
     LOG("starting parsing access member");
@@ -653,6 +644,28 @@ struct Parser {
     LOG("failed to parse access member");
     return {};
   }
+
+  std::optional<uptr<SingleMatchExprAst>>
+  handle_single_match_expr(int &offset) {
+    LOG("starting single match parsing");
+
+    int tmp_offset = offset;
+    if (check_tokens({Match}, tmp_offset)) {
+      tmp_offset += 1;
+
+      auto match_expr = handle_expr(tmp_offset);
+
+      if (!check_tokens({Colon}, tmp_offset))
+        return {};
+      tmp_offset += 1;
+
+asdasdasdasd
+    }
+
+    LOG("failed to parse single match");
+    return {};
+  }
+
 
   std::optional<uptr<IfExprAst>> handle_if_expr(int &offset) {
     if (check_tokens({If}, offset)) {
