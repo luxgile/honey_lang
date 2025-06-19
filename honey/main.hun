@@ -67,9 +67,9 @@ main :: fn (|) {
   printf "my animal is %d years old\n" animal.age
   printf "my owner is %s\n" animal.owner.name
 
-  match animal.kind : AnimalKind.Cat cat {
-    printf "I'm a cat with color %s" cat.color
-  }
+ # match animal.kind : AnimalKind.Cat cat {
+ #   printf "I'm a cat with color %s" cat.color
+ # }
 
   my_bool := ! (my_int != 18)
   if my_bool {

@@ -18,7 +18,30 @@
 #include <variant>
 #include <vector>
 
-/// Not sure if this is context for llvm ir gen or parsing...
+struct ParseError {
+  FilePos pos;
+  std::string msg;
+};
+
+template <class T> struct ParserResult {
+  std::optional<T> result;
+  std::optional<ParseError> error;
+  /* bool incomplete; */
+
+  ParserResult<T> new_ok(T result) { return ParserResult<T>{result, {}}; }
+  ParserResult<T> new_error(FilePos pos, std::string msg) {
+    return ParserResult<T>{{}, ParseError{pos, msg}};
+  }
+  /* ParserResult<T> new_incomplete() { return ParserResult<T>{{}, {}, true}; }
+   */
+
+  bool is_ok() { return result.has_value(); }
+  bool is_err() { return error.has_value(); }
+  /* bool is_incomplete() { return incomplete; } */
+
+  T get_res() { return result.value(); }
+  ParseError get_err() { return error.value(); }
+};
 
 struct Parser {
   bool debug_scan = false;
@@ -659,13 +682,12 @@ struct Parser {
         return {};
       tmp_offset += 1;
 
-asdasdasdasd
+      throw "FUCK";
     }
 
     LOG("failed to parse single match");
     return {};
   }
-
 
   std::optional<uptr<IfExprAst>> handle_if_expr(int &offset) {
     if (check_tokens({If}, offset)) {
