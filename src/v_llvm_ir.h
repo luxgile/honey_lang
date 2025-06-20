@@ -375,6 +375,10 @@ struct LlvmIrGenAstVisitor {
     return for_cond_expr;
   }
 
+  std::expected<llvm::Value *, std::string> operator()(uptr<SingleMatchExprAst> &node) {
+    throw "not implemented";
+  }
+
   std::expected<llvm::Value *, std::string> operator()(uptr<IfExprAst> &node) {
     auto cond_expr = std::visit(*this, node->condition);
     if (!cond_expr)
@@ -665,6 +669,10 @@ struct LlvmStoreAllocaVisitor {
   }
 
   std::expected<void, std::string> operator()(uptr<IfExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<SingleMatchExprAst> &node) {
     return simple_alloca(node);
   }
 

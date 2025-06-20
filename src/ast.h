@@ -183,7 +183,8 @@ struct GroupExprAst {
 
 struct SingleMatchExprAst {
   AstExpression enum_expr;
-  VarDefStmtAst casted_enum_var;
+  uptr<VarDefStmtAst> casted_enum_var;
+  AstExpression then_expr;
 };
 
 struct IfExprAst {

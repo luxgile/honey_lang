@@ -83,6 +83,10 @@ struct AstExprTypeVisitor {
     return std::visit(*this, node->then_expr);
   }
 
+  AstTypeId operator()(uptr<SingleMatchExprAst> &node) const {
+    return std::visit(*this, node->then_expr);
+  }
+
   AstTypeId operator()(uptr<ForExprAst> &node) const {
     return std::visit(*this, node->for_body);
   }

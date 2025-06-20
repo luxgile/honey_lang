@@ -217,3 +217,11 @@ void PrettyPrintAstVisitor::operator()(uptr<EnumExprAst> &node) {
   print_indent();
   std::println("}}");
 }
+void PrettyPrintAstVisitor::operator()(uptr<SingleMatchExprAst> &node) {
+  std::print("match ");
+  std::visit(*this, node->enum_expr);
+  std::print(" : ");
+  (*this)(node->casted_enum_var);
+  std::visit(*this, node->then_expr);
+  std::print("\n");
+}
