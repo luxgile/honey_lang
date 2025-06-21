@@ -108,7 +108,7 @@ struct Parser {
     return false;
   }
 
-  bool check_tokens(std::initializer_list<TokenKind> tokens, int offset = 0) {
+  bool check_tokens(std::initializer_list<TokenKind> tokens, int offset) {
     if (tokens.size() + offset > tk_queue.size()) {
       if (debug_checks) {
         std::print("> [x] check [+{}]: ", offset);
@@ -672,16 +672,16 @@ struct Parser {
       tmp_offset += 1;
 
       // TODO: Need to handle types as a general function
-      if (!check_tokens({Id, Dot, Id}))
+      if (!check_tokens({Id, Dot, Id}, tmp_offset))
         return {};
-      auto enum_name = get_tk(offset).value().value;
-      auto enum_member_name = get_tk(offset + 2).value().value;
-      offset += 3;
+      auto enum_name = get_tk(tmp_offset).value().value;
+      auto enum_member_name = get_tk(tmp_offset + 2).value().value;
+      tmp_offset += 3;
 
       auto casted_var_name = std::string("");
-      if (check_tokens({Id}, offset)) {
-        casted_var_name = get_tk(offset).value().value;
-        offset += 1;
+      if (check_tokens({Id}, tmp_offset)) {
+        casted_var_name = get_tk(tmp_offset).value().value;
+        tmp_offset += 1;
       }
 
       auto enum_type = ctx->type_db.get_type_by_name(enum_name);
@@ -691,17 +691,23 @@ struct Parser {
           enum_type.value()->get_field_by_name(enum_member_name);
       if (!enum_member_type)
         return {};
+      auto enum_member_ty =
+          ctx->type_db.get_type(enum_member_type.value()->type);
 
       auto casted_var = std::make_unique<VarDefStmtAst>(
           casted_var_name, enum_member_type.value()->type, std::nullopt);
 
-      auto then_expr = handle_expr(offset);
+      auto then_expr = handle_expr(tmp_offset);
       if (!then_expr)
         return {};
 
+      offset = tmp_offset;
+
       LOG("single match expression found");
-      return std::make_unique<SingleMatchExprAst>(
+      auto match = std::make_unique<SingleMatchExprAst>(
           std::move(*match_expr), std::move(casted_var), std::move(*then_expr));
+      ctx->defined_vars[match->casted_enum_var->name] = match->casted_enum_var.get();
+      return match;
     }
 
     LOG("failed to parse single match");

@@ -45,7 +45,7 @@ struct LlvmIrGenAstVisitor {
 
   struct DefinedVariable {
     llvm::Type *type;
-    llvm::AllocaInst *alloca;
+    llvm::Value *alloca;
   };
 
   struct EnumValues {
@@ -408,22 +408,28 @@ struct LlvmIrGenAstVisitor {
     // Emit then block
 
     // If variable has a name, create new var and cast the value to it
+    builder->SetInsertPoint(then_bb);
+
     if (node->casted_enum_var->name != "") {
       auto enum_member_expr_llvm_ty =
           ctx->get_llvm_type(enum_member_expr_ty.value()->get_id()).value();
+      auto enum_member_ptr =
+          builder->CreateStructGEP(enum_llvm_ty, *enum_expr, 1);
+      auto member_llvm_ptr_ty = enum_member_expr_llvm_ty->getPointerTo();
       auto casted_enum_member =
-          builder->CreateBitCast(*enum_expr, enum_member_expr_llvm_ty);
-      // TODO: Need to change again how enums are generated. Need an additional struct.
-      /* auto casted_var = builder->CreateStructGEP(Type *Ty, Value *Ptr, unsigned int Idx) */
+          builder->CreateBitCast(enum_member_ptr, member_llvm_ptr_ty);
+      defined_variables[node->casted_enum_var->name] =
+          DefinedVariable{member_llvm_ptr_ty, casted_enum_member};
     }
 
-    builder->SetInsertPoint(then_bb);
     auto then_expr = std::visit(*this, node->then_expr);
     if (!then_expr)
       return std::unexpected(then_expr.error());
 
     builder->CreateBr(merge_bb);
     then_bb = builder->GetInsertBlock();
+
+    builder->SetInsertPoint(merge_bb);
 
     return then_expr;
   }
@@ -671,6 +677,11 @@ struct LlvmStoreAllocaVisitor {
     llvm_gen->rvalue_mode = true;
     auto expr = (*llvm_gen)(node);
     llvm_gen->rvalue_mode = false;
+
+    /* AstExprTypeVisitor visitor = {llvm_gen->ctx}; */
+    /* auto expr_ty = visitor(node); */
+    /* auto expr_llvm_ty = llvm_gen->ctx->get_llvm_type(expr_ty); */
+    /* builder->CreateLoad(expr_llvm_ty.value(), *expr); */
     if (!expr)
       return std::unexpected(expr.error());
     builder->CreateStore(*expr, alloca);

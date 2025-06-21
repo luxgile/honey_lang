@@ -2,10 +2,17 @@
 
 #include "ast.h"
 #include "program_ctx.h"
+#include "types.h"
+#include <functional>
 #include <variant>
 
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
+
+  static AstTypeId get_type(ProgramCtx* ctx, AstExpression &expr) {
+    AstExprTypeVisitor visitor = {ctx};
+    return std::visit(visitor, expr);
+  }
 
   AstTypeId operator()(uptr<IntExprAst> &_) const { return INT_TYPE.get_id(); }
 
@@ -27,12 +34,12 @@ struct AstExprTypeVisitor {
   }
 
   AstTypeId operator()(uptr<MemberAccesorExprAst> &node) const {
-    auto base_type = std::visit(*this, node->base);
-    auto member = ctx->type_db.get_type(base_type).value()->get_field_by_name(
-        node->member);
-    if (!member)
+    auto base_type_id = std::visit(*this, node->base);
+    auto base_type = ctx->type_db.get_type(base_type_id).value();
+    auto member_type = base_type->get_field_by_name(node->member);
+    if (!member_type)
       throw "no member found on type";
-    return member.value()->type;
+    return member_type.value()->type;
   }
 
   AstTypeId operator()(uptr<VarExprAst> &node) const {

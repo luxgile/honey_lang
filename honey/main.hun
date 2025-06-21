@@ -62,18 +62,25 @@ build_cat :: fn (|) {
   cat := AnimalKind.Cat .{ color = "Red" }
 }
 
+print_member_access :: fn (|) {
+  person := Person .{ name = "Guille", gender = true }
+  animal := Animal .{ kind = AnimalKind.Cat .{ color = "Orange "},  name = "Copper", age = 8, owner = person }
+  printf "my animal is %d years old\n" animal.age
+  printf "my owner is %s\n" animal.owner.name
+}
+
+print_cat :: fn(|) {
+  a := AnimalKind.Cat .{ color = "orange" }
+  match a : AnimalKind.Cat cat {
+    printf "I'm a cat with color %s\n" cat.color
+  }
+  printf "Animal printed!\n"
+}
+
 main :: fn (|) {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
-  person := Person .{ name = "Guille", gender = true }
-  animal := Animal .{ kind = AnimalKind.Cat .{ color = "Orange "},  name = "Copper", age = 8, owner = person }
-
-  printf "my animal is %d years old\n" animal.age
-  printf "my owner is %s\n" animal.owner.name
-
- # match animal.kind : AnimalKind.Cat cat {
- #   printf "I'm a cat with color %s" cat.color
- # }
+  print_member_access
 
   my_bool := ! (my_int != 18)
   if my_bool {

@@ -9,10 +9,6 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
   if (node.assignment) {
     AstExprTypeVisitor type_visitor = {ctx};
     auto ast_type = std::visit(type_visitor, *node.assignment);
-    /* auto assignment_type = get_opt(ctx->type_db.get_type(ast_type)); */
-    // If it's an enum, allocate the parent, not the specified type
-    /* if (assignment_type->is_enum_member()) */
-    /*   ast_type = assignment_type->get_parent_id(); */
 
     auto assignment_llvm_type_res = ctx->get_llvm_type(ast_type);
     if (!assignment_llvm_type_res)

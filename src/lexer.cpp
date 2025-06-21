@@ -210,7 +210,7 @@ std::expected<Token, std::string> Lexer::get_token() {
     return create_token(RPar, true);
   }
 
-  return create_token(Undefined);
+  throw "undefined";
 }
 
 std::string token_kind_to_string(TokenKind kind) {
@@ -253,6 +253,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Enum";
   case Fn:
     return "Fn";
+  case Match:
+    return "Match";
   case If:
     return "If";
   case Else:
@@ -265,7 +267,7 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Meta";
   case Undefined:
   default:
-    return "Undefined";
+    throw "Undefined";
   }
 }
 
