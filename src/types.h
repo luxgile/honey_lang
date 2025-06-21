@@ -66,6 +66,9 @@ public:
   bool is_enum() const { return kind == AstTypeKind::Enum; }
   bool is_enum_member() const;
 
+  std::expected<const AstType *, std::string>
+  get_field_type(AstTypeId id) const;
+
   std::expected<const AstTypeField *, std::string>
   get_field_by_idx(int idx) const {
     if (!is_struct() && !is_enum())
@@ -107,8 +110,21 @@ public:
         std::format("no field '{}' found in type '{}'", name, get_name()));
   }
 
-  std::expected<int, std::string>
-  get_field_index_by_id(AstTypeId id) const {
+  std::expected<const AstTypeField *, std::string>
+  get_field(AstTypeId id) const {
+    if (!is_struct() && !is_enum())
+      return std::unexpected("trying to get field from a non-struct type");
+
+    for (auto &field : fields) {
+      if (field.type == id)
+        return &field;
+    }
+
+    return std::unexpected(
+        std::format("no field '{}' found in type '{}'", id, get_name()));
+  }
+
+  std::expected<int, std::string> get_field_index_by_id(AstTypeId id) const {
     if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
 
@@ -156,6 +172,7 @@ public:
                      std::optional<AstTypeId> parent_id);
 
   std::optional<AstTypeId> get_id_by_name(std::string name);
+  std::optional<const AstType *> get_type_by_name(std::string name);
   std::optional<const AstType *> get_type(AstTypeId id);
   std::optional<AstType *> get_type_mut(AstTypeId id);
 };

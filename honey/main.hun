@@ -54,6 +54,10 @@ Animal :: struct {
   owner: Person,
 }
 
+build_dog :: fn (|) {
+  dog := AnimalKind.Dog
+}
+
 build_cat :: fn (|) {
   cat := AnimalKind.Cat .{ color = "Red" }
 }

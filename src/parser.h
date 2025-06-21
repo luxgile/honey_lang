@@ -349,19 +349,15 @@ struct Parser {
       std::vector<AstTypeField> field_types;
       std::vector<AstStatement> field_stmts;
       while (!check_tokens({RBrace}, offset)) {
+        // A enum variant without struct:
         if (check_tokens({Id, Comma}, offset)) {
           auto field = get_tk(offset).value().value;
           offset += 1;
 
           // Create a unit struct to represent enum variant.
           auto s_type = ctx->type_db.new_struct(
-              field,
-              std::vector<AstTypeField>(
-                  {AstTypeField{"_tag", INT_TYPE.get_id()}}),
-              enum_id);
+              field, std::vector<AstTypeField>({}), enum_id);
           auto s_vars = std::vector<uptr<ArgDefAst>>();
-          s_vars.push_back(
-              std::make_unique<ArgDefAst>("_tag", INT_TYPE.get_id(), false));
           auto s = std::make_unique<StructDefAst>(s_type, std::move(s_vars));
           ctx->define_struct(field, s.get());
 
@@ -372,16 +368,6 @@ struct Parser {
           auto stmt_type_id = AstTypeId{};
           if (std::holds_alternative<uptr<StructDefAst>>(*stmt)) {
             auto s = &std::get<uptr<StructDefAst>>(*stmt);
-            // We need to push the tag variable to the beggining both on struct
-            // def and type
-            s->get()->fields.insert(
-                s->get()->fields.begin(),
-                std::make_unique<ArgDefAst>("_tag", INT_TYPE.get_id(), false));
-            auto s_type = get_opt(ctx->type_db.get_type_mut(s->get()->type));
-            auto s_fields = s_type->get_fields();
-            s_fields.insert(s_fields.begin(),
-                            AstTypeField{"_tag", INT_TYPE.get_id()});
-            s_type->set_fields(s_fields);
             stmt_type_id = s->get()->type;
           } else {
             LOG("failed to parse enum - unsuported statement");
@@ -576,6 +562,9 @@ struct Parser {
       return std::make_unique<GroupExprAst>(std::move(*expr));
     }
 
+    if (auto match_expr = handle_single_match_expr(offset))
+      return match_expr;
+
     if (auto if_expr = handle_if_expr(offset))
       return if_expr;
 
@@ -682,7 +671,37 @@ struct Parser {
         return {};
       tmp_offset += 1;
 
-      throw "FUCK";
+      // TODO: Need to handle types as a general function
+      if (!check_tokens({Id, Dot, Id}))
+        return {};
+      auto enum_name = get_tk(offset).value().value;
+      auto enum_member_name = get_tk(offset + 2).value().value;
+      offset += 3;
+
+      auto casted_var_name = std::string("");
+      if (check_tokens({Id}, offset)) {
+        casted_var_name = get_tk(offset).value().value;
+        offset += 1;
+      }
+
+      auto enum_type = ctx->type_db.get_type_by_name(enum_name);
+      if (!enum_type)
+        return {};
+      auto enum_member_type =
+          enum_type.value()->get_field_by_name(enum_member_name);
+      if (!enum_member_type)
+        return {};
+
+      auto casted_var = std::make_unique<VarDefStmtAst>(
+          casted_var_name, enum_member_type.value()->type, std::nullopt);
+
+      auto then_expr = handle_expr(offset);
+      if (!then_expr)
+        return {};
+
+      LOG("single match expression found");
+      return std::make_unique<SingleMatchExprAst>(
+          std::move(*match_expr), std::move(casted_var), std::move(*then_expr));
     }
 
     LOG("failed to parse single match");

@@ -77,6 +77,12 @@ std::optional<AstTypeId> AstTypeDb::get_id_by_name(std::string name) {
   }
   return {};
 }
+std::optional<const AstType *> AstTypeDb::get_type_by_name(std::string name) {
+  auto id = get_id_by_name(name);
+  if (!id)
+    return {};
+  return get_type(*id);
+}
 
 AstType const *AstType::get_parent() const {
   auto parent_ty = db->get_type(*parent);
@@ -88,4 +94,14 @@ bool AstType::is_enum_member() const {
     return false;
   auto parent = get_parent();
   return parent->is_enum();
+}
+std::expected<const AstType *, std::string>
+AstType::get_field_type(AstTypeId id) const {
+  auto field = get_field(id);
+  if (!field)
+    return std::unexpected(field.error());
+  auto field_type = db->get_type(field.value()->type);
+  if (!field_type)
+    return std::unexpected("no type found");
+  return *field_type;
 }

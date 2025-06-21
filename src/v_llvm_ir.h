@@ -213,9 +213,6 @@ struct LlvmIrGenAstVisitor {
         std::println("ignored llmv value generated while creating an enum");
     }
 
-    std::vector<llvm::Type *> field_types;
-    field_types.push_back(llvm::IntegerType::getInt32Ty(*llvm_ctx));
-
     auto node_type = ctx->type_db.get_type(node.type).value();
 
     // Get the biggest member size
@@ -232,6 +229,9 @@ struct LlvmIrGenAstVisitor {
         union_size = size;
     }
 
+    // Create the llvm type
+    std::vector<llvm::Type *> field_types;
+    field_types.push_back(llvm::IntegerType::getInt32Ty(*llvm_ctx));
     field_types.push_back(
         llvm::ArrayType::get(llvm::IntegerType::get(*llvm_ctx, 8), union_size));
     auto enum_type = llvm::StructType::create(*llvm_ctx, field_types,
@@ -375,8 +375,57 @@ struct LlvmIrGenAstVisitor {
     return for_cond_expr;
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<SingleMatchExprAst> &node) {
-    throw "not implemented";
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<SingleMatchExprAst> &node) {
+    auto enum_expr = std::visit(*this, node->enum_expr);
+    if (!enum_expr)
+      return std::unexpected(enum_expr.error());
+
+    auto enum_member_expr_ty =
+        ctx->type_db.get_type(node->casted_enum_var->type);
+    if (!enum_member_expr_ty)
+      return std::unexpected("no type found for match expression");
+    auto enum_ty = enum_member_expr_ty.value()->get_parent();
+    auto enum_llvm_ty = ctx->get_llvm_type(enum_ty->get_id()).value();
+
+    auto enum_tag_ptr = builder->CreateStructGEP(enum_llvm_ty, *enum_expr, 0);
+    auto enum_tag = builder->CreateLoad(
+        llvm::IntegerType::getInt32Ty(*llvm_ctx), enum_tag_ptr);
+    auto member_idx =
+        enum_ty->get_field_index_by_id(node->casted_enum_var->type);
+
+    // Compare tag value to check if it's the right enum
+    auto match_res_expr = builder->CreateICmpEQ(
+        enum_tag,
+        llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, *member_idx)),
+        "match_cond");
+
+    auto fn = builder->GetInsertBlock()->getParent();
+    auto then_bb = llvm::BasicBlock::Create(*llvm_ctx, "match_then", fn);
+    auto merge_bb = llvm::BasicBlock::Create(*llvm_ctx, "match_merge", fn);
+    builder->CreateCondBr(match_res_expr, then_bb, merge_bb);
+
+    // Emit then block
+
+    // If variable has a name, create new var and cast the value to it
+    if (node->casted_enum_var->name != "") {
+      auto enum_member_expr_llvm_ty =
+          ctx->get_llvm_type(enum_member_expr_ty.value()->get_id()).value();
+      auto casted_enum_member =
+          builder->CreateBitCast(*enum_expr, enum_member_expr_llvm_ty);
+      // TODO: Need to change again how enums are generated. Need an additional struct.
+      /* auto casted_var = builder->CreateStructGEP(Type *Ty, Value *Ptr, unsigned int Idx) */
+    }
+
+    builder->SetInsertPoint(then_bb);
+    auto then_expr = std::visit(*this, node->then_expr);
+    if (!then_expr)
+      return std::unexpected(then_expr.error());
+
+    builder->CreateBr(merge_bb);
+    then_bb = builder->GetInsertBlock();
+
+    return then_expr;
   }
 
   std::expected<llvm::Value *, std::string> operator()(uptr<IfExprAst> &node) {
