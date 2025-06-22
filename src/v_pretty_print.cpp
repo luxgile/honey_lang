@@ -225,3 +225,12 @@ void PrettyPrintAstVisitor::operator()(uptr<SingleMatchExprAst> &node) {
   std::visit(*this, node->then_expr);
   std::print("\n");
 }
+void PrettyPrintAstVisitor::operator()(uptr<RefExprAst> &node) {
+  std::print("&");
+  std::visit(*this, node->expr);
+}
+
+void PrettyPrintAstVisitor::operator()(uptr<DerefExprAst> &node) {
+  std::print("^");
+  std::visit(*this, node->expr);
+}

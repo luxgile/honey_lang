@@ -28,14 +28,15 @@ struct StructExprAst;
 struct MemberAccesorExprAst;
 struct EnumExprAst;
 struct SingleMatchExprAst;
+struct RefExprAst;
+struct DerefExprAst;
 
-using AstExpression =
-    std::variant<uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>,
-                 uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
-                 uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
-                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
-                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>,
-                 uptr<EnumExprAst>, uptr<SingleMatchExprAst>>;
+using AstExpression = std::variant<
+    uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>, uptr<RefExprAst>,
+    uptr<DerefExprAst>, uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
+    uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
+    uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>, uptr<StructExprAst>,
+    uptr<MemberAccesorExprAst>, uptr<EnumExprAst>, uptr<SingleMatchExprAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -103,7 +104,8 @@ struct VarDefStmtAst {
 };
 
 struct VarAssignStmtAst {
-  std::string id;
+  /* std::string id; */
+  AstExpression lvalue;
   AstExpression rvalue;
 };
 
@@ -169,8 +171,12 @@ struct StringExprAst {
   std::string value;
 };
 
-struct PtrExprAst {
-  std::string name;
+struct RefExprAst {
+  AstExpression expr;
+};
+
+struct DerefExprAst {
+  AstExpression expr;
 };
 
 struct VarExprAst {
@@ -215,6 +221,16 @@ struct FnHeaderAst {
   bool is_vararic() {
     return suffix_args.size() > 0 &&
            suffix_args[suffix_args.size() - 1]->is_varadic;
+  }
+
+  /// Will treat prefix and suffix as a single list and retrieve by index.
+  const ArgDefAst *get_arg_linear(int idx) {
+    if (idx < (int)prefix_args.size())
+      return prefix_args[idx].get();
+    idx -= prefix_args.size();
+    if (idx < (int)suffix_args.size())
+      return suffix_args[idx].get();
+    return nullptr;
   }
 };
 

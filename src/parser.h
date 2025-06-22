@@ -445,18 +445,24 @@ struct Parser {
   std::optional<uptr<VarAssignStmtAst>>
   handle_var_assign(int &offset, std::initializer_list<TokenKind> halt_tokens) {
     LOG("parsing var assigment");
-    if (check_tokens({Id, Id}, offset) && tk_queue[offset + 1].value == "=") {
-      auto id = get_tk(offset)->value;
-      offset += 2;
-      auto expr = consume_expressions(offset, halt_tokens);
-      if (!expr)
-        return {};
 
-      LOG("var assignment found");
-      auto def_var = std::make_unique<VarAssignStmtAst>(id, std::move(*expr));
-      return def_var;
-    }
-    return {};
+    auto tmp_offset = offset;
+    auto lvalue = handle_expr(tmp_offset);
+    if (!lvalue)
+      return {};
+
+    if (!check_tokens({Id}, tmp_offset) &&
+        get_tk(tmp_offset).value().value != "==")
+      return {};
+    tmp_offset += 1;
+
+    auto rvalue = consume_expressions(tmp_offset, halt_tokens);
+    if (!rvalue)
+      return {};
+
+    LOG("var assignment found");
+    auto def_var = std::make_unique<VarAssignStmtAst>(std::move(*lvalue), std::move(*rvalue));
+    return def_var;
   }
 
   std::optional<uptr<VarDefStmtAst>> handle_var_decl(int &offset) {
@@ -604,6 +610,24 @@ struct Parser {
       return std::make_unique<FloatExprAst>(std::stof(f));
     }
 
+    if (check_tokens({Amper}, offset)) {
+      LOG("ref found");
+      offset += 1;
+      auto expr = handle_expr(offset);
+      if (!expr)
+        return {};
+      return std::make_unique<RefExprAst>(std::move(*expr));
+    }
+
+    if (check_tokens({Pointy}, offset)) {
+      LOG("deref found");
+      offset += 1;
+      auto expr = handle_expr(offset);
+      if (!expr)
+        return {};
+      return std::make_unique<DerefExprAst>(std::move(*expr));
+    }
+
     LOG("no expression found");
     return {};
   }
@@ -706,7 +730,8 @@ struct Parser {
       LOG("single match expression found");
       auto match = std::make_unique<SingleMatchExprAst>(
           std::move(*match_expr), std::move(casted_var), std::move(*then_expr));
-      ctx->defined_vars[match->casted_enum_var->name] = match->casted_enum_var.get();
+      ctx->defined_vars[match->casted_enum_var->name] =
+          match->casted_enum_var.get();
       return match;
     }
 

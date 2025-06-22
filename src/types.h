@@ -19,6 +19,10 @@ struct AstTypeField {
 
 enum struct AstTypeKind {
   Primitive,
+  Reference,
+  Array,
+  Vector,
+  Alias,
   Struct,
   Enum,
 };
@@ -27,17 +31,32 @@ enum struct AstTypeKind {
 
 struct AstType {
 private:
+  // Reference to facilitate getting type info
   AstTypeDb *db;
+
+  // Used to differenciate between main type categories
   AstTypeKind kind;
+
+  // Unique ID the type needs 
   AstTypeId id;
+
+  // Subtype used for references and arrays
+  AstTypeId subtype; 
+
+  // User defined name. Final name might not be this as it needs to be mangled.
   std::string name;
+
+  // Fields holded by enums or structs.
   std::vector<AstTypeField> fields;
+
+  // Scoped types like structs inside structs or variants inside enums
   std::optional<AstTypeId> parent;
 
   AstType() {}
 
 public:
   static AstType new_primitive(std::string name, AstTypeDb *db);
+  static AstType new_reference(AstTypeId subtype, AstTypeDb *db);
 
   static AstType new_struct(std::string name, std::vector<AstTypeField> fields,
                             AstTypeDb *db, std::optional<AstTypeId> parent_id);
@@ -51,6 +70,7 @@ public:
   const AstType *get_parent() const;
   AstTypeId get_parent_id() const { return *parent; }
   void set_parent_id(AstTypeId id) { this->parent = id; }
+  AstTypeId get_subtype() const { return this->subtype; }
   std::string get_fullname() const;
   std::string get_name() const { return name; }
   void set_name(std::string name) { this->name = name; }
@@ -64,6 +84,7 @@ public:
   bool is_struct() const { return kind == AstTypeKind::Struct; }
   bool is_unit() const { return is_struct() && fields.size() == 0; }
   bool is_enum() const { return kind == AstTypeKind::Enum; }
+  bool is_ref() const { return kind == AstTypeKind::Reference; }
   bool is_enum_member() const;
 
   std::expected<const AstType *, std::string>
@@ -163,13 +184,13 @@ public:
     add_type(RAW_STRING_TYPE);
   }
 
-  /* AstType new_primitive(std::string name); */
-
   AstTypeId new_struct(std::string name, std::vector<AstTypeField> fields,
                        std::optional<AstTypeId> parent_id);
 
   AstTypeId new_enum(std::string name, std::vector<AstTypeField> fields,
                      std::optional<AstTypeId> parent_id);
+
+  AstTypeId new_ref(AstTypeId subtype);
 
   std::optional<AstTypeId> get_id_by_name(std::string name);
   std::optional<const AstType *> get_type_by_name(std::string name);

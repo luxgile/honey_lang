@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "types.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
 #include <map>
 #include <optional>
@@ -81,6 +82,7 @@ private:
 
 public:
   AstTypeDb type_db;
+  llvm::Type* ptr_llvm_ty;
   std::map<std::string, VarDefStmtAst *> defined_vars;
 
   void define_primitive(std::string name, AstTypeId id) {
@@ -113,6 +115,13 @@ public:
   }
 
   std::optional<llvm::Type *> get_llvm_type(AstTypeId id) {
+    auto ty = type_db.get_type(id);
+    if(!ty)
+      return std::nullopt;
+
+    if(ty.value()->is_ref()) 
+      return ptr_llvm_ty;
+
     auto type = llvm_types[id];
     if (type == nullptr)
       return std::nullopt;

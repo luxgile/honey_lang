@@ -14,6 +14,8 @@ enum TokenKind {
   RBrace,
   LPar,
   RPar,
+  Amper,
+  Pointy,
   Bar,
   Id,
   Int,
@@ -67,6 +69,7 @@ struct Lexer {
   }
 
   int next_char();
+  int go_back(int steps);
 
   Token create_token(TokenKind kind, bool consume = false);
 

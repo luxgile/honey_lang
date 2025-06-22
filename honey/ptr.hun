@@ -1,0 +1,9 @@
+extern printf :: fn (|format: RawString, args: ...)
+
+main :: fn (|) {
+  my_int := 5
+  my_ptr := &my_int
+  ^my_ptr = 3
+  printf "my_int is %d\n" my_int
+  printf "my_ptr is %d\n" ^my_ptr
+}

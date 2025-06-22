@@ -9,21 +9,24 @@
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
 
-  template<class T>
-  static AstTypeId get_type_id(ProgramCtx* ctx, T &expr) {
+  template <class T> static AstTypeId get_type_id(ProgramCtx *ctx, T &expr) {
     AstExprTypeVisitor visitor = {ctx};
     return visitor(expr);
   }
 
-  template<class T>
-  static const AstType* get_type(ProgramCtx* ctx, T &expr) {
+  template <class T> static const AstType *get_type(ProgramCtx *ctx, T &expr) {
     auto id = get_type_id(ctx, expr);
     return ctx->type_db.get_type(id).value();
   }
 
-  static AstTypeId get_type_id(ProgramCtx* ctx, AstExpression &expr) {
+  static AstTypeId get_type_id(ProgramCtx *ctx, AstExpression &expr) {
     AstExprTypeVisitor visitor = {ctx};
     return std::visit(visitor, expr);
+  }
+
+  static const AstType *get_type(ProgramCtx *ctx, AstExpression &expr) {
+    auto id = get_type_id(ctx, expr);
+    return ctx->type_db.get_type(id).value();
   }
 
   AstTypeId operator()(uptr<IntExprAst> &_) const { return INT_TYPE.get_id(); }
@@ -38,6 +41,21 @@ struct AstExprTypeVisitor {
 
   AstTypeId operator()(uptr<StringExprAst> &_) const {
     return RAW_STRING_TYPE.get_id();
+  }
+
+  AstTypeId operator()(uptr<RefExprAst> &node) const {
+    auto expr_type_id = std::visit(*this, node->expr);
+    auto ref_ty_id = AstType::new_reference(expr_type_id, &ctx->type_db);
+    auto ref = ctx->type_db.get_type(ref_ty_id.get_id());
+    if (!ref)
+      return ctx->type_db.new_ref(expr_type_id);
+    return ref.value()->get_id();
+  }
+
+  AstTypeId operator()(uptr<DerefExprAst> &node) const {
+    auto expr_ptr_id = std::visit(*this, node->expr);
+    auto expr_ptr_type = ctx->type_db.get_type(expr_ptr_id);
+    return expr_ptr_type.value()->get_subtype();
   }
 
   AstTypeId operator()(uptr<StructExprAst> &node) const { return node->type; }

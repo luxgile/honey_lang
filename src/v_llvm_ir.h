@@ -3,6 +3,7 @@
 #include "ast.h"
 #include "helpers.h"
 #include "program_ctx.h"
+#include "types.h"
 #include "v_expr_type.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
@@ -44,6 +45,7 @@ struct LlvmIrGenAstVisitor {
   uptr<llvm::Module> module;
 
   struct DefinedVariable {
+    AstTypeId ty_id;
     llvm::Type *type;
     llvm::Value *alloca;
   };
@@ -54,9 +56,8 @@ struct LlvmIrGenAstVisitor {
 
   // State
   std::map<std::string, DefinedVariable> defined_variables;
-  /* std::map<AstTypeId, EnumValues> enums_llvm_values; */
-  llvm::Function *current_fn;
   bool rvalue_mode;
+  bool get_ref_mode;
 
   LlvmIrGenAstVisitor(ProgramCtx *ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
@@ -69,6 +70,9 @@ struct LlvmIrGenAstVisitor {
       return std::nullopt;
     return &defined_variables[name];
   }
+
+  std::expected<void, std::string>
+  store_in_value(llvm::Value *ptr, AstTypeId ptr_ty_id, AstExpression &expr);
 
   llvm::AllocaInst *build_alloca_at_start(llvm::Function *fn, llvm::Type *type,
                                           std::string name) {
@@ -152,12 +156,23 @@ struct LlvmIrGenAstVisitor {
 
     if (!node.fn_header->is_external) {
       defined_variables.clear();
-      current_fn = fn_header.value();
       auto bb = llvm::BasicBlock::Create(*llvm_ctx, "entry", fn_header.value());
       builder->SetInsertPoint(bb);
+
+      // Generate arguments at the beggining of the function
+      int i = 0;
+      for (auto &arg : fn_header.value()->args()) {
+        auto arg_ty = node.fn_header->get_arg_linear(i)->type;
+        auto arg_alloca = build_alloca_at_start(
+            fn_header.value(), arg.getType(), arg.getName().str());
+        builder->CreateStore(&arg, arg_alloca);
+        defined_variables[std::string(arg.getName())] =
+            DefinedVariable{arg_ty, arg.getType(), arg_alloca};
+        i += 1;
+      }
+
       auto body_ret = std::visit(*this, *node.body);
       bb = builder->GetInsertBlock();
-      current_fn = nullptr;
 
       if (!body_ret) {
         fn_header.value()->eraseFromParent();
@@ -315,7 +330,10 @@ struct LlvmIrGenAstVisitor {
           std::format("variable '{}' is undefined", node->name));
 
     auto var_type = AstExprTypeVisitor::get_type(ctx, node);
-    if (!rvalue_mode && !var_type->is_primitive())
+    if (get_ref_mode)
+      return var.value()->alloca;
+
+    if (!rvalue_mode && !var_type->is_primitive() && !var_type->is_ref())
       return var.value()->alloca;
 
     return builder->CreateLoad(var.value()->type, var.value()->alloca,
@@ -330,6 +348,25 @@ struct LlvmIrGenAstVisitor {
   std::expected<llvm::Value *, std::string>
   operator()(uptr<GroupExprAst> &node) {
     return std::visit(*this, node->expr);
+  }
+
+  std::expected<llvm::Value *, std::string> operator()(uptr<RefExprAst> &node) {
+    get_ref_mode = true;
+    auto expr = std::visit(*this, node->expr);
+    get_ref_mode = false;
+    if (!expr)
+      return std::unexpected(expr.error());
+    return expr;
+  }
+
+  std::expected<llvm::Value *, std::string> operator()(uptr<DerefExprAst> &node) {
+    auto expr = std::visit(*this, node->expr);
+    if (!expr)
+      return std::unexpected(expr.error());
+    auto expr_ty = AstExprTypeVisitor::get_type_id(ctx, node);
+    auto expr_llvm_ty = ctx->get_llvm_type(expr_ty);
+    expr = builder->CreateLoad(*expr_llvm_ty, *expr);
+    return expr;
   }
 
   std::expected<llvm::Value *, std::string> operator()(uptr<StructExprAst> &_) {
@@ -418,8 +455,10 @@ struct LlvmIrGenAstVisitor {
       auto member_llvm_ptr_ty = enum_member_expr_llvm_ty->getPointerTo();
       auto casted_enum_member =
           builder->CreateBitCast(enum_member_ptr, member_llvm_ptr_ty);
-      defined_variables[node->casted_enum_var->name] =
-          DefinedVariable{member_llvm_ptr_ty, casted_enum_member};
+      auto ref_ty = AstType::new_reference(
+          enum_member_expr_ty.value()->get_id(), &ctx->type_db);
+      defined_variables[node->casted_enum_var->name] = DefinedVariable{
+          ref_ty.get_id(), member_llvm_ptr_ty, casted_enum_member};
     }
 
     auto then_expr = std::visit(*this, node->then_expr);
@@ -530,7 +569,7 @@ struct LlvmIrGenAstVisitor {
     auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
                                                *member_idx, node->member);
 
-    if (rvalue_mode || member_llvm_type.value()->isStructTy())
+    if (rvalue_mode || get_ref_mode || member_llvm_type.value()->isStructTy())
       return member_ptr;
 
     return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
@@ -642,17 +681,6 @@ struct LlvmIrGenAstVisitor {
 
   std::expected<llvm::Value *, std::string>
   operator()(uptr<BodyExprAst> &node) {
-
-    if (current_fn != nullptr) {
-      for (auto &arg : current_fn->args()) {
-        auto arg_alloca = build_alloca_at_start(current_fn, arg.getType(),
-                                                arg.getName().str());
-        builder->CreateStore(&arg, arg_alloca);
-        defined_variables[std::string(arg.getName())] =
-            DefinedVariable{arg.getType(), arg_alloca};
-      }
-    }
-
     llvm::Value *last_val = nullptr;
     for (auto &stmt : node->statements) {
       auto stmt_expr = build_statement(stmt);
@@ -677,11 +705,6 @@ struct LlvmStoreAllocaVisitor {
     llvm_gen->rvalue_mode = true;
     auto expr = (*llvm_gen)(node);
     llvm_gen->rvalue_mode = false;
-
-    /* AstExprTypeVisitor visitor = {llvm_gen->ctx}; */
-    /* auto expr_ty = visitor(node); */
-    /* auto expr_llvm_ty = llvm_gen->ctx->get_llvm_type(expr_ty); */
-    /* builder->CreateLoad(expr_llvm_ty.value(), *expr); */
     if (!expr)
       return std::unexpected(expr.error());
     builder->CreateStore(*expr, alloca);
@@ -740,6 +763,14 @@ struct LlvmStoreAllocaVisitor {
     return simple_alloca(node);
   }
 
+  std::expected<void, std::string> operator()(uptr<RefExprAst> &node) {
+    return simple_alloca(node);
+  }
+
+  std::expected<void, std::string> operator()(uptr<DerefExprAst> &node) {
+    return simple_alloca(node);
+  }
+
   std::expected<void, std::string>
   operator()(uptr<MemberAccesorExprAst> &node) {
     return simple_alloca(node);
@@ -764,9 +795,9 @@ struct LlvmStoreAllocaVisitor {
                                               enum_type->get_name() + "_tag");
 
     // Store the tag value
-    LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
-    auto int_expr = std::make_unique<IntExprAst>(*value_idx);
-    auto ir_res = store_visitor(int_expr);
+    auto int_expr = AstExpression{std::make_unique<IntExprAst>(*value_idx)};
+    auto ir_res =
+        llvm_gen->store_in_value(field_ptr, node->enum_type, int_expr);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
@@ -775,8 +806,13 @@ struct LlvmStoreAllocaVisitor {
     auto bitcast_union_ptr =
         builder->CreateStructGEP(*enum_llvm_ty, bitcast_enum, 1);
 
-    store_visitor = {builder, bitcast_union_ptr, llvm_gen};
-    ir_res = store_visitor(node->struct_expr);
+    auto ref_ty =
+        AstType::new_reference(node->struct_expr->type, &llvm_gen->ctx->type_db)
+            .get_id();
+    auto struct_expr = AstExpression{
+        std::move(node->struct_expr)}; // BUG: This will be problematic if the
+                                       // AST it reused
+    ir_res = llvm_gen->store_in_value(bitcast_union_ptr, ref_ty, struct_expr);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
@@ -794,11 +830,15 @@ struct LlvmStoreAllocaVisitor {
                            ->get_field_index_by_name(field->id);
       if (!field_idx)
         return std::unexpected(field_idx.error());
+      auto field_ty = llvm_gen->ctx->type_db.get_type(node->type)
+                          .value()
+                          ->get_field_by_idx(*field_idx)
+                          .value();
 
       auto field_ptr =
           builder->CreateStructGEP(*struct_ty, alloca, *field_idx, field->id);
-      LlvmStoreAllocaVisitor store_visitor = {builder, field_ptr, llvm_gen};
-      auto ir_res = std::visit(store_visitor, field->rvalue);
+      auto ir_res =
+          llvm_gen->store_in_value(field_ptr, field_ty->type, field->rvalue);
       if (!ir_res)
         return std::unexpected(ir_res.error());
     }

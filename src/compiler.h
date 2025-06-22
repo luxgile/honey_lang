@@ -4,6 +4,7 @@
 #include "parser.h"
 #include "program_ctx.h"
 #include "v_llvm_ir.h"
+#include "llvm/IR/DerivedTypes.h"
 #include <expected>
 #include <string>
 #include <vector>
@@ -31,6 +32,7 @@ public:
   Compiler() : parser(&ctx), llvm_gen(&ctx) {
     parser.debug_checks = true;
     parser.debug_scan = true;
+    ctx.ptr_llvm_ty = llvm::PointerType::get(*llvm_gen.llvm_ctx, 0);
     add_internal_types();
   }
 

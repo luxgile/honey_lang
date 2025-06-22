@@ -1,5 +1,8 @@
 #include "v_llvm_ir.h"
+#include "ast.h"
+#include "types.h"
 #include "v_expr_type.h"
+#include "llvm/IR/Value.h"
 #include <variant>
 
 std::expected<void, std::string>
@@ -24,13 +27,11 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
     if (assignment_llvm_type->isVoidTy())
       return std::unexpected("trying to allocate a void type");
 
-    auto alloca =
-        builder->CreateAlloca(*_ty, nullptr, node.name);
+    auto alloca = builder->CreateAlloca(*_ty, nullptr, node.name);
     defined_variables[node.name] =
-        DefinedVariable{assignment_llvm_type, alloca};
+        DefinedVariable{ast_type, assignment_llvm_type, alloca};
 
-    LlvmStoreAllocaVisitor store_visitor = {builder.get(), alloca, this};
-    auto ir_res = std::visit(store_visitor, *node.assignment);
+    auto ir_res = store_in_value(alloca, ast_type, *node.assignment);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
@@ -47,7 +48,7 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
     auto alloca =
         builder->CreateAlloca(assignment_llvm_type, nullptr, node.name);
     defined_variables[node.name] =
-        DefinedVariable{assignment_llvm_type, alloca};
+        DefinedVariable{node.type, assignment_llvm_type, alloca};
   }
 
   return {};
@@ -58,9 +59,17 @@ LlvmIrGenAstVisitor::build_var_assignment(VarAssignStmtAst &node) {
   if (!var)
     return std::unexpected("no variable found for assigment");
 
-  LlvmStoreAllocaVisitor alloca_visitor = {builder.get(), var.value()->alloca,
-                                           this};
-  auto ir_res = std::visit(alloca_visitor, node.rvalue);
+  auto ir_res = store_in_value(var.value()->alloca, var.value()->ty_id, node.rvalue);
+  if (!ir_res)
+    return std::unexpected(ir_res.error());
+  return {};
+}
+
+std::expected<void, std::string>
+LlvmIrGenAstVisitor::store_in_value(llvm::Value *ptr, AstTypeId ptr_ty_id,
+                                    AstExpression &expr) {
+  LlvmStoreAllocaVisitor store_visitor = {builder.get(), ptr, this};
+  auto ir_res = std::visit(store_visitor, expr);
   if (!ir_res)
     return std::unexpected(ir_res.error());
   return {};

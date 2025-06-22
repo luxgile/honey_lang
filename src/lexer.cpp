@@ -23,6 +23,17 @@ int Lexer::next_char() {
   return c;
 }
 
+int Lexer::go_back(int steps) {
+  src_index -= steps;
+  if (capturing)
+    current_pos.end -= steps;
+  else {
+    current_pos.start -= steps;
+    current_pos.end = current_pos.start;
+  }
+  return source[src_index];
+}
+
 Token Lexer::create_token(TokenKind kind, bool consume) {
   if (temp_id == "")
     temp_id = last_char;
@@ -33,7 +44,7 @@ Token Lexer::create_token(TokenKind kind, bool consume) {
   return token;
 }
 
-auto ALLOWED_ID_CHARS = std::string("+-<>=_\\/*~!$%^;?");
+auto ALLOWED_ID_CHARS = std::string("+-<>=_\\/*~!$%^;?&");
 bool is_allowed_id_char(char c) {
   return std::isalpha(c) || ALLOWED_ID_CHARS.contains(c);
 }
@@ -97,6 +108,18 @@ std::expected<Token, std::string> Lexer::get_token() {
 
     if (temp_id == "fn")
       return create_token(Fn);
+
+    if (temp_id.starts_with('&')) {
+      last_char = go_back(temp_id.size() - 1);
+      temp_id = temp_id[0];
+      return create_token(Amper);
+    }
+
+    if (temp_id.starts_with('^')) {
+      last_char = go_back(temp_id.size() - 1);
+      temp_id = temp_id[0];
+      return create_token(Pointy);
+    }
 
     return create_token(Id);
   }
@@ -235,6 +258,10 @@ std::string token_kind_to_string(TokenKind kind) {
     return "RBar";
   case Bar:
     return "Bar";
+  case Amper:
+    return "Amper";
+  case Pointy:
+    return "Pointy";
   case Id:
     return "Identifier";
   case Int:

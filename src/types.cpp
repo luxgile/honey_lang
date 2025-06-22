@@ -54,7 +54,6 @@ AstTypeId AstTypeDb::new_enum(std::string name,
 std::optional<const AstType *> AstTypeDb::get_type(AstTypeId id) {
   if (types.contains(id))
     return &types.at(id);
-  return &types.at(id);
   return {};
 }
 
@@ -104,4 +103,22 @@ AstType::get_field_type(AstTypeId id) const {
   if (!field_type)
     return std::unexpected("no type found");
   return *field_type;
+}
+
+AstType AstType::new_reference(AstTypeId subtype, AstTypeDb *db) {
+  auto subtype_ = db->get_type(subtype);
+  auto type = AstType{};
+  type.db = db;
+  type.kind = AstTypeKind::Reference;
+  type.name = "ptr_" + subtype_.value()->get_name();
+  type.id = std::hash<std::string>{}(type.name);
+  type.parent = {};
+  type.subtype = subtype;
+  return type;
+}
+
+AstTypeId AstTypeDb::new_ref(AstTypeId subtype) {
+  auto type = AstType::new_reference(subtype, this);
+  types.insert({type.get_id(), type});
+  return type.get_id();
 }
