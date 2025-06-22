@@ -1,9 +1,21 @@
 extern printf :: fn (|format: RawString, args: ...)
 
+# This SOMETIMES works???????
+add_one :: fn (| i: ^Int) {
+  ^i = @i+ ^i 1
+}
+
 main :: fn (|) {
   my_int := 5
   my_ptr := &my_int
   ^my_ptr = 3
   printf "my_int is %d\n" my_int
   printf "my_ptr is %d\n" ^my_ptr
+
+  add_one my_ptr
+  printf "my_ptr is %d\n" ^my_ptr
+  printf "my_int is %d\n" my_int
+
+  my_int = @i+ ^my_ptr 1
+  printf "my_int is %d\n" my_int
 }

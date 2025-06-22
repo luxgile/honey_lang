@@ -54,9 +54,10 @@ struct LlvmIrGenAstVisitor {
     std::vector<llvm::Value *> values;
   };
 
+  // TODO: Pass state as an argument in the visitor. Global state is pretty bad.
   // State
   std::map<std::string, DefinedVariable> defined_variables;
-  bool rvalue_mode;
+  volatile bool rvalue_mode = false; // Volatile is needed or the compile might optimize this for some reason.
   bool var_lassign_mode;
   bool get_ref_mode;
 
@@ -163,12 +164,14 @@ struct LlvmIrGenAstVisitor {
       // Generate arguments at the beggining of the function
       int i = 0;
       for (auto &arg : fn_header.value()->args()) {
-        auto arg_ty = node.fn_header->get_arg_linear(i)->type;
-        auto arg_alloca = build_alloca_at_start(
-            fn_header.value(), arg.getType(), arg.getName().str());
-        builder->CreateStore(&arg, arg_alloca);
+        auto arg_ty_id = node.fn_header->get_arg_linear(i)->type;
+        /* auto arg_ty = ctx->type_db.get_type(arg_ty_id).value(); */
+        llvm::Value *arg_val = &arg;
+        arg_val = build_alloca_at_start(fn_header.value(), arg.getType(),
+                                        arg.getName().str());
+        builder->CreateStore(&arg, arg_val);
         defined_variables[std::string(arg.getName())] =
-            DefinedVariable{arg_ty, arg.getType(), arg_alloca};
+            DefinedVariable{arg_ty_id, arg.getType(), arg_val};
         i += 1;
       }
 
@@ -365,7 +368,17 @@ struct LlvmIrGenAstVisitor {
     auto expr = std::visit(*this, node->expr);
     if (!expr)
       return std::unexpected(expr.error());
-    expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
+
+    /* std::println("rvalue: {}", rvalue_mode); */
+    if (rvalue_mode) {
+      /* std::println("rvalue: {}", rvalue_mode); */
+      auto expr_type = AstExprTypeVisitor::get_type(ctx, node);
+      auto llvm_type = ctx->get_llvm_type(expr_type->get_id());
+      /* std::println("type: {} - rvalue: {}", expr_type->get_name(), rvalue_mode); */
+      expr = builder->CreateLoad(*llvm_type, *expr);
+    } else {
+      expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
+    }
     return expr;
   }
 
@@ -702,9 +715,11 @@ struct LlvmStoreAllocaVisitor {
 
   template <class T>
   std::expected<void, std::string> simple_alloca(uptr<T> &node) {
+    /* std::println("rvalue start mode: {}", llvm_gen->rvalue_mode); */
     llvm_gen->rvalue_mode = true;
     auto expr = (*llvm_gen)(node);
     llvm_gen->rvalue_mode = false;
+
     if (!expr)
       return std::unexpected(expr.error());
     builder->CreateStore(*expr, alloca);
