@@ -326,6 +326,38 @@ struct Parser {
     return {};
   }
 
+  std::optional<AstTypeId> handle_type(int &offset) {
+    bool is_ref = false;
+    if (check_tokens({Pointy}, offset)) {
+      is_ref = true;
+      offset += 1;
+    }
+
+    if (!check_tokens({Id}, offset))
+      return {};
+
+    auto id = get_tk(offset).value().value;
+    offset += 1;
+
+    auto type_info = ctx->type_db.get_type_by_name(id);
+    if (!type_info)
+      return {};
+
+    // TODO: This will need to be done to handle types defined inside types
+    /* while(check_tokens({Dot}, offset)) { */
+    /*   offset += 1; */
+    /*   if(!check_tokens({Id}, offset)) */
+    /*     return {}; */
+    /*   auto subtype_name = get_tk(offset).value().value; */
+    /*   auto type = type_info.value().get_fiel */
+    /* } */
+
+    if (is_ref)
+      return ctx->type_db.new_ref(type_info.value()->get_id());
+
+    return type_info.value()->get_id();
+  }
+
   std::optional<uptr<EnumDefAst>> handle_enum_def(int &offset, bool clear_tks) {
     LOG("starting parsing enum");
 
@@ -1006,17 +1038,9 @@ struct Parser {
     offset += 1;
 
     // Return type
-    if (check_tokens({Id}, offset)) {
-      LOG("getting fn return type");
-      auto type_name = tk_queue[offset].value;
-      auto type = ctx->type_db.get_id_by_name(type_name);
-      if (!type)
-        return {};
-      ret_type = *type;
-      offset += 1;
-    } else {
-      LOG("no return type for fn");
-    }
+    auto found_ret_type = handle_type(offset);
+    if (found_ret_type)
+      ret_type = *found_ret_type;
 
     LOG("found fn header");
     return std::make_unique<FnHeaderAst>(
@@ -1059,22 +1083,21 @@ struct Parser {
   }
 
   std::optional<uptr<ArgDefAst>> handle_arg_def(int &offset) {
-    if (check_tokens({Id, Colon, Id}, offset)) {
-      auto type_name = tk_queue[offset + 2].value;
-      auto ast_type = ctx->type_db.get_id_by_name(type_name);
-      if (!ast_type)
-        return {};
-      auto field =
-          std::make_unique<ArgDefAst>(tk_queue[offset].value, *ast_type, false);
-      offset += 3;
-      return field;
-    }
-
     // Varadic argument
     if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
       auto field = std::make_unique<ArgDefAst>(tk_queue[offset].value,
                                                VOID_TYPE.get_id(), true);
       offset += 5;
+      return field;
+    }
+
+    if (check_tokens({Id, Colon}, offset)) {
+      auto field_name = get_tk(offset).value().value;
+      offset += 2;
+      auto arg_type = handle_type(offset);
+      if (!arg_type)
+        return {};
+      auto field = std::make_unique<ArgDefAst>(field_name, *arg_type, false);
       return field;
     }
 
