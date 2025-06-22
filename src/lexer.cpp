@@ -49,7 +49,7 @@ bool is_allowed_id_char(char c) {
   return std::isalpha(c) || ALLOWED_ID_CHARS.contains(c);
 }
 
-std::expected<Token, std::string> Lexer::get_token() {
+Token Lexer::get_token() {
   if (src_index >= (int)source.size() - 1)
     return create_token(EoF);
 

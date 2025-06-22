@@ -11,7 +11,6 @@
 
 class Compiler {
   ProgramCtx ctx;
-  Lexer lexer;
   Parser parser;
   LlvmIrGenAstVisitor llvm_gen;
 

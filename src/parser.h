@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <expected>
+#include <format>
 #include <initializer_list>
 #include <map>
 #include <memory>
@@ -18,35 +19,84 @@
 #include <variant>
 #include <vector>
 
-struct ParseError {
+struct ParserError {
   FilePos pos;
   std::string msg;
+
+  static ParserError type_not_found(Token curr, std::string type_name) {
+    return ParserError{curr.position,
+                       std::format("Use of undeclared type '{}'", type_name)};
+  }
+
+  static ParserError unexpected_token(Token curr, TokenKind expected) {
+    return ParserError{curr.position,
+                       std::format("{} was expected, but {} was found instead",
+                                   token_kind_to_string(expected),
+                                   token_kind_to_string(curr.kind))};
+  }
+
+  static ParserError unsupported_enum_variant(Token curr) {
+    return ParserError{curr.position,
+                       "Unexpected statement found while parsing an enum "
+                       "variant. Only structs and enums are supported."};
+  }
 };
 
-template <class T> struct ParserResult {
+template <class T> class ParserResult {
   std::optional<T> result;
-  std::optional<ParseError> error;
-  /* bool incomplete; */
+  std::optional<ParserError> error;
+  bool is_canceled;
 
-  ParserResult<T> new_ok(T result) { return ParserResult<T>{result, {}}; }
-  ParserResult<T> new_error(FilePos pos, std::string msg) {
-    return ParserResult<T>{{}, ParseError{pos, msg}};
-  }
-  /* ParserResult<T> new_incomplete() { return ParserResult<T>{{}, {}, true}; }
-   */
+public:
+  ParserResult(ParserError error)
+      : result({}), error(error), is_canceled(false) {}
+  ParserResult(T result)
+      : result(std::move(result)), error({}), is_canceled(false) {}
+  ParserResult() : result({}), error({}), is_canceled(true) {}
 
   bool is_ok() { return result.has_value(); }
   bool is_err() { return error.has_value(); }
-  /* bool is_incomplete() { return incomplete; } */
+  bool is_cancel() { return is_canceled; }
 
-  T get_res() { return result.value(); }
-  ParseError get_err() { return error.value(); }
+  T &get_res() { return result.value(); }
+  ParserError get_err() { return error.value(); }
+
+  explicit operator bool() { return is_ok(); }
+
+  template <class U>
+  ParserResult(ParserResult<U> &&other) noexcept(
+      std::is_nothrow_constructible_v<T, U &&> &&
+      std::is_nothrow_constructible_v<ParserError,
+                                      ParserError &&>) // Propagate noexcept
+      : is_canceled(other.is_canceled) {
+    if (other.is_ok()) {
+      result.emplace(std::move(other.result.value()));
+      other.result.reset();
+    } else if (other.is_err()) {
+      error.emplace(std::move(other.error.value()));
+      other.error.reset();
+    }
+  }
+
+  template <class U>
+  ParserResult(const ParserResult<U> &other) : is_canceled(other.is_canceled) {
+    if (other.is_ok()) {
+      result.emplace(other.result.value());
+    } else if (other.is_err()) {
+      error.emplace(other.error.value());
+    }
+  }
 };
 
 struct Parser {
+private:
+  std::vector<ParserError> errors;
+
+public:
   bool debug_scan = false;
   bool debug_checks = false;
   ProgramCtx *ctx;
+  Lexer lexer;
   AstExprTypeVisitor type_visitor;
 
   std::vector<Token> tk_queue;
@@ -72,105 +122,73 @@ struct Parser {
     return tk_queue[offset];
   }
 
+  bool read_tokens(int steps) {
+    for (int i = 0; i < steps; i++) {
+      auto tk = lexer.get_token();
+      if (tk.kind == EoF)
+        return false;
+      tk_queue.push_back(tk);
+    }
+    return true;
+  }
+
   bool check_any_tokens(std::initializer_list<TokenKind> tokens,
                         int offset = 0) {
-    if (tokens.size() + offset > tk_queue.size()) {
-      if (debug_checks) {
-        std::print("> [x] or check [+{}]: ", offset);
-        for (auto tk : tokens) {
-          std::print("{} ", token_kind_to_string(tk));
-        }
-        std::print("\n");
-      }
+    if (tokens.size() + offset > tk_queue.size() &&
+        !read_tokens(tokens.size() + offset - tk_queue.size()))
       return false;
-    }
 
     for (TokenKind tk : tokens) {
       if (tk == tk_queue[offset].kind) {
-        if (debug_checks) {
-          std::print("> [O] or check [+{}]: ", offset);
-          for (auto tk : tokens) {
-            std::print("{} ", token_kind_to_string(tk));
-          }
-          std::print("\n");
-        }
         return true;
       }
     }
 
-    if (debug_checks) {
-      std::print("> [x] or check [+{}]: ", offset);
-      for (auto tk : tokens) {
-        std::print("{} ", token_kind_to_string(tk));
-      }
-      std::print("\n");
-    }
     return false;
   }
 
   bool check_tokens(std::initializer_list<TokenKind> tokens, int offset) {
-    if (tokens.size() + offset > tk_queue.size()) {
-      if (debug_checks) {
-        std::print("> [x] check [+{}]: ", offset);
-        for (auto tk : tokens) {
-          std::print("{} ", token_kind_to_string(tk));
-        }
-        std::print("\n");
-      }
+    if (tokens.size() + offset > tk_queue.size() &&
+        !read_tokens(tokens.size() + offset - tk_queue.size()))
       return false;
-    }
 
     int i = 0;
     for (TokenKind tk : tokens) {
       if (tk != tk_queue[i + offset].kind) {
-        if (debug_checks) {
-          std::print("> [x] check [+{}]: ", offset);
-          for (auto tk : tokens) {
-            std::print("{} ", token_kind_to_string(tk));
-          }
-          std::print("\n");
-        }
         return false;
       }
       i += 1;
     }
 
-    if (debug_checks) {
-      std::print("> [O] check [+{}]: ", offset);
-      for (auto tk : tokens) {
-        std::print("{} ", token_kind_to_string(tk));
-      }
-      std::print("\n");
-    }
     return true;
   }
 
-  std::optional<AstStatement> parse_token(Token token) {
-    tk_queue.push_back(token);
+  void panic_until(TokenKind kind, int &offset) {
+    while (!check_tokens({kind}, offset))
+      offset += 1;
+  }
 
-    if (debug_checks) {
-      std::print("[");
-      int i = 0;
-      for (auto tk : tk_queue) {
-        std::print("{} {},", i++, token_kind_to_string(tk.kind));
-      }
-      std::print("]\n");
-    }
+  std::optional<uptr<FileStmtAst>> parse_file(std::string source) {
+    lexer.set_source(source);
 
     auto offset = 0;
     asttype_stack.clear();
-    LOG("starting parsing...");
-    return handle_file_statement(offset, true);
+
+    std::vector<AstStatement> statements;
+    while (!check_tokens({EoF}, offset)) {
+      auto statement = parse_file_statement(offset);
+      if (statement.is_err())
+        errors.push_back(statement.get_err());
+    }
+    return std::make_unique<FileStmtAst>("main.hun", std::move(statements));
   }
 
-  std::optional<AstStatement> handle_file_statement(int &offset,
-                                                    bool clear_tks) {
-
-    if (auto _struct = handle_struct_def(offset, clear_tks)) {
+  ParserResult<AstStatement> parse_file_statement(int &offset) {
+    if (auto _struct = parse_struct_def(offset)) {
       return _struct;
     }
 
-    if (auto _enum = handle_enum_def(offset, clear_tks)) {
+    if (auto _enum = handle_enum_def(offset)) {
       return _enum;
     }
 
@@ -187,22 +205,18 @@ struct Parser {
       LOG("meta body function found.");
 
       tk_queue.clear();
-      return {};
+      return std::make_unique<StatementExprAst>(std::move(meta.get_res()));
     }
 
     return {};
   }
 
-  std::optional<uptr<StructDefAst>> handle_struct_def(int &offset,
-                                                      bool clear_tks) {
-    LOG("parsing struct");
-
+  ParserResult<uptr<StructDefAst>> parse_struct_def(int &offset) {
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
       offset += 1;
 
     if (check_tokens({Id, Colon, Colon, Struct, LBrace}, offset)) {
-      LOG("struct def found");
       auto struct_name = get_tk(offset).value().value;
       offset += 5;
 
@@ -218,11 +232,18 @@ struct Parser {
       std::vector<AstTypeField> field_types;
       while (!check_tokens({RBrace}, offset)) {
         auto field = handle_arg_def(offset);
-        if (!field)
-          return {};
+        if (field.is_err()) {
+          errors.push_back(field.get_err());
+          panic_until(RBrace, offset);
+          break;
+        }
 
-        if (!check_tokens({Comma}, offset))
-          return {};
+        if (!check_tokens({Comma}, offset)) {
+          errors.push_back(
+              ParserError::unexpected_token(*get_tk(offset), Comma));
+          panic_until(RBrace, offset);
+          break;
+        }
         offset += 1;
 
         // Skip new lines
@@ -230,14 +251,10 @@ struct Parser {
           offset += 1;
 
         field_types.push_back(
-            AstTypeField{field.value()->name, field.value()->type});
-        fields.push_back(std::move(*field));
+            AstTypeField{field.get_res()->name, field.get_res()->type});
+        fields.push_back(std::move(field.get_res()));
       }
       offset += 1;
-
-      LOG("struct parsing successfull");
-      if (clear_tks)
-        tk_queue.clear();
 
       asttype_stack.pop_back();
 
@@ -250,7 +267,6 @@ struct Parser {
       return s;
     }
 
-    LOG("struct parsing failed");
     return {};
   }
 
@@ -326,7 +342,7 @@ struct Parser {
     return {};
   }
 
-  std::optional<AstTypeId> handle_type(int &offset) {
+  ParserResult<AstTypeId> parse_type(int &offset) {
     bool is_ref = false;
     if (check_tokens({Pointy}, offset)) {
       is_ref = true;
@@ -334,14 +350,14 @@ struct Parser {
     }
 
     if (!check_tokens({Id}, offset))
-      return {};
+      return ParserError::unexpected_token(*get_tk(offset), Id);
 
     auto id = get_tk(offset).value().value;
     offset += 1;
 
     auto type_info = ctx->type_db.get_type_by_name(id);
     if (!type_info)
-      return {};
+      return ParserError::type_not_found(*get_tk(offset), id);
 
     // TODO: This will need to be done to handle types defined inside types
     /* while(check_tokens({Dot}, offset)) { */
@@ -358,15 +374,12 @@ struct Parser {
     return type_info.value()->get_id();
   }
 
-  std::optional<uptr<EnumDefAst>> handle_enum_def(int &offset, bool clear_tks) {
-    LOG("starting parsing enum");
-
+  ParserResult<uptr<EnumDefAst>> parse_enum_def(int &offset, bool clear_tks) {
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
       offset += 1;
 
     if (check_tokens({Id, Colon, Colon, Enum, LBrace}, offset)) {
-      LOG("enum def found");
       auto enum_name = get_tk(offset).value().value;
       offset += 5;
 
@@ -395,11 +408,11 @@ struct Parser {
 
           field_types.push_back(AstTypeField{field, s_type});
           field_stmts.push_back(std::move(s));
-        } else if (auto stmt = handle_file_statement(offset, false)) {
+        } else if (auto stmt = parse_file_statement(offset)) {
           // Convert the declared struct into another variant for the enum
           auto stmt_type_id = AstTypeId{};
-          if (std::holds_alternative<uptr<StructDefAst>>(*stmt)) {
-            auto s = &std::get<uptr<StructDefAst>>(*stmt);
+          if (std::holds_alternative<uptr<StructDefAst>>(stmt.get_res())) {
+            auto s = &std::get<uptr<StructDefAst>>(stmt.get_res());
             stmt_type_id = s->get()->type;
           } else {
             LOG("failed to parse enum - unsuported statement");
@@ -409,10 +422,10 @@ struct Parser {
           auto stmt_type = ctx->type_db.get_type(stmt_type_id).value();
           field_types.push_back(
               AstTypeField{stmt_type->get_name(), stmt_type_id});
-          field_stmts.push_back(std::move(*stmt));
+          field_stmts.push_back(std::move(stmt.get_res()));
         } else {
           LOG("failed to parse enum - unit struct or other stmt not found");
-          return {};
+          return ParserError::unsupported_enum_variant(*get_tk(offset));
         }
 
         if (!check_tokens({Comma}, offset))
@@ -1038,7 +1051,7 @@ struct Parser {
     offset += 1;
 
     // Return type
-    auto found_ret_type = handle_type(offset);
+    auto found_ret_type = parse_type(offset);
     if (found_ret_type)
       ret_type = *found_ret_type;
 
@@ -1082,7 +1095,7 @@ struct Parser {
     return args;
   }
 
-  std::optional<uptr<ArgDefAst>> handle_arg_def(int &offset) {
+  ParserResult<uptr<ArgDefAst>> handle_arg_def(int &offset) {
     // Varadic argument
     if (check_tokens({Id, Colon, Dot, Dot, Dot}, offset)) {
       auto field = std::make_unique<ArgDefAst>(tk_queue[offset].value,
@@ -1094,7 +1107,7 @@ struct Parser {
     if (check_tokens({Id, Colon}, offset)) {
       auto field_name = get_tk(offset).value().value;
       offset += 2;
-      auto arg_type = handle_type(offset);
+      auto arg_type = parse_type(offset);
       if (!arg_type)
         return {};
       auto field = std::make_unique<ArgDefAst>(field_name, *arg_type, false);

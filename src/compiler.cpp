@@ -68,7 +68,7 @@ void Compiler::add_internal_types() {
 
 std::expected<std::vector<AstStatement>, std::string>
 Compiler::parse_statements(std::string source) {
-  lexer.set_source(source);
+  parser.lexer.set_source(source);
 
   Token last_token;
   std::vector<AstStatement> statements;

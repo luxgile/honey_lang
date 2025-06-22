@@ -1,6 +1,5 @@
 extern printf :: fn (|format: RawString, args: ...)
 
-# This SOMETIMES works???????
 add_one :: fn (| i: ^Int) {
   ^i = @i+ ^i 1
 }

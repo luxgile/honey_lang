@@ -73,5 +73,5 @@ struct Lexer {
 
   Token create_token(TokenKind kind, bool consume = false);
 
-  std::expected<Token, std::string> get_token();
+  Token get_token();
 };
