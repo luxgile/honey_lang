@@ -81,6 +81,10 @@ main :: fn (|) {
   "Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
   print_member_access
+  # TODO: Need to work on pointers before this works.
+  print_cat
+  # TODO: Problem: How to get a ptr to a fn without calling it?
+  # fn_ptr := &print_cat # This might call it and get the returning value reference
 
   my_bool := ! (my_int != 18)
   if my_bool {

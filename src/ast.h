@@ -1,13 +1,8 @@
 #pragma once
 
 #include "helpers.h"
-#include "lexer.h"
 #include "types.h"
-#include "llvm/IR/Type.h"
-#include <cstddef>
 #include <expected>
-#include <functional>
-#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <print>
@@ -23,6 +18,7 @@ struct CallExprAst;
 struct BodyExprAst;
 struct FnDefAst;
 struct VarExprAst;
+struct PtrExprAst;
 struct MetaDefExprAst;
 struct StatementExprAst;
 struct GroupExprAst;
@@ -171,6 +167,10 @@ struct BoolExprAst {
 
 struct StringExprAst {
   std::string value;
+};
+
+struct PtrExprAst {
+  std::string name;
 };
 
 struct VarExprAst {

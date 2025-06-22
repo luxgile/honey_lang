@@ -9,7 +9,19 @@
 struct AstExprTypeVisitor {
   ProgramCtx *ctx;
 
-  static AstTypeId get_type(ProgramCtx* ctx, AstExpression &expr) {
+  template<class T>
+  static AstTypeId get_type_id(ProgramCtx* ctx, T &expr) {
+    AstExprTypeVisitor visitor = {ctx};
+    return visitor(expr);
+  }
+
+  template<class T>
+  static const AstType* get_type(ProgramCtx* ctx, T &expr) {
+    auto id = get_type_id(ctx, expr);
+    return ctx->type_db.get_type(id).value();
+  }
+
+  static AstTypeId get_type_id(ProgramCtx* ctx, AstExpression &expr) {
     AstExprTypeVisitor visitor = {ctx};
     return std::visit(visitor, expr);
   }

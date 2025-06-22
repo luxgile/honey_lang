@@ -9,7 +9,8 @@
               "program": "C:\\00Dev\\20game_asteroids\\build\\Debug\\asteroids.exe"
             },
             "linux": {
-              "program": "${workspaceFolder}/build/src/honey"
+              "program": "${workspaceFolder}/build/src/honey",
+              "args": ["honey/enum.hun"]
             }
         }
     ]

@@ -314,8 +314,8 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected(
           std::format("variable '{}' is undefined", node->name));
 
-    if (!rvalue_mode &&
-        (var.value()->type->isStructTy() || var.value()->type->isArrayTy()))
+    auto var_type = AstExprTypeVisitor::get_type(ctx, node);
+    if (!rvalue_mode && !var_type->is_primitive())
       return var.value()->alloca;
 
     return builder->CreateLoad(var.value()->type, var.value()->alloca,

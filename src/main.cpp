@@ -2,8 +2,8 @@
 #include <fstream>
 #include <iostream>
 
-int main() {
-  std::ifstream honey_file{"honey/main.hun", std::ios::in};
+int main(int argc, char* argv[]) {
+  std::ifstream honey_file{argv[1], std::ios::in};
   if (!honey_file.is_open())
     return 1;
 
