@@ -55,11 +55,12 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
 }
 std::expected<void, std::string>
 LlvmIrGenAstVisitor::build_var_assignment(VarAssignStmtAst &node) {
-  auto var = get_defined_var(node.id);
-  if (!var)
-    return std::unexpected("no variable found for assigment");
+  var_lassign_mode = true;
+  auto lvalue = std::visit(*this, node.lvalue);
+  var_lassign_mode = false;
+  auto lvalue_type = AstExprTypeVisitor::get_type_id(ctx, node.lvalue);
 
-  auto ir_res = store_in_value(var.value()->alloca, var.value()->ty_id, node.rvalue);
+  auto ir_res = store_in_value(*lvalue, lvalue_type, node.rvalue);
   if (!ir_res)
     return std::unexpected(ir_res.error());
   return {};

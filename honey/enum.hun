@@ -12,12 +12,12 @@ build_dog :: fn (|) {
 }
 
 build_cat :: fn (|) {
-  cat := AnimalKind.Cat .{ color = "Red" }
+  cat := AnimalKind.Cat .{ .color = "Red" }
   printf "cat built! \n"
 }
 
 print_cat :: fn(|) {
-  a := AnimalKind.Cat .{ color = "orange" }
+  a := AnimalKind.Cat .{ .color = "orange" }
   match a : AnimalKind.Cat cat {
     printf "I'm a cat with color %s\n" cat.color
   }

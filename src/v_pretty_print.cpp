@@ -146,7 +146,8 @@ void PrettyPrintAstVisitor::operator()(uptr<ForExprAst> &node) {
 }
 
 void PrettyPrintAstVisitor::operator()(uptr<VarAssignStmtAst> &node) {
-  std::print("{} = ", node->id);
+  std::visit(*this, node->lvalue);
+  std::print(" = ");
   std::visit(*this, node->rvalue);
 }
 
@@ -172,8 +173,9 @@ void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
   indent += 1;
   for (auto &field : node->fields) {
     print_indent();
-    (*this)(field);
-    std::print("\n");
+    std::print(".{} = ", field->name);
+    std::visit(*this, field->rvalue);
+    std::print(",\n");
   }
   indent -= 1;
   print_indent();
@@ -210,8 +212,11 @@ void PrettyPrintAstVisitor::operator()(uptr<EnumExprAst> &node) {
   indent += 1;
   for (auto &field : node->struct_expr->fields) {
     print_indent();
-    (*this)(field);
-    std::print("\n");
+    std::print("{} :: ", field->name);
+    indent += 1;
+    std::visit(*this, field->rvalue);
+    indent -= 1;
+    std::print(",\n");
   }
   indent -= 1;
   print_indent();

@@ -136,8 +136,13 @@ struct StructDefAst {
 };
 
 struct StructExprAst {
+  struct StructFieldAssign {
+    std::string name;
+    AstExpression rvalue;
+  };
+
   AstTypeId type;
-  std::vector<uptr<VarAssignStmtAst>> fields;
+  std::vector<uptr<StructFieldAssign>> fields;
 };
 
 struct TupleDefAst {

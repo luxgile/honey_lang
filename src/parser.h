@@ -451,8 +451,8 @@ struct Parser {
     if (!lvalue)
       return {};
 
-    if (!check_tokens({Id}, tmp_offset) &&
-        get_tk(tmp_offset).value().value != "==")
+    if (!check_tokens({Id}, tmp_offset) ||
+        get_tk(tmp_offset).value().value != "=")
       return {};
     tmp_offset += 1;
 
@@ -460,8 +460,10 @@ struct Parser {
     if (!rvalue)
       return {};
 
+    offset = tmp_offset;
     LOG("var assignment found");
-    auto def_var = std::make_unique<VarAssignStmtAst>(std::move(*lvalue), std::move(*rvalue));
+    auto def_var = std::make_unique<VarAssignStmtAst>(std::move(*lvalue),
+                                                      std::move(*rvalue));
     return def_var;
   }
 
@@ -649,7 +651,7 @@ struct Parser {
       auto enum_member_type = get_opt(ctx->type_db.get_type(enum_member_id));
 
       offset += 3;
-      std::vector<uptr<VarAssignStmtAst>> vars;
+      std::vector<uptr<StructExprAst::StructFieldAssign>> vars;
       if (!enum_member_type->is_unit())
         vars = handle_struct_assigments(offset);
 
@@ -905,15 +907,31 @@ struct Parser {
                                            std::move(field_assigns));
   }
 
-  std::vector<uptr<VarAssignStmtAst>> handle_struct_assigments(int &offset) {
-    std::vector<uptr<VarAssignStmtAst>> field_assigns;
+  std::vector<uptr<StructExprAst::StructFieldAssign>>
+  handle_struct_assigments(int &offset) {
+    std::vector<uptr<StructExprAst::StructFieldAssign>> field_assigns;
     if (check_tokens({Dot, LBrace}, offset)) {
       offset += 2;
       while (!check_tokens({RBrace}, offset)) {
-        auto assign = handle_var_assign(offset, {RBrace, Comma});
-        if (!assign)
+        LOG("parsing struct var assigment");
+
+        if (!check_tokens({Dot, Id}, offset))
           return {};
-        field_assigns.push_back(std::move(*assign));
+        auto id = get_tk(offset + 1).value().value;
+        offset += 2;
+
+        if (!check_tokens({Id}, offset) || get_tk(offset).value().value != "=")
+          return {};
+        offset += 1;
+
+        auto rvalue = consume_expressions(offset, {Comma, NewLine, RBrace});
+        if (!rvalue)
+          return {};
+
+        LOG("struct var assignment found");
+        auto struct_var = std::make_unique<StructExprAst::StructFieldAssign>(
+            id, std::move(*rvalue));
+        field_assigns.push_back(std::move(struct_var));
 
         if (check_tokens({RBrace}, offset - 1))
           break;

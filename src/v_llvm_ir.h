@@ -57,6 +57,7 @@ struct LlvmIrGenAstVisitor {
   // State
   std::map<std::string, DefinedVariable> defined_variables;
   bool rvalue_mode;
+  bool var_lassign_mode;
   bool get_ref_mode;
 
   LlvmIrGenAstVisitor(ProgramCtx *ctx) : ctx(ctx) {
@@ -330,7 +331,7 @@ struct LlvmIrGenAstVisitor {
           std::format("variable '{}' is undefined", node->name));
 
     auto var_type = AstExprTypeVisitor::get_type(ctx, node);
-    if (get_ref_mode)
+    if (get_ref_mode || var_lassign_mode)
       return var.value()->alloca;
 
     if (!rvalue_mode && !var_type->is_primitive() && !var_type->is_ref())
@@ -359,13 +360,12 @@ struct LlvmIrGenAstVisitor {
     return expr;
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<DerefExprAst> &node) {
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<DerefExprAst> &node) {
     auto expr = std::visit(*this, node->expr);
     if (!expr)
       return std::unexpected(expr.error());
-    auto expr_ty = AstExprTypeVisitor::get_type_id(ctx, node);
-    auto expr_llvm_ty = ctx->get_llvm_type(expr_ty);
-    expr = builder->CreateLoad(*expr_llvm_ty, *expr);
+    expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
     return expr;
   }
 
@@ -827,7 +827,7 @@ struct LlvmStoreAllocaVisitor {
     for (auto &field : node->fields) {
       auto field_idx = llvm_gen->ctx->type_db.get_type(node->type)
                            .value()
-                           ->get_field_index_by_name(field->id);
+                           ->get_field_index_by_name(field->name);
       if (!field_idx)
         return std::unexpected(field_idx.error());
       auto field_ty = llvm_gen->ctx->type_db.get_type(node->type)
@@ -836,7 +836,7 @@ struct LlvmStoreAllocaVisitor {
                           .value();
 
       auto field_ptr =
-          builder->CreateStructGEP(*struct_ty, alloca, *field_idx, field->id);
+          builder->CreateStructGEP(*struct_ty, alloca, *field_idx, field->name);
       auto ir_res =
           llvm_gen->store_in_value(field_ptr, field_ty->type, field->rvalue);
       if (!ir_res)
