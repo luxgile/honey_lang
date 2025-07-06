@@ -677,13 +677,13 @@ public:
 
     if (auto mem_acc =
             parser_member_access_expr(offset, inner_expr.get_res())) {
-      auto _inner_expr = std::move(mem_acc.get_res());
-      mem_acc = parser_member_access_expr(offset, inner_expr.get_res());
+      AstExpression _inner_expr = std::move(mem_acc.get_res());
+      mem_acc = parser_member_access_expr(offset, _inner_expr);
       while (mem_acc) {
         _inner_expr = std::move(mem_acc.get_res());
-        mem_acc = parser_member_access_expr(offset, inner_expr.get_res());
+        mem_acc = parser_member_access_expr(offset, _inner_expr);
       }
-      return ParserResult<uptr<MemberAccesorExprAst>>{std::move(_inner_expr)};
+      return std::move(_inner_expr);
     }
 
     return inner_expr;

@@ -10,7 +10,7 @@
             },
             "linux": {
               "program": "${workspaceFolder}/build/src/honey",
-              "args": ["honey/hello_world.hun"]
+              "args": ["honey/main.hun"]
             }
         }
     ]
