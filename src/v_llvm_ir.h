@@ -57,7 +57,8 @@ struct LlvmIrGenAstVisitor {
   // TODO: Pass state as an argument in the visitor. Global state is pretty bad.
   // State
   std::map<std::string, DefinedVariable> defined_variables;
-  volatile bool rvalue_mode = false; // Volatile is needed or the compile might optimize this for some reason.
+  volatile bool rvalue_mode = false; // Volatile is needed or the compile might
+                                     // optimize this for some reason.
   bool var_lassign_mode;
   bool get_ref_mode;
 
@@ -374,7 +375,8 @@ struct LlvmIrGenAstVisitor {
       /* std::println("rvalue: {}", rvalue_mode); */
       auto expr_type = AstExprTypeVisitor::get_type(ctx, node);
       auto llvm_type = ctx->get_llvm_type(expr_type->get_id());
-      /* std::println("type: {} - rvalue: {}", expr_type->get_name(), rvalue_mode); */
+      /* std::println("type: {} - rvalue: {}", expr_type->get_name(),
+       * rvalue_mode); */
       expr = builder->CreateLoad(*llvm_type, *expr);
     } else {
       expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
@@ -542,6 +544,11 @@ struct LlvmIrGenAstVisitor {
     // An if expression that does not have an else counterpart, cannot return a
     // value as it would be undefined.
     return then_expr;
+  }
+
+  std::expected<llvm::Value *, std::string>
+  operator()(uptr<NoOpAst> &node) {
+    return nullptr;
   }
 
   std::expected<llvm::Value *, std::string>
@@ -769,6 +776,8 @@ struct LlvmStoreAllocaVisitor {
   std::expected<void, std::string> operator()(uptr<IfExprAst> &node) {
     return simple_alloca(node);
   }
+
+  std::expected<void, std::string> operator()(uptr<NoOpAst> &node) {}
 
   std::expected<void, std::string> operator()(uptr<SingleMatchExprAst> &node) {
     return simple_alloca(node);

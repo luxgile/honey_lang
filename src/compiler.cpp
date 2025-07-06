@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include "parser.h"
 #include "v_pretty_print.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -14,6 +15,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
+#include <optional>
 
 void Compiler::add_internal_types() {
   ctx.define_llvm_type(VOID_TYPE.get_id(),
@@ -66,46 +68,42 @@ void Compiler::add_internal_types() {
                   std::make_unique<MetaFunction>(MetaFunctionKind::OrBool, 2));
 }
 
-std::expected<std::vector<AstStatement>, std::string>
-Compiler::parse_statements(std::string source) {
-  parser.lexer.set_source(source);
+uptr<FileStmtAst> Compiler::parse_file(std::string source) {
+  /* if (print_tokens) { */
+  /*   std::println(); */
+  /*   std::println(" ----- LEXER RESULTS -----"); */
+  /*   std::println(); */
+  /* } */
 
-  Token last_token;
-  std::vector<AstStatement> statements;
-
-  if (print_tokens) {
-    std::println();
-    std::println(" ----- LEXER RESULTS -----");
-    std::println();
-  }
-
-  do {
-    auto tkn_res = lexer.get_token();
-    if (!tkn_res) {
-      return std::unexpected(std::format("failed tokenizing at {} - {}",
-                                         lexer.current_pos.line,
-                                         lexer.current_pos.start));
-    }
-
-    last_token = *tkn_res;
-    if (print_tokens)
-      last_token.print_token();
-
-    auto statement = parser.parse_token(last_token);
-    if (!statement)
-      continue;
-    statements.push_back(std::move(*statement));
-  } while (last_token.kind != EoF && last_token.kind != Undefined);
-  return statements;
+  return parser.parse_file(source);
+  /**/
+  /* do { */
+  /*   auto tkn_res = lexer.get_token(); */
+  /*   if (!tkn_res) { */
+  /*     return std::unexpected(std::format("failed tokenizing at {} - {}", */
+  /*                                        lexer.current_pos.line, */
+  /*                                        lexer.current_pos.start)); */
+  /*   } */
+  /**/
+  /*   last_token = *tkn_res; */
+  /*   if (print_tokens) */
+  /*     last_token.print_token(); */
+  /**/
+  /*   auto statement = parser.parse_token(last_token); */
+  /*   if (!statement) */
+  /*     continue; */
+  /*   statements.push_back(std::move(*statement)); */
+  /* } while (last_token.kind != EoF && last_token.kind != Undefined); */
+  /* return statements; */
 }
 
 std::expected<void, std::string>
-Compiler::gen_llvm_ir(std::vector<AstStatement> &statements) {
+Compiler::gen_llvm_ir(uptr<FileStmtAst> &file) {
   PrettyPrintAstVisitor pretty_printer = {&ctx};
   std::println();
   std::println(" ----- PARSED CODE -----");
   std::println();
-  for (auto &stmt : statements) {
+  for (auto &stmt : file->statements) {
     if (print_parsed_statements) {
       std::visit(pretty_printer, stmt);
       std::println("");
@@ -166,11 +164,13 @@ Compiler::compile_to_obj_file(std::string file_name) {
 }
 
 std::expected<void, std::string> Compiler::compile_source(std::string source) {
-  auto statements = parse_statements(source);
-  if (!statements)
-    return std::unexpected(statements.error());
+  auto file = parse_file(source);
+  if (parser.has_parsing_errors()) {
+    parser.print_parsing_errors();
+    return std::unexpected("Compilation failed, see previous errors.");
+  }
 
-  auto gen_res = gen_llvm_ir(*statements);
+  auto gen_res = gen_llvm_ir(file);
   if (!gen_res)
     return std::unexpected(gen_res.error());
 

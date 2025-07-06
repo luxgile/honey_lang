@@ -1,0 +1,7 @@
+extern printf :: fn (|format: RawString, args: ...)
+
+main :: fn(|) {
+  printf "hello hun!\n"
+}
+
+asd

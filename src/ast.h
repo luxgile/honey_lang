@@ -30,13 +30,14 @@ struct EnumExprAst;
 struct SingleMatchExprAst;
 struct RefExprAst;
 struct DerefExprAst;
+struct NoOpAst;
 
 using AstExpression = std::variant<
     uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>, uptr<RefExprAst>,
     uptr<DerefExprAst>, uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
     uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
     uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>, uptr<StructExprAst>,
-    uptr<MemberAccesorExprAst>, uptr<EnumExprAst>, uptr<SingleMatchExprAst>>;
+    uptr<MemberAccesorExprAst>, uptr<EnumExprAst>, uptr<SingleMatchExprAst>, uptr<NoOpAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -102,6 +103,8 @@ struct VarDefStmtAst {
 
   std::optional<AstExpression> assignment;
 };
+
+struct NoOpAst {};
 
 struct VarAssignStmtAst {
   /* std::string id; */

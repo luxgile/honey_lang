@@ -43,6 +43,8 @@ struct AstExprTypeVisitor {
     return RAW_STRING_TYPE.get_id();
   }
 
+  AstTypeId operator()(uptr<NoOpAst> &_) const { return VOID_TYPE.get_id(); }
+
   AstTypeId operator()(uptr<RefExprAst> &node) const {
     auto expr_type_id = std::visit(*this, node->expr);
     auto ref_ty_id = AstType::new_reference(expr_type_id, &ctx->type_db);
