@@ -1,14 +1,26 @@
 extern printf :: fn (|format: RawString, args: ...)
 
-main :: fn(|) {
-  n := 10
-  n = fib n
++ :: fn (lhs: Int | rhs: Int) Int {
+  @i+ lhs rhs
+} 
+
+- :: fn (lhs: Int | rhs: Int) Int {
+  @i- lhs rhs
+} 
+
+<= :: fn (lhs: Int | rhs: Int) Bool {
+  @b<= lhs rhs
 }
 
 fib :: fn(|n: Int) Int {
-  printf "%d\n" n
 	if n <= 1 {
 		ret 1
   }
 	fib (n - 1) + fib (n - 2)
+}
+
+main :: fn(|) {
+  n := 10
+  n = fib n
+  printf "%d\n" n
 }

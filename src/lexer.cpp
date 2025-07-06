@@ -88,6 +88,9 @@ Token Lexer::get_token() {
     if (temp_id == "if")
       return create_token(If);
 
+    if (temp_id == "ret")
+      return create_token(Return);
+
     if (temp_id == "else")
       return create_token(Else);
 
@@ -282,6 +285,8 @@ std::string token_kind_to_string(TokenKind kind) {
     return "Fn";
   case Match:
     return "Match";
+  case Return:
+    return "Return";
   case If:
     return "If";
   case Else:

@@ -16,6 +16,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
+#include <exception>
 #include <optional>
 #include <print>
 
@@ -190,9 +191,13 @@ std::expected<void, std::string> Compiler::compile_source(std::string source) {
   if (!gen_res)
     return std::unexpected(gen_res.error());
 
+  try {
   auto com_res = compile_to_obj_file("honey.o");
   if (!com_res)
     return std::unexpected(com_res.error());
+  } catch (const std::exception& e) {
+    std::println("{}", e.what());
+  }
 
   return {};
 }

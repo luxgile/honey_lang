@@ -4,6 +4,7 @@
 #include "program_ctx.h"
 #include "types.h"
 #include <functional>
+#include <print>
 #include <variant>
 
 struct AstExprTypeVisitor {
@@ -76,8 +77,10 @@ struct AstExprTypeVisitor {
 
   AstTypeId operator()(uptr<VarExprAst> &node) const {
     auto def_var = ctx->defined_vars[node->name];
-    if (!def_var)
+    if (!def_var) {
+      std::println("defined var '{}' not found", node->name);
       throw "defined var not found";
+    }
 
     return def_var->type;
   }

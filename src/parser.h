@@ -446,6 +446,9 @@ public:
           new VarDefStmtAst{suffix->name, suffix->type, std::nullopt};
     }
 
+    // Register the fn early in case it's recursive
+    ctx->define_fn(header->name, header);
+
     if (!is_external) {
       auto body_r = parse_fn_body(offset);
       if (!body_r)
@@ -458,6 +461,8 @@ public:
 
     auto fn = std::make_unique<FnDefAst>(std::move(header_r.get_res()),
                                          std::move(body));
+
+    // fn header moved, needs to be defined again
     ctx->define_fn(fn->fn_header->name, fn->fn_header.get());
     return fn;
   }
@@ -599,7 +604,8 @@ public:
     auto last_expr = std::move(line_expressions.back());
     line_expressions.pop_back();
     /* if (line_expressions.size() > 0) */
-    /*   std::println("!! line expressions unnused: {}", line_expressions.size()); */
+    /*   std::println("!! line expressions unnused: {}",
+     * line_expressions.size()); */
     line_expressions.clear();
     return std::move(last_expr);
   }
@@ -643,8 +649,24 @@ public:
         std::make_unique<VarDefStmtAst>(id, type, std::move(expr.get_res()));
     ctx->defined_vars[id] = def_var.get();
     return def_var;
-    LOG("parsing var declaration failed");
-    return {};
+  }
+
+  ParserResult<uptr<ReturnStmtAst>> parse_return(int &offset) {
+    if (!check_tokens({Return}, offset))
+      return {};
+    offset += 1;
+
+    if (check_tokens({NewLine}, offset)) {
+      offset += 1;
+      return std::make_unique<ReturnStmtAst>(std::nullopt);
+    }
+
+    auto expr = consume_expressions(offset, {NewLine});
+    if (!expr)
+      return expr.get_err();
+
+    LOG("return expr found");
+    return std::make_unique<ReturnStmtAst>(std::move(expr.get_res()));
   }
 
   ParserResult<AstStatement> parse_statement(int &offset) {
@@ -655,6 +677,10 @@ public:
     // Var assigment
     if (auto var_assign = parse_var_assign(offset, {NewLine})) {
       return var_assign;
+    }
+
+    if (auto ret = parse_return(offset)) {
+      return ret;
     }
 
     // If nothing else found, try to find a expression like a call function.
@@ -1211,8 +1237,7 @@ public:
         break;
       }
 
-      return ParserError::unexpected_token(get_tk(offset),
-                                           {Comma, Bar, RPar});
+      return ParserError::unexpected_token(get_tk(offset), {Comma, Bar, RPar});
     }
 
     return args;

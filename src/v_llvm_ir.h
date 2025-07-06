@@ -188,20 +188,24 @@ struct LlvmIrGenAstVisitor {
         return std::unexpected(body_ret.error());
       }
 
-      if (!ctx->type_db.get_type(node.fn_header->ret_type).value()->is_void()) {
-        auto expected_ret_type = ctx->get_llvm_type(node.fn_header->ret_type);
-        if (!expected_ret_type)
-          return std::unexpected("undefined return type");
+      // Check if the fn already generated a return statement
+      if (bb->getTerminator() == nullptr) {
+        if (!ctx->type_db.get_type(node.fn_header->ret_type)
+                 .value()
+                 ->is_void()) {
+          auto expected_ret_type = ctx->get_llvm_type(node.fn_header->ret_type);
+          if (!expected_ret_type)
+            return std::unexpected("undefined return type");
 
-        if (*expected_ret_type != body_ret.value()->getType())
-          return std::unexpected(
-              "trying to return a value different than specified");
+          if (*expected_ret_type != body_ret.value()->getType())
+            return std::unexpected(
+                "trying to return a value different than specified");
 
-        builder->CreateRet(*body_ret);
-      } else {
-        builder->CreateRetVoid();
+          builder->CreateRet(*body_ret);
+        } else {
+          builder->CreateRetVoid();
+        }
       }
-
     } else {
       fn_header.value()->setCallingConv(llvm::CallingConv::C);
     }
@@ -269,6 +273,20 @@ struct LlvmIrGenAstVisitor {
   std::expected<void, std::string> build_var_assignment(GenCtx *gctx,
                                                         VarAssignStmtAst &node);
 
+  std::expected<void, std::string> build_return(GenCtx *gctx,
+                                                ReturnStmtAst &node) {
+    if (node.expr) {
+      auto expr = build_expr(gctx, *node.expr);
+      if (!expr)
+        return std::unexpected(expr.error());
+      builder->CreateRet(*expr);
+    } else {
+      builder->CreateRetVoid();
+    }
+
+    return {};
+  }
+
   std::expected<llvm::Value *, std::string>
   build_statement(GenCtx *gctx, AstStatement &statement) {
     if (std::holds_alternative<uptr<FnDefAst>>(statement)) {
@@ -304,6 +322,13 @@ struct LlvmIrGenAstVisitor {
           gctx, *std::get<uptr<VarAssignStmtAst>>(statement));
       if (!var)
         return std::unexpected(var.error());
+      return nullptr;
+    }
+
+    if (std::holds_alternative<uptr<ReturnStmtAst>>(statement)) {
+      auto ret = build_return(gctx, *std::get<uptr<ReturnStmtAst>>(statement));
+      if (!ret)
+        return std::unexpected(ret.error());
       return nullptr;
     }
 
@@ -441,6 +466,7 @@ struct LlvmIrGenAstVisitor {
     auto for_body_expr = build_expr(gctx, node->for_body);
     if (!for_cond_expr)
       return std::unexpected(for_body_expr.error());
+
     builder->CreateBr(for_check_bb);
 
     // Emit merge block
@@ -538,7 +564,9 @@ struct LlvmIrGenAstVisitor {
     if (!then_expr)
       return std::unexpected(then_expr.error());
 
-    builder->CreateBr(merge_bb);
+    then_bb = builder->GetInsertBlock();
+    if (then_bb->getTerminator() == nullptr)
+      builder->CreateBr(merge_bb);
     then_bb = builder->GetInsertBlock();
 
     // Emit else block
@@ -550,7 +578,11 @@ struct LlvmIrGenAstVisitor {
       else_expr = build_expr(gctx, *node->else_expr);
       if (!else_expr)
         return std::unexpected(else_expr.error());
-      builder->CreateBr(merge_bb);
+
+      else_bb = builder->GetInsertBlock();
+      if (else_bb->getTerminator() == nullptr)
+        builder->CreateBr(merge_bb);
+
       else_bb = builder->GetInsertBlock();
     }
 
