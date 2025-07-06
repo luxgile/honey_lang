@@ -17,6 +17,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/TargetParser/Host.h"
 #include <optional>
+#include <print>
 
 void Compiler::add_internal_types() {
   ctx.define_llvm_type(VOID_TYPE.get_id(),
@@ -101,9 +102,11 @@ uptr<FileStmtAst> Compiler::parse_file(std::string source) {
 std::expected<void, std::string>
 Compiler::gen_llvm_ir(uptr<FileStmtAst> &file) {
   PrettyPrintAstVisitor pretty_printer = {&ctx};
-  std::println();
-  std::println(" ----- PARSED CODE -----");
-  std::println();
+  if (print_parsed_statements) {
+    std::println();
+    std::println(" ----- PARSED CODE -----");
+    std::println();
+  }
 
   LlvmIrGenAstVisitor::GenCtx gctx;
   for (auto &stmt : file->statements) {
@@ -167,7 +170,17 @@ Compiler::compile_to_obj_file(std::string file_name) {
 }
 
 std::expected<void, std::string> Compiler::compile_source(std::string source) {
-  auto file = parse_file(source);
+  std::println("compiling honey code...");
+
+  uptr<FileStmtAst> file;
+  try {
+    file = parse_file(source);
+  } catch (const ParserError &err) {
+    ParserError::print_error(err, source);
+    parser.print_parsing_errors();
+    return std::unexpected("Compilation failed, see previous errors.");
+  }
+
   if (parser.has_parsing_errors()) {
     parser.print_parsing_errors();
     return std::unexpected("Compilation failed, see previous errors.");

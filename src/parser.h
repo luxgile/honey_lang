@@ -25,7 +25,7 @@ struct ParserError {
   FilePos pos;
   std::string msg;
 
-  static void print_error(ParserError &error, std::string source) {
+  static void print_error(const ParserError &error, std::string source) {
     auto pos = error.pos;
     std::vector<std::string> lines;
     std::istringstream iss(source);
@@ -128,6 +128,10 @@ struct ParserError {
   static ParserError undefined_statement(Token curr) {
     return ParserError{curr.position, "Undefined statement found."};
   }
+
+  static ParserError eof_found(Token curr) {
+    return ParserError{curr.position, "Unexpectedly reached end of file."};
+  }
 };
 
 template <class T> class ParserResult {
@@ -206,9 +210,9 @@ public:
   if (debug_scan)                                                              \
   std::println(msg)
 
-  std::optional<Token> get_tk(int offset) {
+  Token get_tk(int offset) {
     if (offset >= (int)tk_queue.size())
-      return {};
+      throw ParserError::eof_found(tk_queue[tk_queue.size() - 1]);
     return tk_queue[offset];
   }
 
@@ -231,7 +235,7 @@ public:
   }
 
   bool check_any_tokens(std::initializer_list<TokenKind> tokens, int offset) {
-    if (offset > (int)tk_queue.size())
+    if (offset >= (int)tk_queue.size())
       return false;
 
     for (TokenKind tk : tokens) {
@@ -244,7 +248,7 @@ public:
   }
 
   bool check_tokens(std::initializer_list<TokenKind> tokens, int offset) {
-    if (tokens.size() + offset - 1 > tk_queue.size())
+    if (tokens.size() + offset - 1 >= tk_queue.size())
       return false;
 
     int i = 0;
@@ -259,12 +263,12 @@ public:
   }
 
   void panic_until(std::initializer_list<TokenKind> kinds, int &offset) {
-    while (!check_any_tokens(kinds, offset))
+    while (!check_any_tokens(kinds, offset) && offset < (int)tk_queue.size())
       offset += 1;
   }
 
   void panic_until(TokenKind kind, int &offset) {
-    while (!check_tokens({kind}, offset))
+    while (!check_tokens({kind}, offset) && offset < (int)tk_queue.size())
       offset += 1;
   }
 
@@ -317,7 +321,7 @@ public:
     }
 
     panic_until({NewLine, EoF}, offset);
-    return ParserError::undefined_statement(get_tk(offset).value());
+    return ParserError::undefined_statement(get_tk(offset));
   }
 
   ParserResult<uptr<StructDefAst>> parse_struct_def(int &offset) {
@@ -326,7 +330,7 @@ public:
       offset += 1;
 
     if (check_tokens({Id, Colon, Colon, Struct, LBrace}, offset)) {
-      auto struct_name = get_tk(offset).value().value;
+      auto struct_name = get_tk(offset).value;
       offset += 5;
 
       // Skip new lines
@@ -349,7 +353,7 @@ public:
 
         if (!check_tokens({Comma}, offset)) {
           errors.push_back(
-              ParserError::unexpected_token(*get_tk(offset), Comma));
+              ParserError::unexpected_token(get_tk(offset), Comma));
           panic_until(RBrace, offset);
           break;
         }
@@ -387,13 +391,12 @@ public:
     if (!check_tokens({Meta}, offset))
       return {};
 
-    auto meta_tk = get_tk(offset).value();
+    auto meta_tk = get_tk(offset);
     offset += 1;
 
     auto meta_fn = ctx->get_meta(meta_tk.value);
     if (!meta_fn)
-      return ParserError::undefined_meta_fn(get_tk(offset).value(),
-                                            meta_tk.value);
+      return ParserError::undefined_meta_fn(get_tk(offset), meta_tk.value);
 
     std::vector<AstExpression> args;
     for (int i = 0; i < meta_fn.value()->arg_num(); i++) {
@@ -423,7 +426,7 @@ public:
     if (!check_tokens({Id, Colon, Colon, Fn}, offset))
       return {};
 
-    auto fn_id = *get_tk(offset);
+    auto fn_id = get_tk(offset);
     offset += 4;
     auto header_r = parse_fn_header(fn_id.value, offset);
     if (!header_r)
@@ -451,7 +454,7 @@ public:
     }
 
     if (!body && !is_external)
-      return ParserError::fn_missing_body(get_tk(offset).value());
+      return ParserError::fn_missing_body(get_tk(offset));
 
     auto fn = std::make_unique<FnDefAst>(std::move(header_r.get_res()),
                                          std::move(body));
@@ -467,14 +470,14 @@ public:
     }
 
     if (!check_tokens({Id}, offset))
-      return ParserError::unexpected_token(*get_tk(offset), Id);
+      return ParserError::unexpected_token(get_tk(offset), Id);
 
-    auto id = get_tk(offset).value().value;
+    auto id = get_tk(offset).value;
     offset += 1;
 
     auto type_info = ctx->type_db.get_type_by_name(id);
     if (!type_info)
-      return ParserError::type_not_found(*get_tk(offset), id);
+      return ParserError::type_not_found(get_tk(offset), id);
 
     // TODO: This will need to be done to handle types defined inside types
     /* while(check_tokens({Dot}, offset)) { */
@@ -499,7 +502,7 @@ public:
     if (!check_tokens({Id, Colon, Colon, Enum, LBrace}, offset))
       return {};
 
-    auto enum_name = get_tk(offset).value().value;
+    auto enum_name = get_tk(offset).value;
     offset += 5;
 
     // Skip new lines
@@ -515,7 +518,7 @@ public:
     while (!check_tokens({RBrace}, offset)) {
       // A enum variant without struct:
       if (check_tokens({Id, Comma}, offset)) {
-        auto field = get_tk(offset).value().value;
+        auto field = get_tk(offset).value;
         offset += 1;
 
         // Create a unit struct to represent enum variant.
@@ -535,7 +538,7 @@ public:
           auto s = &std::get<uptr<StructDefAst>>(stmt.get_res());
           stmt_type_id = s->get()->type;
         } else {
-          return ParserError::non_struct_enum_variant(get_tk(offset).value());
+          return ParserError::non_struct_enum_variant(get_tk(offset));
         }
 
         auto stmt_type = ctx->type_db.get_type(stmt_type_id).value();
@@ -544,11 +547,11 @@ public:
         field_stmts.push_back(std::move(stmt.get_res()));
 
       } else {
-        return ParserError::unsupported_enum_variant(*get_tk(offset));
+        return ParserError::unsupported_enum_variant(get_tk(offset));
       }
 
       if (!check_tokens({Comma}, offset))
-        return ParserError::unexpected_token(get_tk(offset).value(), Comma);
+        return ParserError::unexpected_token(get_tk(offset), Comma);
       offset += 1;
 
       // Skip new lines
@@ -595,8 +598,8 @@ public:
 
     auto last_expr = std::move(line_expressions.back());
     line_expressions.pop_back();
-    if (line_expressions.size() > 0)
-      std::println("!! line expressions unnused: {}", line_expressions.size());
+    /* if (line_expressions.size() > 0) */
+    /*   std::println("!! line expressions unnused: {}", line_expressions.size()); */
     line_expressions.clear();
     return std::move(last_expr);
   }
@@ -608,9 +611,8 @@ public:
     if (!lvalue)
       return lvalue.get_err();
 
-    if (!check_tokens({Id}, tmp_offset) ||
-        get_tk(tmp_offset).value().value != "=")
-      return ParserError::unexpected_token(get_tk(tmp_offset).value(), "=");
+    if (!check_tokens({Id}, tmp_offset) || get_tk(tmp_offset).value != "=")
+      return ParserError::unexpected_token(get_tk(tmp_offset), "=");
     tmp_offset += 1;
 
     auto rvalue = consume_expressions(tmp_offset, halt_tokens);
@@ -625,10 +627,10 @@ public:
 
   ParserResult<uptr<VarDefStmtAst>> parse_var_decl(int &offset) {
     if (!check_tokens({Id, Colon, Id}, offset) ||
-        get_tk(offset + 2).value().value != "=")
+        get_tk(offset + 2).value != "=")
       return {};
 
-    auto id = get_tk(offset).value().value;
+    auto id = get_tk(offset).value;
     offset += 3;
     auto expr = consume_expressions(offset, {NewLine});
     if (!expr)
@@ -693,7 +695,7 @@ public:
     LOG("parsing expression");
 
     if (check_tokens({Id}, offset)) {
-      auto identifier = get_tk(offset).value().value;
+      auto identifier = get_tk(offset).value;
 
       // Enum expr
       if (auto enum_expr = parse_enum_expr(offset))
@@ -797,22 +799,22 @@ public:
     }
 
     LOG("no expression found");
-    return {};
+    return ParserError::expression_expected(get_tk(offset));
   }
 
   ParserResult<uptr<EnumExprAst>> parse_enum_expr(int &offset) {
     if (!check_tokens({Id, Dot, Id}, offset))
       return {};
-    auto enum_name = get_tk(offset).value().value;
-    auto enum_member_name = get_tk(offset + 2).value().value;
+    auto enum_name = get_tk(offset).value;
+    auto enum_member_name = get_tk(offset + 2).value;
 
     auto enum_type_id = ctx->type_db.get_id_by_name(enum_name);
     if (!enum_type_id)
-      return ParserError::type_not_found(get_tk(offset).value(), enum_name);
+      return ParserError::type_not_found(get_tk(offset), enum_name);
 
     auto enum_type = ctx->type_db.get_type(*enum_type_id).value();
     if (!enum_type->is_enum())
-      return ParserError::expected_type_enum(get_tk(offset).value(), enum_type);
+      return ParserError::expected_type_enum(get_tk(offset), enum_type);
 
     auto enum_member_id =
         enum_type->get_field_by_name(enum_member_name).value()->type;
@@ -841,7 +843,7 @@ public:
       return {};
 
     offset += 2;
-    auto id = get_tk(offset - 1).value().value;
+    auto id = get_tk(offset - 1).value;
 
     LOG("member access parsed");
     return std::make_unique<MemberAccesorExprAst>(std::move(base_expr), id);
@@ -859,31 +861,30 @@ public:
     auto match_expr = parse_expr(tmp_offset);
 
     if (!check_tokens({Colon}, tmp_offset))
-      return ParserError::unexpected_token(get_tk(offset).value(), Colon);
+      return ParserError::unexpected_token(get_tk(offset), Colon);
     tmp_offset += 1;
 
     // TODO: Need to handle types as a general function
     if (!check_tokens({Id, Dot, Id}, tmp_offset))
-      return ParserError::unexpected_token(get_tk(offset).value(),
-                                           {Id, Dot, Id});
-    auto enum_name = get_tk(tmp_offset).value().value;
-    auto enum_member_name = get_tk(tmp_offset + 2).value().value;
+      return ParserError::unexpected_token(get_tk(offset), {Id, Dot, Id});
+    auto enum_name = get_tk(tmp_offset).value;
+    auto enum_member_name = get_tk(tmp_offset + 2).value;
     tmp_offset += 3;
 
     auto casted_var_name = std::string("");
     if (check_tokens({Id}, tmp_offset)) {
-      casted_var_name = get_tk(tmp_offset).value().value;
+      casted_var_name = get_tk(tmp_offset).value;
       tmp_offset += 1;
     }
 
     auto enum_type = ctx->type_db.get_type_by_name(enum_name);
     if (!enum_type)
-      return ParserError::type_not_found(get_tk(offset).value(), enum_name);
+      return ParserError::type_not_found(get_tk(offset), enum_name);
     auto enum_member_type =
         enum_type.value()->get_field_by_name(enum_member_name);
     if (!enum_member_type)
-      return ParserError::undefined_enum_member(get_tk(offset).value(),
-                                                enum_name, enum_member_name);
+      return ParserError::undefined_enum_member(get_tk(offset), enum_name,
+                                                enum_member_name);
     /* auto enum_member_ty =
      * ctx->type_db.get_type(enum_member_type.value()->type); */
 
@@ -962,11 +963,11 @@ public:
 
   ParserResult<std::unique_ptr<CallExprAst>> parse_call_expr(int &offset) {
     LOG("parsing call");
-    auto identifier = get_tk(offset).value().value;
+    auto identifier = get_tk(offset).value;
     auto overloads = ctx->get_overloads(identifier);
     if (!overloads) {
       LOG("parsing call failed - no overload found");
-      return ParserError::undefined_call(get_tk(offset).value(), identifier);
+      return ParserError::undefined_call(get_tk(offset), identifier);
     }
 
     // Consume the identifier
@@ -1054,11 +1055,11 @@ public:
 
   ParserResult<std::unique_ptr<StructExprAst>> parse_struct_expr(int &offset) {
     LOG("parsing struct expr");
-    auto identifier = get_tk(offset).value().value;
+    auto identifier = get_tk(offset).value;
     auto s = ctx->get_struct(identifier);
     if (!s) {
       LOG("parsing struct failed - no struct found");
-      return ParserError::undefined_struct(get_tk(offset).value(), identifier);
+      return ParserError::undefined_struct(get_tk(offset), identifier);
     }
 
     // Consume the identifier
@@ -1080,21 +1081,20 @@ public:
   parse_struct_assigments(int &offset) {
     std::vector<uptr<StructExprAst::StructFieldAssign>> field_assigns;
     if (!check_tokens({Dot, LBrace}, offset))
-      return ParserError::unexpected_token(get_tk(offset).value(),
-                                           {Dot, LBrace});
+      return ParserError::unexpected_token(get_tk(offset), {Dot, LBrace});
     offset += 2;
 
     while (!check_tokens({RBrace}, offset)) {
       LOG("parsing struct var assigment");
 
       if (!check_tokens({Dot, Id}, offset))
-        return ParserError::unexpected_token(get_tk(offset).value(), {Dot, Id});
+        return ParserError::unexpected_token(get_tk(offset), {Dot, Id});
 
-      auto id = get_tk(offset + 1).value().value;
+      auto id = get_tk(offset + 1).value;
       offset += 2;
 
-      if (!check_tokens({Id}, offset) || get_tk(offset).value().value != "=")
-        return ParserError::unexpected_token(get_tk(offset).value(), "=");
+      if (!check_tokens({Id}, offset) || get_tk(offset).value != "=")
+        return ParserError::unexpected_token(get_tk(offset), "=");
       offset += 1;
 
       auto rvalue = consume_expressions(offset, {Comma, NewLine, RBrace});
@@ -1152,7 +1152,7 @@ public:
     auto ret_type = VOID_TYPE.get_id();
 
     if (!check_tokens({LPar}, offset))
-      return ParserError::unexpected_token(get_tk(offset).value(), LPar);
+      return ParserError::unexpected_token(get_tk(offset), LPar);
     offset += 1;
 
     // Prev arguments
@@ -1163,7 +1163,7 @@ public:
 
     // Divider type
     if (!check_tokens({Bar}, offset))
-      return ParserError::unexpected_token(get_tk(offset).value(), Bar);
+      return ParserError::unexpected_token(get_tk(offset), Bar);
     offset += 1;
 
     // Next arguments
@@ -1173,7 +1173,7 @@ public:
       return {};
 
     if (!check_tokens({RPar}, offset))
-      return ParserError::unexpected_token(get_tk(offset).value(), RPar);
+      return ParserError::unexpected_token(get_tk(offset), RPar);
     offset += 1;
 
     // Return type
@@ -1196,7 +1196,7 @@ public:
     while (true) {
       auto arg = parse_arg_def(offset);
       if (!arg)
-        return ParserError::argument_expected(get_tk(offset).value());
+        return ParserError::argument_expected(get_tk(offset));
 
       args.push_back(std::move(arg.get_res()));
 
@@ -1211,7 +1211,7 @@ public:
         break;
       }
 
-      return ParserError::unexpected_token(get_tk(offset).value(),
+      return ParserError::unexpected_token(get_tk(offset),
                                            {Comma, Bar, RPar});
     }
 
@@ -1228,7 +1228,7 @@ public:
     }
 
     if (check_tokens({Id, Colon}, offset)) {
-      auto field_name = get_tk(offset).value().value;
+      auto field_name = get_tk(offset).value;
       offset += 2;
       auto arg_type = parse_type(offset);
       if (!arg_type)
