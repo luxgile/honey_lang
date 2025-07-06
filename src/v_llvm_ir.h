@@ -56,11 +56,19 @@ struct LlvmIrGenAstVisitor {
 
   // TODO: Pass state as an argument in the visitor. Global state is pretty bad.
   // State
-  std::map<std::string, DefinedVariable> defined_variables;
-  volatile bool rvalue_mode = false; // Volatile is needed or the compile might
-                                     // optimize this for some reason.
-  bool var_lassign_mode;
-  bool get_ref_mode;
+  struct GenCtx {
+    std::map<std::string, DefinedVariable> defined_variables;
+    volatile bool rvalue_mode = false; // Volatile is needed or the compile
+                                       // might optimize this for some reason.
+    bool var_lassign_mode = false;
+    bool get_ref_mode = false;
+
+    std::optional<DefinedVariable *> get_defined_var(std::string name) {
+      if (defined_variables.find(name) == defined_variables.end())
+        return std::nullopt;
+      return &defined_variables[name];
+    }
+  };
 
   LlvmIrGenAstVisitor(ProgramCtx *ctx) : ctx(ctx) {
     llvm_ctx = std::make_unique<llvm::LLVMContext>();
@@ -68,14 +76,10 @@ struct LlvmIrGenAstVisitor {
     builder = std::make_unique<llvm::IRBuilder<>>(*llvm_ctx);
   }
 
-  std::optional<DefinedVariable *> get_defined_var(std::string name) {
-    if (defined_variables.find(name) == defined_variables.end())
-      return std::nullopt;
-    return &defined_variables[name];
-  }
-
-  std::expected<void, std::string>
-  store_in_value(llvm::Value *ptr, AstTypeId ptr_ty_id, AstExpression &expr);
+  std::expected<void, std::string> store_in_value(GenCtx *gctx,
+                                                  llvm::Value *ptr,
+                                                  AstTypeId ptr_ty_id,
+                                                  AstExpression &expr);
 
   llvm::AllocaInst *build_alloca_at_start(llvm::Function *fn, llvm::Type *type,
                                           std::string name) {
@@ -149,7 +153,7 @@ struct LlvmIrGenAstVisitor {
     return fn;
   }
 
-  std::expected<void, std::string> build_fn(FnDefAst &node) {
+  std::expected<void, std::string> build_fn(GenCtx *gctx, FnDefAst &node) {
     auto fn_header = build_prototype(*node.fn_header);
     if (!fn_header)
       return std::unexpected("error creating fn header");
@@ -158,7 +162,7 @@ struct LlvmIrGenAstVisitor {
       return std::unexpected("trying to redefine an existing fn");
 
     if (!node.fn_header->is_external) {
-      defined_variables.clear();
+      gctx->defined_variables.clear();
       auto bb = llvm::BasicBlock::Create(*llvm_ctx, "entry", fn_header.value());
       builder->SetInsertPoint(bb);
 
@@ -171,12 +175,12 @@ struct LlvmIrGenAstVisitor {
         arg_val = build_alloca_at_start(fn_header.value(), arg.getType(),
                                         arg.getName().str());
         builder->CreateStore(&arg, arg_val);
-        defined_variables[std::string(arg.getName())] =
+        gctx->defined_variables[std::string(arg.getName())] =
             DefinedVariable{arg_ty_id, arg.getType(), arg_val};
         i += 1;
       }
 
-      auto body_ret = std::visit(*this, *node.body);
+      auto body_ret = build_expr(gctx, *node.body);
       bb = builder->GetInsertBlock();
 
       if (!body_ret) {
@@ -223,10 +227,10 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
-  std::expected<void, std::string> build_enum(EnumDefAst &node) {
+  std::expected<void, std::string> build_enum(GenCtx *gctx, EnumDefAst &node) {
     // Generate inner structs members
     for (auto &stmt : node.values) {
-      auto stmt_res = build_statement(stmt);
+      auto stmt_res = build_statement(gctx, stmt);
       if (!stmt_res)
         return std::unexpected(stmt_res.error());
       if (*stmt_res != nullptr)
@@ -260,14 +264,15 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
-  std::expected<void, std::string> build_var(VarDefStmtAst &node);
+  std::expected<void, std::string> build_var(GenCtx *gctx, VarDefStmtAst &node);
 
-  std::expected<void, std::string> build_var_assignment(VarAssignStmtAst &node);
+  std::expected<void, std::string> build_var_assignment(GenCtx *gctx,
+                                                        VarAssignStmtAst &node);
 
   std::expected<llvm::Value *, std::string>
-  build_statement(AstStatement &statement) {
+  build_statement(GenCtx *gctx, AstStatement &statement) {
     if (std::holds_alternative<uptr<FnDefAst>>(statement)) {
-      auto fn = build_fn(*std::get<uptr<FnDefAst>>(statement));
+      auto fn = build_fn(gctx, *std::get<uptr<FnDefAst>>(statement));
       if (!fn)
         return std::unexpected(fn.error());
       return nullptr;
@@ -281,29 +286,30 @@ struct LlvmIrGenAstVisitor {
     }
 
     if (std::holds_alternative<uptr<EnumDefAst>>(statement)) {
-      auto stc = build_enum(*std::get<uptr<EnumDefAst>>(statement));
+      auto stc = build_enum(gctx, *std::get<uptr<EnumDefAst>>(statement));
       if (!stc)
         return std::unexpected(stc.error());
       return nullptr;
     }
 
     if (std::holds_alternative<uptr<VarDefStmtAst>>(statement)) {
-      auto var = build_var(*std::get<uptr<VarDefStmtAst>>(statement));
+      auto var = build_var(gctx, *std::get<uptr<VarDefStmtAst>>(statement));
       if (!var)
         return std::unexpected(var.error());
       return nullptr;
     }
 
     if (std::holds_alternative<uptr<VarAssignStmtAst>>(statement)) {
-      auto var =
-          build_var_assignment(*std::get<uptr<VarAssignStmtAst>>(statement));
+      auto var = build_var_assignment(
+          gctx, *std::get<uptr<VarAssignStmtAst>>(statement));
       if (!var)
         return std::unexpected(var.error());
       return nullptr;
     }
 
     if (std::holds_alternative<uptr<StatementExprAst>>(statement)) {
-      auto res = (*this)(std::get<uptr<StatementExprAst>>(statement));
+      auto res =
+          build_expr(gctx, std::get<uptr<StatementExprAst>>(statement)->expr);
       if (!res)
         return std::unexpected(res.error());
       return *res;
@@ -312,33 +318,45 @@ struct LlvmIrGenAstVisitor {
     return std::unexpected("no statement found");
   }
 
+  std::expected<llvm::Value *, std::string> build_expr(GenCtx *gctx,
+                                                       AstExpression &expr) {
+    return std::visit(
+        [this, gctx](auto &node) -> std::expected<llvm::Value *, std::string> {
+          auto expr = visit_expr(gctx, node);
+          return expr;
+        },
+        expr);
+  }
+
   // Literals
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<BoolExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<BoolExprAst> &node) {
     return llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(1, node->value));
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<IntExprAst> &node) {
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<IntExprAst> &node) {
     return llvm::ConstantInt::get(*llvm_ctx, llvm::APInt(32, node->value));
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<FloatExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<FloatExprAst> &node) {
     auto fp = llvm::ConstantFP::get(*llvm_ctx, llvm::APFloat(node->value));
     return fp;
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<VarExprAst> &node) {
-    auto var = get_defined_var(node->name);
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<VarExprAst> &node) {
+    auto var = gctx->get_defined_var(node->name);
     if (!var)
       return std::unexpected(
           std::format("variable '{}' is undefined", node->name));
 
     auto var_type = AstExprTypeVisitor::get_type(ctx, node);
-    if (get_ref_mode || var_lassign_mode)
+    if (gctx->get_ref_mode || gctx->var_lassign_mode)
       return var.value()->alloca;
 
-    if (!rvalue_mode && !var_type->is_primitive() && !var_type->is_ref())
+    if (!gctx->rvalue_mode && !var_type->is_primitive() && !var_type->is_ref())
       return var.value()->alloca;
 
     return builder->CreateLoad(var.value()->type, var.value()->alloca,
@@ -346,37 +364,38 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<StatementExprAst> &node) {
-    return std::visit(*this, node->expr);
+  visit_expr(GenCtx *gctx, uptr<StatementExprAst> &node) {
+    return build_expr(gctx, node->expr);
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<GroupExprAst> &node) {
-    return std::visit(*this, node->expr);
+  visit_expr(GenCtx *gctx, uptr<GroupExprAst> &node) {
+    return build_expr(gctx, node->expr);
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<RefExprAst> &node) {
-    get_ref_mode = true;
-    auto expr = std::visit(*this, node->expr);
-    get_ref_mode = false;
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<RefExprAst> &node) {
+    gctx->get_ref_mode = true;
+    auto expr = build_expr(gctx, node->expr);
+    gctx->get_ref_mode = false;
     if (!expr)
       return std::unexpected(expr.error());
     return expr;
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<DerefExprAst> &node) {
-    auto expr = std::visit(*this, node->expr);
+  visit_expr(GenCtx *gctx, uptr<DerefExprAst> &node) {
+    auto expr = build_expr(gctx, node->expr);
     if (!expr)
       return std::unexpected(expr.error());
 
-    /* std::println("rvalue: {}", rvalue_mode); */
-    if (rvalue_mode) {
-      /* std::println("rvalue: {}", rvalue_mode); */
+    std::println("out - rvalue: {}", gctx->rvalue_mode ? "true" : "false");
+    if (gctx->rvalue_mode) {
+      std::println("in - rvalue: {}", gctx->rvalue_mode ? "true" : "false");
       auto expr_type = AstExprTypeVisitor::get_type(ctx, node);
       auto llvm_type = ctx->get_llvm_type(expr_type->get_id());
-      /* std::println("type: {} - rvalue: {}", expr_type->get_name(),
-       * rvalue_mode); */
+      std::println("type: {} - rvalue: {}", expr_type->get_name(),
+                   gctx->rvalue_mode ? "true" : "false");
       expr = builder->CreateLoad(*llvm_type, *expr);
     } else {
       expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
@@ -384,17 +403,20 @@ struct LlvmIrGenAstVisitor {
     return expr;
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<StructExprAst> &_) {
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<StructExprAst> &_) {
     struct Unreachable {};
     throw Unreachable{};
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<EnumExprAst> &_) {
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<EnumExprAst> &_) {
     struct Unreachable {};
     throw Unreachable{};
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<ForExprAst> &node) {
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<ForExprAst> &node) {
 
     auto fn = builder->GetInsertBlock()->getParent();
     auto for_check_bb = llvm::BasicBlock::Create(*llvm_ctx, "for_check", fn);
@@ -405,7 +427,7 @@ struct LlvmIrGenAstVisitor {
 
     // Emit for check block
     builder->SetInsertPoint(for_check_bb);
-    auto for_cond_expr = std::visit(*this, node->condition);
+    auto for_cond_expr = build_expr(gctx, node->condition);
     if (!for_cond_expr)
       return std::unexpected(for_cond_expr.error());
 
@@ -416,7 +438,7 @@ struct LlvmIrGenAstVisitor {
 
     // Emit for body block
     builder->SetInsertPoint(for_body_bb);
-    auto for_body_expr = std::visit(*this, node->for_body);
+    auto for_body_expr = build_expr(gctx, node->for_body);
     if (!for_cond_expr)
       return std::unexpected(for_body_expr.error());
     builder->CreateBr(for_check_bb);
@@ -428,8 +450,8 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<SingleMatchExprAst> &node) {
-    auto enum_expr = std::visit(*this, node->enum_expr);
+  visit_expr(GenCtx *gctx, uptr<SingleMatchExprAst> &node) {
+    auto enum_expr = build_expr(gctx, node->enum_expr);
     if (!enum_expr)
       return std::unexpected(enum_expr.error());
 
@@ -472,11 +494,11 @@ struct LlvmIrGenAstVisitor {
           builder->CreateBitCast(enum_member_ptr, member_llvm_ptr_ty);
       auto ref_ty = AstType::new_reference(
           enum_member_expr_ty.value()->get_id(), &ctx->type_db);
-      defined_variables[node->casted_enum_var->name] = DefinedVariable{
+      gctx->defined_variables[node->casted_enum_var->name] = DefinedVariable{
           ref_ty.get_id(), member_llvm_ptr_ty, casted_enum_member};
     }
 
-    auto then_expr = std::visit(*this, node->then_expr);
+    auto then_expr = build_expr(gctx, node->then_expr);
     if (!then_expr)
       return std::unexpected(then_expr.error());
 
@@ -488,8 +510,9 @@ struct LlvmIrGenAstVisitor {
     return then_expr;
   }
 
-  std::expected<llvm::Value *, std::string> operator()(uptr<IfExprAst> &node) {
-    auto cond_expr = std::visit(*this, node->condition);
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<IfExprAst> &node) {
+    auto cond_expr = build_expr(gctx, node->condition);
     if (!cond_expr)
       return std::unexpected(cond_expr.error());
 
@@ -511,7 +534,7 @@ struct LlvmIrGenAstVisitor {
 
     // Emit then block
     builder->SetInsertPoint(then_bb);
-    auto then_expr = std::visit(*this, node->then_expr);
+    auto then_expr = build_expr(gctx, node->then_expr);
     if (!then_expr)
       return std::unexpected(then_expr.error());
 
@@ -524,7 +547,7 @@ struct LlvmIrGenAstVisitor {
       fn->insert(fn->end(), else_bb);
       builder->SetInsertPoint(else_bb);
 
-      else_expr = std::visit(*this, *node->else_expr);
+      else_expr = build_expr(gctx, *node->else_expr);
       if (!else_expr)
         return std::unexpected(else_expr.error());
       builder->CreateBr(merge_bb);
@@ -546,13 +569,13 @@ struct LlvmIrGenAstVisitor {
     return then_expr;
   }
 
-  std::expected<llvm::Value *, std::string>
-  operator()(uptr<NoOpAst> &node) {
+  std::expected<llvm::Value *, std::string> visit_expr(GenCtx *gctx,
+                                                       uptr<NoOpAst> &node) {
     return nullptr;
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<StringExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<StringExprAst> &node) {
     auto str_const =
         llvm::ConstantDataArray::getString(*llvm_ctx, node->value, true);
     auto global_str = new llvm::GlobalVariable(
@@ -563,8 +586,8 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<MemberAccesorExprAst> &node) {
-    auto base_expr = std::visit(*this, node->base);
+  visit_expr(GenCtx *gctx, uptr<MemberAccesorExprAst> &node) {
+    auto base_expr = build_expr(gctx, node->base);
     if (!base_expr)
       return std::unexpected(base_expr.error());
 
@@ -589,7 +612,8 @@ struct LlvmIrGenAstVisitor {
     auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
                                                *member_idx, node->member);
 
-    if (rvalue_mode || get_ref_mode || member_llvm_type.value()->isStructTy())
+    if (gctx->rvalue_mode || gctx->get_ref_mode ||
+        member_llvm_type.value()->isStructTy())
       return member_ptr;
 
     return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
@@ -597,7 +621,7 @@ struct LlvmIrGenAstVisitor {
 
   // Expressions
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<CallExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<CallExprAst> &node) {
     auto overloads = ctx->get_overloads(node->fn_name);
     if (!overloads)
       return std::unexpected("no overloads found for call");
@@ -622,14 +646,14 @@ struct LlvmIrGenAstVisitor {
     std::vector<llvm::Value *> args;
 
     for (auto &arg : node->prefix_args) {
-      auto arg_val = std::visit(*this, arg);
+      auto arg_val = build_expr(gctx, arg);
       if (!arg_val)
         return std::unexpected(arg_val.error());
       args.push_back(*arg_val);
     }
 
     for (auto &arg : node->suffix_args) {
-      auto arg_val = std::visit(*this, arg);
+      auto arg_val = build_expr(gctx, arg);
       if (!arg_val)
         return std::unexpected(arg_val.error());
       args.push_back(*arg_val);
@@ -639,7 +663,7 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<MetaDefExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<MetaDefExprAst> &node) {
     auto meta_fn = ctx->get_meta(node->name);
 
     if (!meta_fn)
@@ -650,15 +674,17 @@ struct LlvmIrGenAstVisitor {
 
     // TODO: As soon as additional meta fn are defined, they might have
     // different number of arguments
-    auto lhs = std::visit(*this, node->args[0]);
+    auto lhs = build_expr(gctx, node->args[0]);
     if (!lhs)
       return std::unexpected("error generating lhs of int add");
-    auto rhs = std::visit(*this, node->args[1]);
+    auto rhs = build_expr(gctx, node->args[1]);
     if (!rhs)
       return std::unexpected("error generating rhs of int add");
 
-    if (meta_fn.value()->kind == MetaFunctionKind::AddInt)
-      return builder->CreateAdd(*lhs, *rhs, "addi32tmp");
+    if (meta_fn.value()->kind == MetaFunctionKind::AddInt) {
+      auto add = builder->CreateAdd(*lhs, *rhs, "addi32tmp");
+      return add;
+    }
     if (meta_fn.value()->kind == MetaFunctionKind::SubInt)
       return builder->CreateSub(*lhs, *rhs, "subi32tmp");
     if (meta_fn.value()->kind == MetaFunctionKind::MulInt)
@@ -700,10 +726,10 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
-  operator()(uptr<BodyExprAst> &node) {
+  visit_expr(GenCtx *gctx, uptr<BodyExprAst> &node) {
     llvm::Value *last_val = nullptr;
     for (auto &stmt : node->statements) {
-      auto stmt_expr = build_statement(stmt);
+      auto stmt_expr = build_statement(gctx, stmt);
       if (!stmt_expr)
         return std::unexpected(stmt_expr.error());
 
@@ -720,12 +746,22 @@ struct LlvmStoreAllocaVisitor {
   llvm::Value *alloca;
   LlvmIrGenAstVisitor *llvm_gen;
 
+  std::expected<void, std::string>
+  build_alloca(LlvmIrGenAstVisitor::GenCtx *gctx, AstExpression &expr) {
+    return std::visit(
+        [this, gctx](auto &node) -> std::expected<void, std::string> {
+          return visit_expr(gctx, node);
+        },
+        expr);
+  }
+
   template <class T>
-  std::expected<void, std::string> simple_alloca(uptr<T> &node) {
+  std::expected<void, std::string>
+  simple_alloca(LlvmIrGenAstVisitor::GenCtx *gctx, uptr<T> &node) {
     /* std::println("rvalue start mode: {}", llvm_gen->rvalue_mode); */
-    llvm_gen->rvalue_mode = true;
-    auto expr = (*llvm_gen)(node);
-    llvm_gen->rvalue_mode = false;
+    gctx->rvalue_mode = true;
+    auto expr = llvm_gen->visit_expr(gctx, node);
+    gctx->rvalue_mode = false;
 
     if (!expr)
       return std::unexpected(expr.error());
@@ -733,74 +769,92 @@ struct LlvmStoreAllocaVisitor {
     return {};
   }
 
-  std::expected<void, std::string> operator()(uptr<IntExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<IntExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<FloatExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<FloatExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<StringExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<StringExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<BoolExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<BoolExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<VarExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<VarExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<CallExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<CallExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<BodyExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<BodyExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<StatementExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<StatementExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<MetaDefExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<MetaDefExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<GroupExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<GroupExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<IfExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<IfExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<NoOpAst> &node) {}
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<NoOpAst> &node) {}
 
-  std::expected<void, std::string> operator()(uptr<SingleMatchExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<SingleMatchExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<ForExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<ForExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<RefExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<RefExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<DerefExprAst> &node) {
-    return simple_alloca(node);
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<DerefExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
   std::expected<void, std::string>
-  operator()(uptr<MemberAccesorExprAst> &node) {
-    return simple_alloca(node);
+  visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+             uptr<MemberAccesorExprAst> &node) {
+    return simple_alloca(gctx, node);
   }
 
-  std::expected<void, std::string> operator()(uptr<EnumExprAst> &node) {
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<EnumExprAst> &node) {
     auto enum_llvm_ty = llvm_gen->ctx->get_llvm_type(node->enum_type);
     if (!enum_llvm_ty)
       return std::unexpected("failed to get struct type");
@@ -821,7 +875,7 @@ struct LlvmStoreAllocaVisitor {
     // Store the tag value
     auto int_expr = AstExpression{std::make_unique<IntExprAst>(*value_idx)};
     auto ir_res =
-        llvm_gen->store_in_value(field_ptr, node->enum_type, int_expr);
+        llvm_gen->store_in_value(gctx, field_ptr, node->enum_type, int_expr);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
@@ -836,14 +890,16 @@ struct LlvmStoreAllocaVisitor {
     auto struct_expr = AstExpression{
         std::move(node->struct_expr)}; // BUG: This will be problematic if the
                                        // AST it reused
-    ir_res = llvm_gen->store_in_value(bitcast_union_ptr, ref_ty, struct_expr);
+    ir_res =
+        llvm_gen->store_in_value(gctx, bitcast_union_ptr, ref_ty, struct_expr);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
     return {};
   }
 
-  std::expected<void, std::string> operator()(uptr<StructExprAst> &node) {
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<StructExprAst> &node) {
     auto struct_ty = llvm_gen->ctx->get_llvm_type(node->type);
     if (!struct_ty)
       return std::unexpected("failed to get struct type");
@@ -861,8 +917,8 @@ struct LlvmStoreAllocaVisitor {
 
       auto field_ptr =
           builder->CreateStructGEP(*struct_ty, alloca, *field_idx, field->name);
-      auto ir_res =
-          llvm_gen->store_in_value(field_ptr, field_ty->type, field->rvalue);
+      auto ir_res = llvm_gen->store_in_value(gctx, field_ptr, field_ty->type,
+                                             field->rvalue);
       if (!ir_res)
         return std::unexpected(ir_res.error());
     }

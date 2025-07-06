@@ -6,7 +6,7 @@
 #include <variant>
 
 std::expected<void, std::string>
-LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
+LlvmIrGenAstVisitor::build_var(GenCtx *gctx, VarDefStmtAst &node) {
   llvm::Type *assignment_llvm_type;
 
   if (node.assignment) {
@@ -28,10 +28,10 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
       return std::unexpected("trying to allocate a void type");
 
     auto alloca = builder->CreateAlloca(*_ty, nullptr, node.name);
-    defined_variables[node.name] =
+    gctx->defined_variables[node.name] =
         DefinedVariable{ast_type, assignment_llvm_type, alloca};
 
-    auto ir_res = store_in_value(alloca, ast_type, *node.assignment);
+    auto ir_res = store_in_value(gctx, alloca, ast_type, *node.assignment);
     if (!ir_res)
       return std::unexpected(ir_res.error());
 
@@ -47,30 +47,31 @@ LlvmIrGenAstVisitor::build_var(VarDefStmtAst &node) {
 
     auto alloca =
         builder->CreateAlloca(assignment_llvm_type, nullptr, node.name);
-    defined_variables[node.name] =
+    gctx->defined_variables[node.name] =
         DefinedVariable{node.type, assignment_llvm_type, alloca};
   }
 
   return {};
 }
 std::expected<void, std::string>
-LlvmIrGenAstVisitor::build_var_assignment(VarAssignStmtAst &node) {
-  var_lassign_mode = true;
-  auto lvalue = std::visit(*this, node.lvalue);
-  var_lassign_mode = false;
+LlvmIrGenAstVisitor::build_var_assignment(GenCtx *gctx,
+                                          VarAssignStmtAst &node) {
+  gctx->var_lassign_mode = true;
+  auto lvalue = build_expr(gctx, node.lvalue);
+  gctx->var_lassign_mode = false;
   auto lvalue_type = AstExprTypeVisitor::get_type_id(ctx, node.lvalue);
 
-  auto ir_res = store_in_value(*lvalue, lvalue_type, node.rvalue);
+  auto ir_res = store_in_value(gctx, *lvalue, lvalue_type, node.rvalue);
   if (!ir_res)
     return std::unexpected(ir_res.error());
   return {};
 }
 
 std::expected<void, std::string>
-LlvmIrGenAstVisitor::store_in_value(llvm::Value *ptr, AstTypeId ptr_ty_id,
-                                    AstExpression &expr) {
+LlvmIrGenAstVisitor::store_in_value(GenCtx *gctx, llvm::Value *ptr,
+                                    AstTypeId ptr_ty_id, AstExpression &expr) {
   LlvmStoreAllocaVisitor store_visitor = {builder.get(), ptr, this};
-  auto ir_res = std::visit(store_visitor, expr);
+  auto ir_res = store_visitor.build_alloca(gctx, expr);
   if (!ir_res)
     return std::unexpected(ir_res.error());
   return {};

@@ -1,5 +1,6 @@
 #include "compiler.h"
 #include "parser.h"
+#include "v_llvm_ir.h"
 #include "v_pretty_print.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
@@ -103,13 +104,15 @@ Compiler::gen_llvm_ir(uptr<FileStmtAst> &file) {
   std::println();
   std::println(" ----- PARSED CODE -----");
   std::println();
+
+  LlvmIrGenAstVisitor::GenCtx gctx;
   for (auto &stmt : file->statements) {
     if (print_parsed_statements) {
       std::visit(pretty_printer, stmt);
       std::println("");
     }
 
-    auto gen_result = llvm_gen.build_statement(stmt);
+    auto gen_result = llvm_gen.build_statement(&gctx, stmt);
 
     if (!gen_result)
       return std::unexpected(std::format("gen error: {}", gen_result.error()));
