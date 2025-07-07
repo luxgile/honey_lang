@@ -1,12 +1,11 @@
-### Instructions
-To update the compiler:
+### Build Instructions
+Update meson with (only once):
+`meson setup build`
+
+Then build the compiler with:
 `meson compile -C build` 
 
-To compile .hun files (Will look for 'honey/main.hun'):
-`build/src/honey`
+### Compiler Instructions
+To compile .hun files 
+`build/src/honey` <file here>
 
-To link object file with c bindings:
-`clang -g bindings.c honey.o -o main`
-
-To run honey code:
-`./main`
