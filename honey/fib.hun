@@ -1,5 +1,4 @@
 extern printf :: fn (|format: RawString, args: ...)
-
 extern scanf :: fn (|format: RawString, input: ^Int)
 
 + :: fn (lhs: Int | rhs: Int) Int {

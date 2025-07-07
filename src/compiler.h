@@ -15,10 +15,6 @@ class Compiler {
   Parser parser;
   LlvmIrGenAstVisitor llvm_gen;
 
-  bool print_tokens = false;
-  bool print_parsed_statements = true;
-  bool print_llvm_ir = true;
-
   void add_internal_types();
   uptr<FileStmtAst> parse_file(std::string source);
 
@@ -27,6 +23,10 @@ class Compiler {
   std::expected<void, std::string> compile_to_obj_file(std::string file_name);
 
 public:
+  bool print_tokens = false;
+  bool print_parsed_statements = false;
+  bool print_llvm_ir = false;
+
   Compiler() : parser(&ctx), llvm_gen(&ctx) {
     parser.debug_checks = false;
     parser.debug_scan = false;

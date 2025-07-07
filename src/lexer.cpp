@@ -49,17 +49,21 @@ bool is_allowed_id_char(char c) {
   return std::isalpha(c) || ALLOWED_ID_CHARS.contains(c);
 }
 
+bool is_whitespace(char c) {
+  return c != '\n' && std::isspace(c);
+}
+
 Token Lexer::get_token() {
   if (src_index >= (int)source.size() - 1)
     return create_token(EoF);
+  //
+  // Skip whitespace
+  while (is_whitespace(last_char))
+    last_char = next_char();
 
   // Don't skip new lines.
   if (last_char == '\n')
     return create_token(NewLine, true);
-
-  // Skip whitespace
-  while (std::isspace(last_char))
-    last_char = next_char();
 
   // Ignore comments
   // TODO: Worth to return comments as tokens for documentation
@@ -236,6 +240,7 @@ Token Lexer::get_token() {
     return create_token(RPar, true);
   }
 
+  std::println("undefined token found: '{}'", last_char);
   throw "undefined";
 }
 
