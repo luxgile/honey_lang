@@ -34,15 +34,16 @@ struct ParserError {
       lines.push_back(line);
 
     line = lines[pos.line];
-    std::println("error: {}", error.msg);
-    std::println("--- [{} {}-{}]", pos.line, pos.start, pos.end);
-    std::println("|");
-    std::println("|  {}", line);
-    std::print("|  ");
+    std::println("{}{}error{}: {}", ansi_bold(), ansi_red(), ansi_reset(),
+                 error.msg);
+    std::println("{}--- [{} {}-{}]{}", ansi_faint(), pos.line, pos.start,
+                 pos.end, ansi_reset());
+    std::println("{}", line);
 
     // Print error marker
     uint i = 0;
     bool on_bounds = false;
+    std::print("{}", ansi_red());
     for (auto c : line) {
       if (i == pos.start)
         on_bounds = true;
@@ -55,7 +56,7 @@ struct ParserError {
         std::print("{}", c == '\t' ? c : ' ');
       i += 1;
     }
-    std::print("\n");
+    std::print("{}\n", ansi_reset());
 
     std::println();
   }
@@ -302,7 +303,7 @@ public:
     lexer.set_source(source);
     while (true) {
       auto tk = lexer.get_token();
-      if(print_tokens)
+      if (print_tokens)
         tk.print_token();
       tk_queue.push_back(tk);
       if (tk.kind == EoF)
