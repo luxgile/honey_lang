@@ -80,7 +80,7 @@ struct ParserError {
 
   static ParserError undefined_identifier(Token curr, std::string id) {
     return ParserError{curr.position,
-                       std::format("{} found, but has not been defined.", id)};
+                       std::format("{} is not defined.", id)};
   }
 
   static ParserError unexpected_token(Token curr, std::string expected) {
@@ -753,26 +753,27 @@ public:
       auto identifier = get_tk(offset).value;
 
       // Enum expr
-      if (auto enum_expr = parse_enum_expr(offset))
-        return enum_expr;
-      else if (enum_expr.is_err())
-        return enum_expr.get_err();
+      if (ctx->get_enum(identifier).has_value()) {
+        if (auto enum_expr = parse_enum_expr(offset))
+          return enum_expr;
+        else if (enum_expr.is_err())
+          return enum_expr.get_err();
+      }
 
       // Call expr
-      if (auto call = parse_call_expr(offset))
-        return call;
-      else if (call.is_err())
-        return call.get_err();
+      if (ctx->get_overloads(identifier).has_value()) {
+        if (auto call = parse_call_expr(offset))
+          return call;
+        else if (call.is_err())
+          return call.get_err();
+      }
 
-      // If the identifier is a fn but the previous call failed because not all
-      // args are parsed yet, avoid creating a variable below
-      if (auto overloads = ctx->get_overloads(identifier))
-        return {};
-
-      if (auto struct_expr = parse_struct_expr(offset))
-        return struct_expr;
-      else if (struct_expr.is_err())
-        return struct_expr.get_err();
+      if (ctx->get_struct(identifier).has_value()) {
+        if (auto struct_expr = parse_struct_expr(offset))
+          return struct_expr;
+        else if (struct_expr.is_err())
+          return struct_expr.get_err();
+      }
 
       // Variable
       if (ctx->defined_vars[identifier] == nullptr)
