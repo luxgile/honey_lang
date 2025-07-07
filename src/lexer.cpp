@@ -67,9 +67,22 @@ Token Lexer::get_token() {
   // TODO: Worth to return comments as tokens for documentation
   if (last_char == '#') {
     last_char = next_char();
-    while (last_char != '\n')
+    if (last_char == '+') { // Multiline command
       last_char = next_char();
-    return create_token(NewLine, current_pos, true);
+      while (src_index < (int)source.size() - 1) {
+        if (last_char == '+') {
+          last_char = next_char();
+          if (last_char == '#')
+            break;
+        }
+        last_char = next_char();
+      }
+      return create_token(NewLine, current_pos, true);
+    } else { // Line command
+      while (last_char != '\n')
+        last_char = next_char();
+      return create_token(NewLine, current_pos, true);
+    }
   }
 
   // Identifier

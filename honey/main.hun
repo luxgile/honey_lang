@@ -4,6 +4,7 @@ related_to :: fn (lhs: RawString | rhs: RawString) {
   printf "%s is related to %s \n" lhs rhs
 }
 
+# Some boilerplate functions to ease readability
 + :: fn (lhs: Int | rhs: Int) Int {
   @i+ lhs rhs
 } 
@@ -76,6 +77,9 @@ print_cat :: fn(|) {
   }
 }
 
+#+ Here's how multiline commands work
+   You can use as many lines as needed
+   It will work until the escape sequence: +#
 main :: fn (|) {
   "1: Guille" related_to "Ichi"
   my_int := 3 * 5 + 3
