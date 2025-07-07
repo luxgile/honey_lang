@@ -78,7 +78,7 @@ uptr<FileStmtAst> Compiler::parse_file(std::string source) {
   /*   std::println(); */
   /* } */
 
-  return parser.parse_file(source);
+  return parser.parse_file(source, print_tokens);
   /**/
   /* do { */
   /*   auto tkn_res = lexer.get_token(); */

@@ -72,7 +72,20 @@ struct Lexer {
   int next_char();
   int go_back(int steps);
 
-  Token create_token(TokenKind kind, bool consume = false);
+  Token create_token(TokenKind kind, FilePos pos, bool consume = false);
 
   Token get_token();
+
+  void start_capturing() {
+    current_pos.end = current_pos.start;
+    capturing = true;
+  }
+  FilePos stop_capturing() {
+    capturing = false;
+    auto pos = current_pos;
+    if (pos.end != 0)
+      pos.end -= 1;
+    current_pos.start = current_pos.end;
+    return pos;
+  }
 };

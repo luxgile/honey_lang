@@ -33,10 +33,31 @@ struct ParserError {
     while (std::getline(iss, line))
       lines.push_back(line);
 
+    line = lines[pos.line];
     std::println("error: {}", error.msg);
-    std::println("--- line: {}", error.pos.line);
+    std::println("--- [{} {}-{}]", pos.line, pos.start, pos.end);
     std::println("|");
-    std::println("|  {}", lines[pos.line - 1]);
+    std::println("|  {}", line);
+    std::print("|  ");
+
+    // Print error marker
+    uint i = 0;
+    bool on_bounds = false;
+    for (auto c : line) {
+      if (i == pos.start)
+        on_bounds = true;
+      if (i == pos.end + 1)
+        on_bounds = false;
+
+      if (on_bounds)
+        std::print("^");
+      else
+        std::print("{}", c == '\t' ? c : ' ');
+      i += 1;
+    }
+    std::print("\n");
+
+    std::println();
   }
 
   static ParserError type_not_found(Token curr, std::string type_name) {
@@ -54,6 +75,11 @@ struct ParserError {
     msg += std::format(" was expected, but {} was found instead.",
                        token_kind_to_string(curr.kind));
     return ParserError{curr.position, msg};
+  }
+
+  static ParserError undefined_identifier(Token curr, std::string id) {
+    return ParserError{curr.position,
+                       std::format("{} found, but has not been defined.", id)};
   }
 
   static ParserError unexpected_token(Token curr, std::string expected) {
@@ -272,10 +298,12 @@ public:
       offset += 1;
   }
 
-  uptr<FileStmtAst> parse_file(std::string source) {
+  uptr<FileStmtAst> parse_file(std::string source, bool print_tokens) {
     lexer.set_source(source);
     while (true) {
       auto tk = lexer.get_token();
+      if(print_tokens)
+        tk.print_token();
       tk_queue.push_back(tk);
       if (tk.kind == EoF)
         break;
@@ -726,10 +754,14 @@ public:
       // Enum expr
       if (auto enum_expr = parse_enum_expr(offset))
         return enum_expr;
+      else if (enum_expr.is_err())
+        return enum_expr.get_err();
 
       // Call expr
       if (auto call = parse_call_expr(offset))
         return call;
+      else if (call.is_err())
+        return call.get_err();
 
       // If the identifier is a fn but the previous call failed because not all
       // args are parsed yet, avoid creating a variable below
@@ -738,8 +770,13 @@ public:
 
       if (auto struct_expr = parse_struct_expr(offset))
         return struct_expr;
+      else if (struct_expr.is_err())
+        return struct_expr.get_err();
 
       // Variable
+      if (ctx->defined_vars[identifier] == nullptr)
+        return ParserError::undefined_identifier(get_tk(offset), identifier);
+
       auto var = std::make_unique<VarExprAst>(identifier);
       LOG("var expression found");
       offset += 1;
@@ -748,6 +785,8 @@ public:
 
     if (auto body = parse_fn_body(offset))
       return body;
+    else if (body.is_err())
+      return body.get_err();
 
     if (check_tokens({LPar}, offset)) {
       offset += 1;
@@ -760,12 +799,18 @@ public:
 
     if (auto match_expr = parse_single_match_expr(offset))
       return match_expr;
+    else if (match_expr.is_err())
+      return match_expr.get_err();
 
     if (auto if_expr = parse_if_expr(offset))
       return if_expr;
+    else if (if_expr.is_err())
+      return if_expr.get_err();
 
     if (auto for_expr = parse_loop_expr(offset))
       return for_expr;
+    else if (for_expr.is_err())
+      return for_expr.get_err();
 
     if (check_tokens({Meta}, offset)) {
       auto meta = parse_meta_expr(offset);
@@ -1011,7 +1056,7 @@ public:
           matched_args = false;
           break;
         }
-        std::println(" >>> adding line expression call as prefix");
+        /* std::println(" >>> adding line expression call as prefix"); */
         prefix_args.push_back(std::move(line_expressions[i]));
       }
 
