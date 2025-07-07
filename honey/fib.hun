@@ -23,7 +23,7 @@ fib :: fn(|n: Int) Int {
 main :: fn(|) {
   n := 10
   #TODO: This is not being called
-  scanf "%d" &x
+  scanf "%d" &n
   n = fib n
   printf "%d\n" n
 }
