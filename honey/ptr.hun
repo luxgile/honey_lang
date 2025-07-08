@@ -4,6 +4,10 @@ add_one :: fn (| i: ^Int) {
   ^i = @i+ ^i 1
 }
 
++= :: fn (lhs: ^Int | rhs: Int) {
+  ^lhs = @i+ ^lhs rhs 
+}
+
 main :: fn (|) {
   my_int := 5
   my_ptr := &my_int
@@ -17,4 +21,8 @@ main :: fn (|) {
 
   my_int = @i+ ^my_ptr 1
   printf "my_int is %d\n" my_int
+
+  a := 5
+  &a += 2
+  printf "a = %d\n" a
 }
