@@ -79,8 +79,7 @@ struct ParserError {
   }
 
   static ParserError undefined_identifier(Token curr, std::string id) {
-    return ParserError{curr.position,
-                       std::format("{} is not defined.", id)};
+    return ParserError{curr.position, std::format("{} is not defined.", id)};
   }
 
   static ParserError unexpected_token(Token curr, std::string expected) {
@@ -158,6 +157,14 @@ struct ParserError {
 
   static ParserError eof_found(Token curr) {
     return ParserError{curr.position, "Unexpectedly reached end of file."};
+  }
+  static ParserError multityped_array(Token curr, const AstType *array_type,
+                                      const AstType *unexpected_type) {
+    return ParserError{curr.position,
+                       std::format("Array with type '{}' cannot contain an "
+                                   "expression of a different type '{}'",
+                                   array_type->get_name(),
+                                   unexpected_type->get_name())};
   }
 };
 
@@ -647,7 +654,7 @@ public:
       return lvalue.get_err();
 
     if (!check_tokens({Id}, tmp_offset) || get_tk(tmp_offset).value != "=")
-      return ParserError::unexpected_token(get_tk(tmp_offset), "=");
+      return {}; // Not a var assigment
     tmp_offset += 1;
 
     auto rvalue = consume_expressions(tmp_offset, halt_tokens);
@@ -700,16 +707,23 @@ public:
 
   ParserResult<AstStatement> parse_statement(int &offset) {
     // Var declaration
-    if (auto var_decl = parse_var_decl(offset))
+    if (auto var_decl = parse_var_decl(offset)) {
       return var_decl;
+    } else if (var_decl.is_err()) {
+      return var_decl.get_err();
+    }
 
     // Var assigment
     if (auto var_assign = parse_var_assign(offset, {NewLine})) {
       return var_assign;
+    } else if (var_assign.is_err()) {
+      return var_assign.get_err();
     }
 
     if (auto ret = parse_return(offset)) {
       return ret;
+    } else if (ret.is_err()) {
+      return ret.get_err();
     }
 
     // If nothing else found, try to find a expression like a call function.
@@ -798,6 +812,11 @@ public:
       return ParserResult<uptr<GroupExprAst>>{
           std::make_unique<GroupExprAst>(std::move(expr.get_res()))};
     }
+
+    if (auto array_expr = parse_array_expr(offset))
+      return array_expr;
+    else if (array_expr.is_err())
+      return array_expr.get_err();
 
     if (auto match_expr = parse_single_match_expr(offset))
       return match_expr;
@@ -1150,6 +1169,47 @@ public:
                                            std::move(field_assigns.get_res()));
   }
 
+  ParserResult<std::unique_ptr<ArrayExprAst>> parse_array_expr(int &offset) {
+    if (!check_tokens({LBracks}, offset))
+      return {};
+    offset += 1;
+
+    std::optional<AstTypeId> el_type;
+    std::vector<AstExpression> elements;
+    while (true) {
+      auto expr = parse_expr(offset);
+      if (!expr)
+        return expr.get_err();
+
+      // Ensure all expressions are of the same type
+      auto expr_type = AstExprTypeVisitor::get_type_id(ctx, expr.get_res());
+      if (el_type && *el_type != expr_type) {
+        return ParserError::multityped_array(
+            get_tk(offset), ctx->type_db.get_type(*el_type).value(),
+            ctx->type_db.get_type(expr_type).value());
+      } else if (!el_type) {
+        el_type = expr_type;
+      }
+
+      elements.push_back(std::move(expr.get_res()));
+
+      if (check_tokens({Comma}, offset)) {
+        offset += 1;
+        continue;
+      }
+
+      if (check_tokens({RBracks}, offset)) {
+        offset += 1;
+        break;
+      }
+
+      return ParserError::unexpected_token(get_tk(offset), {Comma, RBracks});
+    }
+
+    auto array_type = ctx->type_db.new_array(*el_type, elements.size());
+    return std::make_unique<ArrayExprAst>(array_type, std::move(elements));
+  }
+
   ParserResult<std::vector<uptr<StructExprAst::StructFieldAssign>>>
   parse_struct_assigments(int &offset) {
     std::vector<uptr<StructExprAst::StructFieldAssign>> field_assigns;
@@ -1201,6 +1261,11 @@ public:
       auto stmt = parse_statement(offset);
       if (!stmt) {
         panic_until(NewLine, offset);
+
+        while (check_tokens({NewLine}, offset)) { // Ignore new line
+          offset += 1;
+        }
+
         errors.push_back(stmt.get_err());
         continue;
       }

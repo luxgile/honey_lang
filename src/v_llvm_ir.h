@@ -607,6 +607,28 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
+  visit_expr(GenCtx *gctx, uptr<ArrayExprAst> &node) {
+    auto array_type = ctx->type_db.get_type(node->type).value();
+    auto llvm_element_type =
+        ctx->get_llvm_type(array_type->get_subtype()).value();
+    auto llvm_array_type =
+        llvm::ArrayType::get(llvm_element_type, array_type->get_array_size());
+    auto array = builder->CreateAlloca(llvm_array_type, nullptr);
+
+    // Populate array with elements.
+    for (int i = 0; i < (int)node->elements.size(); i += 1) {
+      auto el_val = build_expr(gctx, node->elements[i]);
+      if (!el_val)
+        return std::unexpected(el_val.error());
+      auto idx = builder->getInt64(i);
+      auto el_ptr = builder->CreateGEP(llvm_array_type, array, idx);
+      builder->CreateStore(*el_val, el_ptr);
+    }
+
+    return array;
+  }
+
+  std::expected<llvm::Value *, std::string>
   visit_expr(GenCtx *gctx, uptr<StringExprAst> &node) {
     auto str_const =
         llvm::ConstantDataArray::getString(*llvm_ctx, node->value, true);
@@ -803,6 +825,11 @@ struct LlvmStoreAllocaVisitor {
 
   std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
                                               uptr<IntExprAst> &node) {
+    return simple_alloca(gctx, node);
+  }
+
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<ArrayExprAst> &node) {
     return simple_alloca(gctx, node);
   }
 

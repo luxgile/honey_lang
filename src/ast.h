@@ -10,6 +10,7 @@
 #include <variant>
 #include <vector>
 
+struct ArrayExprAst;
 struct IntExprAst;
 struct FloatExprAst;
 struct StringExprAst;
@@ -32,12 +33,14 @@ struct RefExprAst;
 struct DerefExprAst;
 struct NoOpAst;
 
-using AstExpression = std::variant<
-    uptr<IntExprAst>, uptr<FloatExprAst>, uptr<StringExprAst>, uptr<RefExprAst>,
-    uptr<DerefExprAst>, uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
-    uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
-    uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>, uptr<StructExprAst>,
-    uptr<MemberAccesorExprAst>, uptr<EnumExprAst>, uptr<SingleMatchExprAst>, uptr<NoOpAst>>;
+using AstExpression =
+    std::variant<uptr<ArrayExprAst>, uptr<IntExprAst>, uptr<FloatExprAst>,
+                 uptr<StringExprAst>, uptr<RefExprAst>, uptr<DerefExprAst>,
+                 uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
+                 uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
+                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
+                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>,
+                 uptr<EnumExprAst>, uptr<SingleMatchExprAst>, uptr<NoOpAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -76,7 +79,7 @@ enum struct MetaFunctionKind {
   GtEqBool,
 };
 
-/// Cannot be defined on Honey code, only internal implementation.
+/// Internal functions that are resolved at compile time
 struct MetaFunction {
   MetaFunctionKind kind;
   int num_args;
@@ -161,6 +164,11 @@ struct ArgDefAst {
   std::string name;
   AstTypeId type;
   bool is_varadic;
+};
+
+struct ArrayExprAst {
+  AstTypeId type;
+  std::vector<AstExpression> elements;
 };
 
 struct IntExprAst {

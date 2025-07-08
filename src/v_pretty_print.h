@@ -70,6 +70,10 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<EnumExprAst> &node);
 
   void operator()(uptr<RefExprAst> &node);
+
   void operator()(uptr<DerefExprAst> &node);
+
+  void operator()(uptr<ArrayExprAst> &node);
+
   void operator()(uptr<NoOpAst> &node) {}
 };

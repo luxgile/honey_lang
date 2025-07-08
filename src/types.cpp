@@ -1,4 +1,5 @@
 #include "types.h"
+#include <format>
 
 bool AstType::is_void() const { return *this == VOID_TYPE; }
 
@@ -110,15 +111,34 @@ AstType AstType::new_reference(AstTypeId subtype, AstTypeDb *db) {
   auto type = AstType{};
   type.db = db;
   type.kind = AstTypeKind::Reference;
-  type.name = "ptr_" + subtype_.value()->get_name();
+  type.name = "#ptr_" + subtype_.value()->get_name();
   type.id = std::hash<std::string>{}(type.name);
   type.parent = {};
   type.subtype = subtype;
   return type;
 }
 
+AstType AstType::new_array(AstTypeId subtype, int size, AstTypeDb *db) {
+  auto subtype_ = db->get_type(subtype);
+  auto type = AstType{};
+  type.db = db;
+  type.kind = AstTypeKind::Reference;
+  type.name = std::format("#array[{}]_", size) + subtype_.value()->get_name();
+  type.id = std::hash<std::string>{}(type.name);
+  type.parent = {};
+  type.subtype = subtype;
+  type.array_size = size;
+  return type;
+}
+
 AstTypeId AstTypeDb::new_ref(AstTypeId subtype) {
   auto type = AstType::new_reference(subtype, this);
+  types.insert({type.get_id(), type});
+  return type.get_id();
+}
+
+AstTypeId AstTypeDb::new_array(AstTypeId subtype, int size) {
+  auto type = AstType::new_array(subtype, size, this);
   types.insert({type.get_id(), type});
   return type.get_id();
 }

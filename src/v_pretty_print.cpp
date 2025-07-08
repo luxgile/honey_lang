@@ -239,3 +239,11 @@ void PrettyPrintAstVisitor::operator()(uptr<DerefExprAst> &node) {
   std::print("^");
   std::visit(*this, node->expr);
 }
+
+void PrettyPrintAstVisitor::operator()(uptr<ArrayExprAst> &node) {
+  std::print("[");
+  for (auto &expr : node->elements) {
+    std::visit(*this, expr);
+  }
+  std::print("]");
+}

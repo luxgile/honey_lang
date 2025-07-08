@@ -44,6 +44,10 @@ struct AstExprTypeVisitor {
     return RAW_STRING_TYPE.get_id();
   }
 
+  AstTypeId operator()(uptr<ArrayExprAst> &node) const {
+    return node->type;
+  }
+
   AstTypeId operator()(uptr<NoOpAst> &_) const { return VOID_TYPE.get_id(); }
 
   AstTypeId operator()(uptr<RefExprAst> &node) const {

@@ -249,6 +249,10 @@ Token Lexer::get_token() {
     return create_token(LPar, current_pos, true);
   case ')':
     return create_token(RPar, current_pos, true);
+  case '[':
+    return create_token(LBracks, current_pos, true);
+  case ']':
+    return create_token(RBracks, current_pos, true);
   }
 
   std::println("undefined token found: '{}'", last_char);
@@ -275,6 +279,10 @@ std::string token_kind_to_string(TokenKind kind) {
     return "LPar";
   case RPar:
     return "RBar";
+  case LBracks:
+    return "LBracks";
+  case RBracks:
+    return "RBracks";
   case Bar:
     return "Bar";
   case Amper:

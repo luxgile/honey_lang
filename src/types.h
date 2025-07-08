@@ -37,11 +37,14 @@ private:
   // Used to differenciate between main type categories
   AstTypeKind kind;
 
-  // Unique ID the type needs 
+  // Unique ID the type needs
   AstTypeId id;
 
   // Subtype used for references and arrays
-  AstTypeId subtype; 
+  AstTypeId subtype;
+  //
+  // Subtype used for references and arrays
+  int array_size;
 
   // User defined name. Final name might not be this as it needs to be mangled.
   std::string name;
@@ -64,6 +67,8 @@ public:
   static AstType new_enum(std::string name, std::vector<AstTypeField> fields,
                           AstTypeDb *db, std::optional<AstTypeId> parent_id);
 
+  static AstType new_array(AstTypeId subtype, int size, AstTypeDb *db);
+
   AstTypeId get_id() const { return id; }
 
   bool has_parent() const { return parent.has_value(); }
@@ -71,6 +76,7 @@ public:
   AstTypeId get_parent_id() const { return *parent; }
   void set_parent_id(AstTypeId id) { this->parent = id; }
   AstTypeId get_subtype() const { return this->subtype; }
+  int get_array_size() const { return this->array_size; }
   std::string get_fullname() const;
   std::string get_name() const { return name; }
   void set_name(std::string name) { this->name = name; }
@@ -191,6 +197,7 @@ public:
                      std::optional<AstTypeId> parent_id);
 
   AstTypeId new_ref(AstTypeId subtype);
+  AstTypeId new_array(AstTypeId subtype, int size);
 
   std::optional<AstTypeId> get_id_by_name(std::string name);
   std::optional<const AstType *> get_type_by_name(std::string name);

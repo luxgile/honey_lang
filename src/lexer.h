@@ -12,6 +12,8 @@ enum TokenKind {
   Colon,
   LBrace,
   RBrace,
+  LBracks,
+  RBracks,
   LPar,
   RPar,
   Amper,
