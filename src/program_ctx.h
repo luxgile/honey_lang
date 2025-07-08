@@ -14,9 +14,6 @@ struct AstExprTypeVisitor;
 struct OverloadFnGroup {
   std::vector<FnHeaderAst *> fns;
 
-  // TODO: Terribly inneficient. Start using types as ids instead of strings to
-  // improve checks.
-
   bool eq_arg_types(std::vector<uptr<ArgDefAst>> &lhs,
                     std::vector<AstTypeId> &rhs, bool is_varadic = false) {
     if (lhs.size() != rhs.size() && !is_varadic)
@@ -82,7 +79,7 @@ private:
 
 public:
   AstTypeDb type_db;
-  llvm::Type* ptr_llvm_ty;
+  llvm::Type *ptr_llvm_ty;
   std::map<std::string, VarDefStmtAst *> defined_vars;
 
   void define_primitive(std::string name, AstTypeId id) {
@@ -95,7 +92,14 @@ public:
       fns[name] = std::make_unique<OverloadFnGroup>();
       overloads = fns[name].get();
     }
-    overloads->fns.push_back(fn);
+
+    auto fn_info = overloads->get_fn(fn);
+    if (fn_info) {
+      // Function already defined. Redefine.
+      overloads->fns[std::get<0>(*fn_info)] = fn;
+    } else {
+      overloads->fns.push_back(fn);
+    }
   }
 
   std::optional<OverloadFnGroup *> get_overloads(std::string name) {
@@ -116,10 +120,10 @@ public:
 
   std::optional<llvm::Type *> get_llvm_type(AstTypeId id) {
     auto ty = type_db.get_type(id);
-    if(!ty)
+    if (!ty)
       return std::nullopt;
 
-    if(ty.value()->is_ref()) 
+    if (ty.value()->is_ref())
       return ptr_llvm_ty;
 
     auto type = llvm_types[id];

@@ -142,6 +142,33 @@ struct ParserError {
                        std::format("'{}' is not a valid function.", name)};
   }
 
+  static ParserError no_overload_call_matched(Token curr, AstTypeDb *type_db,
+                                              OverloadFnGroup *group) {
+    std::string msg = std::format("No overload found for function '{}' with "
+                                  "the given arguments. Available overloads:\n",
+                                  group->fns[0]->name);
+    for (auto &fn : group->fns) {
+      msg += "\t (";
+      for (auto &arg : fn->prefix_args) {
+        auto arg_type = msg +=
+            std::format("{}: {}", arg->name,
+                        type_db->get_type(arg->type).value()->get_name());
+      }
+      if (fn->prefix_args.size() > 0)
+        msg += " ";
+      msg += "|";
+      if (fn->suffix_args.size() > 0)
+        msg += " ";
+      for (auto &arg : fn->suffix_args) {
+        auto arg_type = msg +=
+            std::format("{}: {}", arg->name,
+                        type_db->get_type(arg->type).value()->get_name());
+      }
+      msg += ")\n";
+    }
+    return ParserError{curr.position, msg};
+  }
+
   static ParserError undefined_struct(Token curr, std::string name) {
     return ParserError{curr.position,
                        std::format("'{}' is not a valid struct.", name)};
@@ -1062,13 +1089,15 @@ public:
       return ParserError::undefined_call(get_tk(offset), identifier);
     }
 
-    // Consume the identifier
-    auto tmp_offset = offset;
-    tmp_offset += 1;
-
     for (auto fn : overloads.value()->fns) {
+      // Consume the identifier
+      auto tmp_offset = offset;
+      tmp_offset += 1;
+
       std::vector<AstExpression> prefix_args{};
       bool matched_args = true;
+
+      // Prefixes
       for (int i = 0;
            i < (int)line_expressions.size() && i < (int)fn->prefix_args.size();
            i++) {
@@ -1087,6 +1116,7 @@ public:
       matched_args = true;
       line_expressions.clear();
 
+      // TODO: At some point I need to fix this mess
       std::vector<AstExpression> suffix_args{};
       if (fn->is_vararic()) {
         int i = 0;
@@ -1142,7 +1172,8 @@ public:
     }
 
     LOG("parsing call failed");
-    return {};
+    return ParserError::no_overload_call_matched(get_tk(offset), &ctx->type_db,
+                                                 overloads.value());
   }
 
   ParserResult<std::unique_ptr<StructExprAst>> parse_struct_expr(int &offset) {
