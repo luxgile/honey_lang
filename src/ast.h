@@ -141,6 +141,7 @@ struct EnumExprAst {
 struct StructDefAst {
   AstTypeId type;
   std::vector<uptr<ArgDefAst>> fields;
+  std::vector<uptr<FnDefAst>> methods;
 };
 
 struct StructExprAst {
@@ -228,7 +229,10 @@ struct ForExprAst {
 };
 
 struct CallExprAst {
+  /// Non-mangled name of the function
   std::string fn_name;
+  /// Actual overloaded fn reference
+  AstTypeId fn_id;
   std::vector<AstExpression> prefix_args;
   std::vector<AstExpression> suffix_args;
 };

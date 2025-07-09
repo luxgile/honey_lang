@@ -62,8 +62,10 @@ void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
 
   std::print(" | ");
 
-  for (auto &arg : node->suffix_args) {
-    (*this)(arg);
+  for (int i = 0; i < (int)node->suffix_args.size(); i++) {
+    (*this)(node->suffix_args[i]);
+    if(i != node->suffix_args.size() - 1)
+      std::print(", ");
   }
   std::print(")");
   std::print(" {} ", get_type_name(node->ret_type));
@@ -157,6 +159,10 @@ void PrettyPrintAstVisitor::operator()(uptr<StructDefAst> &node) {
   for (auto &field : node->fields) {
     print_indent();
     std::println("{}: {},", field->name, get_type_name(field->type));
+  }
+  for (auto &method : node->methods) {
+    print_indent();
+    (*this)(method);
   }
   indent -= 1;
   std::println("}}");
@@ -254,4 +260,3 @@ void PrettyPrintAstVisitor::operator()(uptr<IndexExprAst> &node) {
   std::visit(*this, node->index);
   std::print("]");
 }
-

@@ -1,0 +1,20 @@
+extern printf :: fn (|format: RawString, args: ...)
+
+
+Person :: struct {
+  name: RawString,
+  gender: Bool,
+
+  get_gender :: fn(|self) RawString {
+    if self.gender {
+       "male"
+    } else {
+    "female"
+    }
+  }
+}
+
+main :: fn (|) {
+  person := Person .{ .name = "El Pepe", .gender = true }
+  printf "I'm %s\n" person.name
+}

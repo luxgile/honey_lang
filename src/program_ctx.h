@@ -5,6 +5,8 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
+#include <algorithm>
+#include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
@@ -13,15 +15,15 @@ struct AstExprTypeVisitor;
 
 /// Holds a group of functions with the same name but different definitions
 struct OverloadFnGroup {
-  std::vector<FnHeaderAst *> fns;
+  std::vector<AstTypeId> fns;
 
-  bool eq_arg_types(std::vector<uptr<ArgDefAst>> &lhs,
-                    std::vector<AstTypeId> &rhs, bool is_varadic = false) {
+  bool eq_arg_types(std::vector<AstNamedType> lhs, std::vector<AstTypeId> rhs,
+                    bool is_varadic = false) {
     if (lhs.size() != rhs.size() && !is_varadic)
       return false;
 
     for (int i = 0; i < (int)lhs.size(); i++) {
-      if (!lhs[i]->is_varadic && lhs[i]->type != rhs[i])
+      if (!lhs[i].is_varadic && lhs[i].type != rhs[i])
         return false;
     }
 
@@ -29,15 +31,17 @@ struct OverloadFnGroup {
   }
 
   /// Returns the fn and the index it was found.
-  std::optional<std::tuple<int, FnHeaderAst *>>
-  get_fn(std::vector<AstTypeId> pre, std::vector<AstTypeId> suf) {
+  std::optional<std::tuple<int, AstTypeId>> get_fn(AstTypeDb *db,
+                                                   std::vector<AstTypeId> pre,
+                                                   std::vector<AstTypeId> suf) {
     for (int i = 0; i < (int)fns.size(); i++) {
       auto fn = fns[i];
+      auto fn_ty = db->get_type(fn).value();
 
-      if (!eq_arg_types(fn->prefix_args, pre))
+      if (!eq_arg_types(fn_ty->get_pre_args(), pre))
         continue;
 
-      if (!eq_arg_types(fn->suffix_args, suf, fn->is_vararic()))
+      if (!eq_arg_types(fn_ty->get_su_args(), suf, fn_ty->is_varadic()))
         continue;
 
       return std::tuple(i, fn);
@@ -46,8 +50,13 @@ struct OverloadFnGroup {
   }
 
   /// Returns the fn and the index it was found.
-  std::optional<std::tuple<int, FnHeaderAst *>> get_fn(FnHeaderAst *eq_fn) {
-    if (fns.size() == 0 || fns[0]->name != eq_fn->name)
+  std::optional<std::tuple<int, AstTypeId>> get_fn(AstTypeDb *db,
+                                                   FnHeaderAst *eq_fn) {
+    if (fns.size() == 0)
+      return std::nullopt;
+
+    auto fn_ty = db->get_type(fns[0]).value();
+    if (fn_ty->get_name() != eq_fn->name)
       return std::nullopt;
 
     std::vector<AstTypeId> prefix_args;
@@ -60,13 +69,14 @@ struct OverloadFnGroup {
       suffix_args.push_back(suffix->type);
     }
 
-    return get_fn(prefix_args, suffix_args);
+    return get_fn(db, prefix_args, suffix_args);
   }
 
-  std::optional<std::string> get_mangled_name(FnHeaderAst *fn);
-
-  std::optional<std::string> get_mangled_name(CallExprAst *call,
-                                              AstExprTypeVisitor *type_visitor);
+  /* std::optional<std::string> get_mangled_name(FnHeaderAst *fn); */
+  /**/
+  /* std::optional<std::string> get_mangled_name(CallExprAst *call, */
+  /*                                             AstExprTypeVisitor
+   * *type_visitor); */
 };
 
 struct ProgramCtx {
@@ -87,19 +97,45 @@ public:
     primitives.insert({name, id});
   }
 
-  void define_fn(std::string name, FnHeaderAst *fn) {
+  AstTypeId define_fn(std::string name, FnHeaderAst *fn,
+                 std::optional<AstTypeId> parent_struct) {
     auto overloads = fns[name].get();
     if (overloads == nullptr) {
       fns[name] = std::make_unique<OverloadFnGroup>();
       overloads = fns[name].get();
     }
 
-    auto fn_info = overloads->get_fn(fn);
+    auto fn_info = overloads->get_fn(&type_db, fn);
     if (fn_info) {
+      std::vector<AstNamedType> pre_args;
+      for (auto &pre : fn->prefix_args)
+        pre_args.push_back(AstNamedType{pre->name, pre->type, false});
+
+      std::vector<AstNamedType> su_args;
+      for (auto &su : fn->suffix_args)
+        su_args.push_back(AstNamedType{su->name, su->type, su->is_varadic});
+
+      auto fn_ty = type_db.new_fn(name, std::get<0>(*fn_info), pre_args,
+                                  su_args, fn->ret_type, parent_struct);
+
       // Function already defined. Redefine.
-      overloads->fns[std::get<0>(*fn_info)] = fn;
+      overloads->fns[std::get<0>(*fn_info)] = fn_ty;
+      return fn_ty;
     } else {
-      overloads->fns.push_back(fn);
+
+      std::vector<AstNamedType> pre_args;
+      for (auto &pre : fn->prefix_args)
+        pre_args.push_back(AstNamedType{pre->name, pre->type, false});
+
+      std::vector<AstNamedType> su_args;
+      for (auto &su : fn->suffix_args)
+        su_args.push_back(AstNamedType{su->name, su->type, su->is_varadic});
+
+      auto fn_ty = type_db.new_fn(name, overloads->fns.size(), pre_args,
+                                  su_args, fn->ret_type, parent_struct);
+
+      overloads->fns.push_back(fn_ty);
+      return fn_ty;
     }
   }
 
@@ -107,11 +143,6 @@ public:
     auto fn = &fns[name];
     if (fn->get() != nullptr)
       return fn->get();
-
-    /* auto fn_ext = ext_fns[name].get(); */
-    /* if (fn_ext != nullptr) */
-    /*   return fn_ext; */
-
     return std::nullopt;
   }
 

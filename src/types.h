@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <format>
 #include <map>
@@ -12,9 +13,10 @@ using AstTypeId = std::size_t;
 struct AstType;
 class AstTypeDb;
 
-struct AstTypeField {
+struct AstNamedType {
   std::string name;
   AstTypeId type;
+  bool is_varadic;
 };
 
 enum struct AstTypeKind {
@@ -24,6 +26,7 @@ enum struct AstTypeKind {
   Vector,
   Alias,
   Struct,
+  Function,
   Enum,
 };
 
@@ -38,19 +41,26 @@ private:
   AstTypeKind kind;
 
   // Unique ID the type needs
-  AstTypeId id;
+  AstTypeId id = 0;
 
   // Subtype used for references and arrays
-  AstTypeId subtype;
-  //
-  // Subtype used for references and arrays
-  int array_size;
+  AstTypeId subtype = 0;
+
+  // Only used for array types
+  int array_size = 0;
 
   // User defined name. Final name might not be this as it needs to be mangled.
   std::string name;
+  std::uint32_t overload = 0;
 
   // Fields holded by enums or structs.
-  std::vector<AstTypeField> fields;
+  std::vector<AstNamedType> fields;
+  std::vector<AstTypeId> methods;
+
+  // Info for function types
+  AstTypeId ret_type;
+  std::vector<AstNamedType> pre_args;
+  std::vector<AstNamedType> su_args;
 
   // Scoped types like structs inside structs or variants inside enums
   std::optional<AstTypeId> parent;
@@ -61,13 +71,17 @@ public:
   static AstType new_primitive(std::string name, AstTypeDb *db);
   static AstType new_reference(AstTypeId subtype, AstTypeDb *db);
 
-  static AstType new_struct(std::string name, std::vector<AstTypeField> fields,
+  static AstType new_struct(std::string name, std::vector<AstNamedType> fields,
                             AstTypeDb *db, std::optional<AstTypeId> parent_id);
 
-  static AstType new_enum(std::string name, std::vector<AstTypeField> fields,
+  static AstType new_enum(std::string name, std::vector<AstNamedType> fields,
                           AstTypeDb *db, std::optional<AstTypeId> parent_id);
 
   static AstType new_array(AstTypeId subtype, int size, AstTypeDb *db);
+  static AstType new_fn(std::string name, std::uint32_t overload,
+                        std::vector<AstNamedType> pre_args,
+                        std::vector<AstNamedType> su_args, AstTypeId ret,
+                        std::optional<AstTypeId> parent_struct, AstTypeDb *db);
 
   AstTypeId get_id() const { return id; }
 
@@ -80,8 +94,16 @@ public:
   std::string get_fullname() const;
   std::string get_name() const { return name; }
   void set_name(std::string name) { this->name = name; }
-  std::vector<AstTypeField> get_fields() const { return fields; }
-  void set_fields(std::vector<AstTypeField> fields) { this->fields = fields; }
+  std::vector<AstNamedType> get_fields() const { return fields; }
+  void set_fields(std::vector<AstNamedType> fields) { this->fields = fields; }
+
+  std::vector<AstNamedType> get_pre_args() const { return pre_args; }
+  std::vector<AstNamedType> get_su_args() const { return su_args; }
+  bool is_varadic() const {
+    return su_args.size() > 0 && su_args.back().is_varadic;
+  }
+  AstTypeId get_return() const { return ret_type; }
+  std::uint32_t get_overload() const { return overload; }
 
   bool operator==(const AstType &rhs) const { return id == rhs.id; }
 
@@ -97,7 +119,7 @@ public:
   std::expected<const AstType *, std::string>
   get_field_type(AstTypeId id) const;
 
-  std::expected<const AstTypeField *, std::string>
+  std::expected<const AstNamedType *, std::string>
   get_field_by_idx(int idx) const {
     if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
@@ -108,7 +130,7 @@ public:
     return &fields[idx];
   }
 
-  std::expected<const AstTypeField *, std::string>
+  std::expected<const AstNamedType *, std::string>
   get_field_by_name(std::string name) const {
     if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
@@ -121,6 +143,23 @@ public:
     return std::unexpected(
         std::format("no field '{}' found in type '{}'", name, get_name()));
   }
+
+  // TODO: No idea how to get the overload from this
+  /* std::expected<const AstNamedType *, std::string> */
+  /* get_method_by_name(std::string name) const { */
+  /*   if (!is_struct() && !is_enum()) */
+  /*     return std::unexpected("trying to get field from a non-struct type");
+   */
+  /**/
+  /*   for (auto &method : methods) { */
+  /*     if (method.name == name) */
+  /*       return &method; */
+  /*   } */
+  /**/
+  /*   return std::unexpected( */
+  /*       std::format("no field '{}' found in type '{}'", name, get_name()));
+   */
+  /* } */
 
   std::expected<int, std::string>
   get_field_index_by_name(std::string name) const {
@@ -138,7 +177,7 @@ public:
         std::format("no field '{}' found in type '{}'", name, get_name()));
   }
 
-  std::expected<const AstTypeField *, std::string>
+  std::expected<const AstNamedType *, std::string>
   get_field(AstTypeId id) const {
     if (!is_struct() && !is_enum())
       return std::unexpected("trying to get field from a non-struct type");
@@ -191,14 +230,18 @@ public:
     add_type(RAW_STRING_TYPE);
   }
 
-  AstTypeId new_struct(std::string name, std::vector<AstTypeField> fields,
+  AstTypeId new_struct(std::string name, std::vector<AstNamedType> fields,
                        std::optional<AstTypeId> parent_id);
 
-  AstTypeId new_enum(std::string name, std::vector<AstTypeField> fields,
+  AstTypeId new_enum(std::string name, std::vector<AstNamedType> fields,
                      std::optional<AstTypeId> parent_id);
 
   AstTypeId new_ref(AstTypeId subtype);
   AstTypeId new_array(AstTypeId subtype, int size);
+  AstTypeId new_fn(std::string name, std::uint32_t overload,
+                   std::vector<AstNamedType> pre_args,
+                   std::vector<AstNamedType> su_args, AstTypeId ret,
+                   std::optional<AstTypeId> parent_struct);
 
   std::optional<AstTypeId> get_id_by_name(std::string name);
   std::optional<const AstType *> get_type_by_name(std::string name);

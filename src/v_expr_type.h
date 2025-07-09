@@ -81,10 +81,13 @@ struct AstExprTypeVisitor {
   AstTypeId operator()(uptr<MemberAccesorExprAst> &node) const {
     auto base_type_id = std::visit(*this, node->base);
     auto base_type = ctx->type_db.get_type(base_type_id).value();
-    auto member_type = base_type->get_field_by_name(node->member);
-    if (!member_type)
-      throw "no member found on type";
-    return member_type.value()->type;
+    auto field_type = base_type->get_field_by_name(node->member);
+    if (field_type)
+      return field_type.value()->type;
+    /* auto method_type = base_type->get_method_by_name(node->member); */
+    /* if (method_type) */
+    /*   return method_type.value()->type; */
+    throw "no member found on type";
   }
 
   AstTypeId operator()(uptr<VarExprAst> &node) const {
@@ -101,9 +104,10 @@ struct AstExprTypeVisitor {
 
   // Expressions
   AstTypeId operator()(uptr<CallExprAst> &node) const {
-    auto overloads = ctx->get_overloads(node->fn_name);
+    auto _ty = ctx->type_db.get_type(node->fn_id).value();
+    auto overloads = ctx->get_overloads(_ty->get_name());
     if (!overloads)
-      throw "no overloads found";
+      throw std::runtime_error("no overloads found");
 
     std::vector<AstTypeId> prefix_types;
     for (auto &pre : node->prefix_args) {
@@ -114,11 +118,13 @@ struct AstExprTypeVisitor {
       suffix_types.push_back(std::visit(*this, suf));
     }
 
-    auto fn = overloads.value()->get_fn(prefix_types, suffix_types);
+    auto fn =
+        overloads.value()->get_fn(&ctx->type_db, prefix_types, suffix_types);
     if (!fn)
-      throw "no fn found in overloads";
+      throw std::runtime_error("no fn found in overloads");
 
-    return std::get<1>(*fn)->ret_type;
+    auto fn_ty = std::get<1>(*fn);
+    return ctx->type_db.get_type(fn_ty).value()->get_return();
   }
 
   AstTypeId operator()(uptr<BodyExprAst> &_) const {

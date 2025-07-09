@@ -144,25 +144,28 @@ struct ParserError {
 
   static ParserError no_overload_call_matched(Token curr, AstTypeDb *type_db,
                                               OverloadFnGroup *group) {
+    auto fn_ty = type_db->get_type(group->fns[0]).value();
     std::string msg = std::format("No overload found for function '{}' with "
                                   "the given arguments. Available overloads:\n",
-                                  group->fns[0]->name);
+                                  fn_ty->get_name());
+
     for (auto &fn : group->fns) {
       msg += "\t (";
-      for (auto &arg : fn->prefix_args) {
+      fn_ty = type_db->get_type(fn).value();
+      for (auto &arg : fn_ty->get_pre_args()) {
         auto arg_type = msg +=
-            std::format("{}: {}", arg->name,
-                        type_db->get_type(arg->type).value()->get_name());
+            std::format("{}: {}", arg.name,
+                        type_db->get_type(arg.type).value()->get_name());
       }
-      if (fn->prefix_args.size() > 0)
+      if (fn_ty->get_pre_args().size() > 0)
         msg += " ";
       msg += "|";
-      if (fn->suffix_args.size() > 0)
+      if (fn_ty->get_su_args().size() > 0)
         msg += " ";
-      for (auto &arg : fn->suffix_args) {
+      for (auto &arg : fn_ty->get_su_args()) {
         auto arg_type = msg +=
-            std::format("{}: {}", arg->name,
-                        type_db->get_type(arg->type).value()->get_name());
+            std::format("{}: {}", arg.name,
+                        type_db->get_type(arg.type).value()->get_name());
       }
       msg += ")\n";
     }
@@ -368,7 +371,7 @@ public:
       return _enum;
     }
 
-    if (auto fn = parse_fn_def(offset)) {
+    if (auto fn = parse_fn_def(std::nullopt, offset)) {
       return fn;
     }
 
@@ -404,9 +407,26 @@ public:
       asttype_stack.push_back(s_id);
 
       // Get struct fields
+      std::vector<uptr<FnDefAst>> methods;
       std::vector<uptr<ArgDefAst>> fields;
-      std::vector<AstTypeField> field_types;
+      std::vector<AstNamedType> field_types;
       while (!check_tokens({RBrace}, offset)) {
+        auto fn = parse_fn_def(s_id, offset);
+        if (fn.is_err()) {
+          errors.push_back(fn.get_err());
+          panic_until(RBrace, offset);
+          break;
+        }
+
+        if (fn.is_ok()) {
+          // Skip new lines
+          while (check_tokens({NewLine}, offset))
+            offset += 1;
+
+          methods.push_back(std::move(fn.get_res()));
+          continue;
+        }
+
         auto field = parse_arg_def(offset);
         if (field.is_err()) {
           errors.push_back(field.get_err());
@@ -414,21 +434,24 @@ public:
           break;
         }
 
-        if (!check_tokens({Comma}, offset)) {
-          errors.push_back(
-              ParserError::unexpected_token(get_tk(offset), Comma));
-          panic_until(RBrace, offset);
-          break;
-        }
-        offset += 1;
-
-        // Skip new lines
-        while (check_tokens({NewLine}, offset))
+        if (field.is_ok()) {
+          if (!check_tokens({Comma}, offset)) {
+            errors.push_back(
+                ParserError::unexpected_token(get_tk(offset), Comma));
+            panic_until(RBrace, offset);
+            break;
+          }
           offset += 1;
 
-        field_types.push_back(
-            AstTypeField{field.get_res()->name, field.get_res()->type});
-        fields.push_back(std::move(field.get_res()));
+          // Skip new lines
+          while (check_tokens({NewLine}, offset))
+            offset += 1;
+
+          field_types.push_back(
+              AstNamedType{field.get_res()->name, field.get_res()->type});
+          fields.push_back(std::move(field.get_res()));
+          continue;
+        }
       }
       offset += 1;
 
@@ -438,7 +461,8 @@ public:
       s_type->set_fields(field_types);
       if (asttype_stack.size() > 0)
         s_type->set_parent_id(asttype_stack.back());
-      auto s = std::make_unique<StructDefAst>(s_id, std::move(fields));
+      auto s = std::make_unique<StructDefAst>(s_id, std::move(fields),
+                                              std::move(methods));
       ctx->define_struct(struct_name, s.get());
       return s;
     }
@@ -475,7 +499,8 @@ public:
     return std::make_unique<MetaDefExprAst>(meta_tk.value, std::move(args));
   }
 
-  ParserResult<uptr<FnDefAst>> parse_fn_def(int &offset) {
+  ParserResult<uptr<FnDefAst>>
+  parse_fn_def(std::optional<AstTypeId> parent_struct, int &offset) {
     // Skip all new lines
     while (check_tokens({NewLine}, offset))
       offset += 1;
@@ -491,7 +516,7 @@ public:
 
     auto fn_id = get_tk(offset);
     offset += 4;
-    auto header_r = parse_fn_header(fn_id.value, offset);
+    auto header_r = parse_fn_header(fn_id.value, parent_struct, offset);
     if (!header_r)
       return header_r.get_err();
 
@@ -510,7 +535,7 @@ public:
     }
 
     // Register the fn early in case it's recursive
-    ctx->define_fn(header->name, header);
+    auto fn_ty = ctx->define_fn(header->name, header, parent_struct);
 
     if (!is_external) {
       auto body_r = parse_fn_body(offset);
@@ -526,7 +551,8 @@ public:
                                          std::move(body));
 
     // fn header moved, needs to be defined again
-    ctx->define_fn(fn->fn_header->name, fn->fn_header.get());
+    /* ctx->define_fn(fn->fn_header->name, fn->fn_header.get(), parent_struct);
+     */
     return fn;
   }
 
@@ -581,7 +607,7 @@ public:
     asttype_stack.push_back(enum_id);
 
     // Get struct fields
-    std::vector<AstTypeField> field_types;
+    std::vector<AstNamedType> field_types;
     std::vector<AstStatement> field_stmts;
     while (!check_tokens({RBrace}, offset)) {
       // A enum variant without struct:
@@ -591,12 +617,12 @@ public:
 
         // Create a unit struct to represent enum variant.
         auto s_type = ctx->type_db.new_struct(
-            field, std::vector<AstTypeField>({}), enum_id);
+            field, std::vector<AstNamedType>({}), enum_id);
         auto s_vars = std::vector<uptr<ArgDefAst>>();
         auto s = std::make_unique<StructDefAst>(s_type, std::move(s_vars));
         ctx->define_struct(field, s.get());
 
-        field_types.push_back(AstTypeField{field, s_type});
+        field_types.push_back(AstNamedType{field, s_type});
         field_stmts.push_back(std::move(s));
       } else if (auto stmt = parse_file_statement(offset)) {
         // Convert the declared struct into another variant for the enum
@@ -611,7 +637,7 @@ public:
 
         auto stmt_type = ctx->type_db.get_type(stmt_type_id).value();
         field_types.push_back(
-            AstTypeField{stmt_type->get_name(), stmt_type_id});
+            AstNamedType{stmt_type->get_name(), stmt_type_id});
         field_stmts.push_back(std::move(stmt.get_res()));
 
       } else {
@@ -1098,6 +1124,8 @@ public:
     }
 
     for (auto fn : overloads.value()->fns) {
+      auto fn_ty = ctx->type_db.get_type(fn).value();
+
       // Consume the identifier
       auto tmp_offset = offset;
       tmp_offset += 1;
@@ -1106,11 +1134,11 @@ public:
       bool matched_args = true;
 
       // Prefixes
-      for (int i = 0;
-           i < (int)line_expressions.size() && i < (int)fn->prefix_args.size();
+      for (int i = 0; i < (int)line_expressions.size() &&
+                      i < (int)fn_ty->get_pre_args().size();
            i++) {
         if (std::visit(type_visitor, line_expressions[i]) !=
-            fn->prefix_args[i]->type) {
+            fn_ty->get_pre_args()[i].type) {
           matched_args = false;
           break;
         }
@@ -1126,7 +1154,7 @@ public:
 
       // TODO: At some point I need to fix this mess
       std::vector<AstExpression> suffix_args{};
-      if (fn->is_vararic()) {
+      if (fn_ty->is_varadic()) {
         int i = 0;
         while (true) {
           if (check_tokens({NewLine}, tmp_offset)) {
@@ -1137,9 +1165,10 @@ public:
           if (!expr)
             return expr.get_err();
 
-          if (!fn->is_vararic() && (i >= (int)fn->suffix_args.size() ||
-                                    std::visit(type_visitor, expr.get_res()) !=
-                                        fn->suffix_args[i]->type)) {
+          if (!fn_ty->is_varadic() &&
+              (i >= (int)fn_ty->get_su_args().size() ||
+               std::visit(type_visitor, expr.get_res()) !=
+                   fn_ty->get_su_args()[i].type)) {
             matched_args = false;
             break;
           }
@@ -1152,16 +1181,16 @@ public:
           continue;
 
       } else {
-        int expected_arg_count = fn->suffix_args.size();
+        int expected_arg_count = fn_ty->get_su_args().size();
         for (int i = 0; i < expected_arg_count; i++) {
           auto expr = parse_expr(tmp_offset);
           if (!expr)
             return expr.get_err();
 
-          if (i >= (int)fn->suffix_args.size() ||
-              (!fn->suffix_args[i]->is_varadic &&
+          if (i >= (int)fn_ty->get_su_args().size() ||
+              (!fn_ty->get_su_args()[i].is_varadic &&
                std::visit(type_visitor, expr.get_res()) !=
-                   fn->suffix_args[i]->type)) {
+                   fn_ty->get_su_args()[i].type)) {
             matched_args = false;
             break;
           }
@@ -1175,7 +1204,8 @@ public:
 
       LOG("call expr found");
       offset = tmp_offset;
-      return std::make_unique<CallExprAst>(fn->name, std::move(prefix_args),
+      return std::make_unique<CallExprAst>(fn_ty->get_fullname(), fn,
+                                           std::move(prefix_args),
                                            std::move(suffix_args));
     }
 
@@ -1338,7 +1368,8 @@ public:
   }
 
   ParserResult<std::unique_ptr<FnHeaderAst>>
-  parse_fn_header(std::string header_id, int &offset) {
+  parse_fn_header(std::string header_id, std::optional<AstTypeId> parent_struct,
+                  int &offset) {
     LOG("parsing fn header");
     auto ret_type = VOID_TYPE.get_id();
 
@@ -1348,7 +1379,7 @@ public:
 
     // Prev arguments
     LOG("prefix args:");
-    auto prefix = parse_fn_args(offset);
+    auto prefix = parse_fn_args(std::nullopt, offset);
     if (!prefix)
       return prefix.get_err();
 
@@ -1359,9 +1390,9 @@ public:
 
     // Next arguments
     LOG("suffix args:");
-    auto suffix = parse_fn_args(offset);
+    auto suffix = parse_fn_args(parent_struct, offset);
     if (!suffix)
-      return {};
+      return suffix.get_err();
 
     if (!check_tokens({RPar}, offset))
       return ParserError::unexpected_token(get_tk(offset), RPar);
@@ -1377,7 +1408,8 @@ public:
                                          std::move(suffix.get_res()));
   }
 
-  ParserResult<std::vector<uptr<ArgDefAst>>> parse_fn_args(int &offset) {
+  ParserResult<std::vector<uptr<ArgDefAst>>>
+  parse_fn_args(std::optional<AstTypeId> parent_struct, int &offset) {
     auto args = std::vector<uptr<ArgDefAst>>();
 
     // No arguments found
@@ -1385,7 +1417,15 @@ public:
       return args;
 
     while (true) {
-      auto arg = parse_arg_def(offset);
+      ParserResult<uptr<ArgDefAst>> arg;
+      if (parent_struct.has_value() && check_tokens({Id}, offset) &&
+          get_tk(offset).value == "self") {
+        arg = std::make_unique<ArgDefAst>(
+            "self", ctx->type_db.new_ref(*parent_struct), false);
+        offset += 1;
+      } else
+        arg = parse_arg_def(offset);
+
       if (!arg)
         return ParserError::argument_expected(get_tk(offset));
 

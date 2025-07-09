@@ -1,5 +1,8 @@
 #include "types.h"
+#include <cstdint>
 #include <format>
+#include <string>
+#include <vector>
 
 bool AstType::is_void() const { return *this == VOID_TYPE; }
 
@@ -13,7 +16,7 @@ AstType AstType::new_primitive(std::string name, AstTypeDb *db) {
   return type;
 }
 
-AstType AstType::new_struct(std::string name, std::vector<AstTypeField> fields,
+AstType AstType::new_struct(std::string name, std::vector<AstNamedType> fields,
                             AstTypeDb *db, std::optional<AstTypeId> parent_id) {
   auto type = AstType{};
   type.kind = AstTypeKind::Struct;
@@ -24,7 +27,7 @@ AstType AstType::new_struct(std::string name, std::vector<AstTypeField> fields,
   type.db = db;
   return type;
 }
-AstType AstType::new_enum(std::string name, std::vector<AstTypeField> fields,
+AstType AstType::new_enum(std::string name, std::vector<AstNamedType> fields,
                           AstTypeDb *db, std::optional<AstTypeId> parent_id) {
   auto type = AstType{};
   type.kind = AstTypeKind::Enum;
@@ -37,7 +40,7 @@ AstType AstType::new_enum(std::string name, std::vector<AstTypeField> fields,
 }
 
 AstTypeId AstTypeDb::new_struct(std::string name,
-                                std::vector<AstTypeField> fields,
+                                std::vector<AstNamedType> fields,
                                 std::optional<AstTypeId> parent_id) {
   auto type = AstType::new_struct(name, fields, this, parent_id);
   types.insert({type.get_id(), type});
@@ -45,7 +48,7 @@ AstTypeId AstTypeDb::new_struct(std::string name,
 }
 
 AstTypeId AstTypeDb::new_enum(std::string name,
-                              std::vector<AstTypeField> fields,
+                              std::vector<AstNamedType> fields,
                               std::optional<AstTypeId> parent_id) {
   auto type = AstType::new_enum(name, fields, this, parent_id);
   types.insert({type.get_id(), type});
@@ -68,8 +71,11 @@ std::string AstType::get_fullname() const {
   auto fullname = get_name();
   if (parent.has_value())
     fullname = db->get_type(*parent).value()->get_fullname() + "_" + fullname;
+  if (overload > 0)
+    fullname += std::format("_{}", overload);
   return fullname;
 }
+
 std::optional<AstTypeId> AstTypeDb::get_id_by_name(std::string name) {
   for (auto &pair : types) {
     if (pair.second.get_name() == name)
@@ -111,7 +117,7 @@ AstType AstType::new_reference(AstTypeId subtype, AstTypeDb *db) {
   auto type = AstType{};
   type.db = db;
   type.kind = AstTypeKind::Reference;
-  type.name = "#ptr_" + subtype_.value()->get_name();
+  type.name = "^" + subtype_.value()->get_name();
   type.id = std::hash<std::string>{}(type.name);
   type.parent = {};
   type.subtype = subtype;
@@ -123,7 +129,7 @@ AstType AstType::new_array(AstTypeId subtype, int size, AstTypeDb *db) {
   auto type = AstType{};
   type.db = db;
   type.kind = AstTypeKind::Array;
-  type.name = std::format("#array[{}]_", size) + subtype_.value()->get_name();
+  type.name = std::format("#{}[{}]", subtype_.value()->get_name(), size);
   type.id = std::hash<std::string>{}(type.name);
   type.parent = {};
   type.subtype = subtype;
@@ -139,6 +145,33 @@ AstTypeId AstTypeDb::new_ref(AstTypeId subtype) {
 
 AstTypeId AstTypeDb::new_array(AstTypeId subtype, int size) {
   auto type = AstType::new_array(subtype, size, this);
+  types.insert({type.get_id(), type});
+  return type.get_id();
+}
+
+AstType AstType::new_fn(std::string name, std::uint32_t overload,
+                        std::vector<AstNamedType> pre_args,
+                        std::vector<AstNamedType> su_args, AstTypeId ret,
+                        std::optional<AstTypeId> parent_struct, AstTypeDb *db) {
+  auto type = AstType{};
+  type.db = db;
+  type.kind = AstTypeKind::Function;
+  type.name = name;
+  type.overload = overload;
+  type.parent = parent_struct;
+  type.ret_type = ret;
+  type.pre_args = pre_args;
+  type.su_args = su_args;
+  type.id = std::hash<std::string>{}(type.get_fullname());
+  return type;
+}
+
+AstTypeId AstTypeDb::new_fn(std::string name, std::uint32_t overload,
+                            std::vector<AstNamedType> pre_args,
+                            std::vector<AstNamedType> su_args, AstTypeId ret,
+                            std::optional<AstTypeId> parent_struct) {
+  auto type = AstType::new_fn(name, overload, pre_args, su_args, ret,
+                              parent_struct, this);
   types.insert({type.get_id(), type});
   return type.get_id();
 }

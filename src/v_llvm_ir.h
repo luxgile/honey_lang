@@ -129,12 +129,11 @@ struct LlvmIrGenAstVisitor {
     if (!fn_overloads)
       return std::unexpected("no overloads found for fn header");
 
-    auto mangled_name = fn_overloads.value()->get_mangled_name(&header);
-    if (!mangled_name)
-      return std::unexpected("unexpected issue generating mangled name");
-
+    auto fn_id =
+        std::get<1>(*fn_overloads.value()->get_fn(&ctx->type_db, &header));
+    auto fn_ty = ctx->type_db.get_type(fn_id).value();
     auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
-                                     *mangled_name, module.get());
+                                     fn_ty->get_fullname(), module.get());
 
     int i = 0;
     for (auto &arg : header.prefix_args) {
@@ -703,18 +702,7 @@ struct LlvmIrGenAstVisitor {
   // Expressions
   std::expected<llvm::Value *, std::string>
   visit_expr(GenCtx *gctx, uptr<CallExprAst> &node) {
-    auto overloads = ctx->get_overloads(node->fn_name);
-    if (!overloads)
-      return std::unexpected("no overloads found for call");
-
-    AstExprTypeVisitor visitor = {ctx};
-    auto mangled_name =
-        overloads.value()->get_mangled_name(node.get(), &visitor);
-
-    if (!mangled_name)
-      return std::unexpected("issue getting mangled name for call");
-
-    auto callee_fn = module->getFunction(*mangled_name);
+    auto callee_fn = module->getFunction(node->fn_name);
 
     if (!callee_fn)
       return std::unexpected("tried to call unknown fn");
