@@ -91,6 +91,7 @@ public:
   bool is_unit() const { return is_struct() && fields.size() == 0; }
   bool is_enum() const { return kind == AstTypeKind::Enum; }
   bool is_ref() const { return kind == AstTypeKind::Reference; }
+  bool is_array() const { return kind == AstTypeKind::Array; }
   bool is_enum_member() const;
 
   std::expected<const AstType *, std::string>

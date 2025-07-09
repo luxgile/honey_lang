@@ -122,7 +122,7 @@ AstType AstType::new_array(AstTypeId subtype, int size, AstTypeDb *db) {
   auto subtype_ = db->get_type(subtype);
   auto type = AstType{};
   type.db = db;
-  type.kind = AstTypeKind::Reference;
+  type.kind = AstTypeKind::Array;
   type.name = std::format("#array[{}]_", size) + subtype_.value()->get_name();
   type.id = std::hash<std::string>{}(type.name);
   type.parent = {};

@@ -112,10 +112,12 @@ main :: fn (|) {
   array := [8.0, 3.0, 2.0, 1.0, 9.0, 10.0, 9.0]
   i = 0
   average := 0.0
-#  loop i < 7 {
-#    average = average + array[i]
-#    i = i + 1
-#  }
+  loop i < 7 {
+    element := array[i]
+    average = average + element
+    printf "8: array[%d] %f\n" i element
+    i = i + 1
+  }
   average = average / 7.0
-  printf "8: array average is %d\n" average
+  printf "8: array average is %f\n" average
 }

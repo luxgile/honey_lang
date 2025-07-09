@@ -5,6 +5,7 @@
 #include "types.h"
 #include <functional>
 #include <print>
+#include <stdexcept>
 #include <variant>
 
 struct AstExprTypeVisitor {
@@ -44,8 +45,15 @@ struct AstExprTypeVisitor {
     return RAW_STRING_TYPE.get_id();
   }
 
-  AstTypeId operator()(uptr<ArrayExprAst> &node) const {
-    return node->type;
+  AstTypeId operator()(uptr<ArrayExprAst> &node) const { return node->type; }
+
+  AstTypeId operator()(uptr<IndexExprAst> &node) const {
+    auto base_type_id = std::visit(*this, node->base);
+    auto base_type = ctx->type_db.get_type(base_type_id).value();
+    if (!base_type->is_array())
+      throw std::runtime_error(
+          "trying to index an expression that's not an array.");
+    return base_type->get_subtype();
   }
 
   AstTypeId operator()(uptr<NoOpAst> &_) const { return VOID_TYPE.get_id(); }

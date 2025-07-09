@@ -17,7 +17,8 @@ struct PrettyPrintAstVisitor {
 
   std::string get_type_name(AstTypeId id) {
     auto type = ctx->type_db.get_type(id);
-    if(!type) return "?";
+    if (!type)
+      return "?";
     return type.value()->get_name();
   }
 
@@ -74,6 +75,8 @@ struct PrettyPrintAstVisitor {
   void operator()(uptr<DerefExprAst> &node);
 
   void operator()(uptr<ArrayExprAst> &node);
+
+  void operator()(uptr<IndexExprAst> &node);
 
   void operator()(uptr<NoOpAst> &node) {}
 };

@@ -2,6 +2,7 @@
 
 #include "ast.h"
 #include "types.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
 #include <map>
@@ -125,6 +126,11 @@ public:
 
     if (ty.value()->is_ref())
       return ptr_llvm_ty;
+
+    if (ty.value()->is_array()) {
+      auto base_type = get_llvm_type(ty.value()->get_subtype()).value();
+      return llvm::ArrayType::get(base_type, ty.value()->get_array_size());
+    }
 
     auto type = llvm_types[id];
     if (type == nullptr)

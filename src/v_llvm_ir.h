@@ -389,6 +389,32 @@ struct LlvmIrGenAstVisitor {
   }
 
   std::expected<llvm::Value *, std::string>
+  visit_expr(GenCtx *gctx, uptr<IndexExprAst> &node) {
+    GenCtx _gctx = *gctx;
+    _gctx.rvalue_mode =
+        false; // Make sure we get the array pointer rather than the value
+    auto base = build_expr(&_gctx, node->base);
+    if (!base)
+      return std::unexpected(base.error());
+
+    auto base_type = AstExprTypeVisitor::get_type_id(ctx, node->base);
+    auto base_type_llvm = ctx->get_llvm_type(base_type).value();
+
+    auto el_type = AstExprTypeVisitor::get_type_id(ctx, node);
+    auto el_type_llvm = ctx->get_llvm_type(el_type).value();
+
+    auto index = build_expr(gctx, node->index);
+    if (!index)
+      return std::unexpected(index.error());
+
+    auto el_ptr = builder->CreateGEP(base_type_llvm, *base,
+                                     {builder->getInt64(0), *index});
+    if (gctx->rvalue_mode)
+      return builder->CreateLoad(el_type_llvm, el_ptr);
+    return el_ptr;
+  }
+
+  std::expected<llvm::Value *, std::string>
   visit_expr(GenCtx *gctx, uptr<StatementExprAst> &node) {
     return build_expr(gctx, node->expr);
   }
@@ -616,16 +642,17 @@ struct LlvmIrGenAstVisitor {
     auto array = builder->CreateAlloca(llvm_array_type, nullptr);
 
     // Populate array with elements.
+    auto zero = builder->getInt64(0);
     for (int i = 0; i < (int)node->elements.size(); i += 1) {
       auto el_val = build_expr(gctx, node->elements[i]);
       if (!el_val)
         return std::unexpected(el_val.error());
       auto idx = builder->getInt64(i);
-      auto el_ptr = builder->CreateGEP(llvm_array_type, array, idx);
+      auto el_ptr = builder->CreateGEP(llvm_array_type, array, {zero, idx});
       builder->CreateStore(*el_val, el_ptr);
     }
 
-    return array;
+    return builder->CreateLoad(llvm_array_type, array);
   }
 
   std::expected<llvm::Value *, std::string>
@@ -825,6 +852,11 @@ struct LlvmStoreAllocaVisitor {
 
   std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
                                               uptr<IntExprAst> &node) {
+    return simple_alloca(gctx, node);
+  }
+
+  std::expected<void, std::string> visit_expr(LlvmIrGenAstVisitor::GenCtx *gctx,
+                                              uptr<IndexExprAst> &node) {
     return simple_alloca(gctx, node);
   }
 

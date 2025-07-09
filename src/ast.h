@@ -11,6 +11,7 @@
 #include <vector>
 
 struct ArrayExprAst;
+struct IndexExprAst;
 struct IntExprAst;
 struct FloatExprAst;
 struct StringExprAst;
@@ -34,13 +35,14 @@ struct DerefExprAst;
 struct NoOpAst;
 
 using AstExpression =
-    std::variant<uptr<ArrayExprAst>, uptr<IntExprAst>, uptr<FloatExprAst>,
-                 uptr<StringExprAst>, uptr<RefExprAst>, uptr<DerefExprAst>,
-                 uptr<BoolExprAst>, uptr<CallExprAst>, uptr<BodyExprAst>,
-                 uptr<VarExprAst>, uptr<MetaDefExprAst>, uptr<StatementExprAst>,
-                 uptr<GroupExprAst>, uptr<IfExprAst>, uptr<ForExprAst>,
-                 uptr<StructExprAst>, uptr<MemberAccesorExprAst>,
-                 uptr<EnumExprAst>, uptr<SingleMatchExprAst>, uptr<NoOpAst>>;
+    std::variant<uptr<ArrayExprAst>, uptr<IndexExprAst>, uptr<IntExprAst>,
+                 uptr<FloatExprAst>, uptr<StringExprAst>, uptr<RefExprAst>,
+                 uptr<DerefExprAst>, uptr<BoolExprAst>, uptr<CallExprAst>,
+                 uptr<BodyExprAst>, uptr<VarExprAst>, uptr<MetaDefExprAst>,
+                 uptr<StatementExprAst>, uptr<GroupExprAst>, uptr<IfExprAst>,
+                 uptr<ForExprAst>, uptr<StructExprAst>,
+                 uptr<MemberAccesorExprAst>, uptr<EnumExprAst>,
+                 uptr<SingleMatchExprAst>, uptr<NoOpAst>>;
 
 struct ArgDefAst;
 struct FnHeaderAst;
@@ -169,6 +171,11 @@ struct ArgDefAst {
 struct ArrayExprAst {
   AstTypeId type;
   std::vector<AstExpression> elements;
+};
+
+struct IndexExprAst {
+  AstExpression base;
+  AstExpression index;
 };
 
 struct IntExprAst {

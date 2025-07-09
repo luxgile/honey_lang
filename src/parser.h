@@ -773,6 +773,14 @@ public:
     if (inner_expr.is_err())
       return inner_expr.get_err();
 
+    // Check if indexing expression
+    if (auto index_expr = parse_index_expr(offset, inner_expr.get_res())) {
+      return index_expr;
+    } else if (index_expr.is_err()) {
+      return index_expr.get_err();
+    }
+
+    // Check if accessing expression
     if (auto mem_acc =
             parser_member_access_expr(offset, inner_expr.get_res())) {
       AstExpression _inner_expr = std::move(mem_acc.get_res());
@@ -1198,6 +1206,20 @@ public:
     LOG("struct expr found");
     return std::make_unique<StructExprAst>(s.value()->type,
                                            std::move(field_assigns.get_res()));
+  }
+
+  ParserResult<std::unique_ptr<IndexExprAst>>
+  parse_index_expr(int &offset, AstExpression &base) {
+    if (!check_tokens({LBracks}, offset))
+      return {};
+    offset += 1;
+
+    auto index = consume_expressions(offset, {RBracks});
+    if (!index)
+      return index.get_err();
+
+    return std::make_unique<IndexExprAst>(std::move(base),
+                                          std::move(index.get_res()));
   }
 
   ParserResult<std::unique_ptr<ArrayExprAst>> parse_array_expr(int &offset) {

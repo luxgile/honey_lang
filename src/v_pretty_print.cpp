@@ -247,3 +247,11 @@ void PrettyPrintAstVisitor::operator()(uptr<ArrayExprAst> &node) {
   }
   std::print("]");
 }
+
+void PrettyPrintAstVisitor::operator()(uptr<IndexExprAst> &node) {
+  std::visit(*this, node->base);
+  std::print("[");
+  std::visit(*this, node->index);
+  std::print("]");
+}
+
