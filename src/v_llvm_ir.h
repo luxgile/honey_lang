@@ -597,7 +597,7 @@ struct LlvmIrGenAstVisitor {
     // Emit else block
     std::expected<llvm::Value *, std::string> else_expr = nullptr;
     if (node->else_expr) {
-      fn->insert(fn->end(), else_bb);
+      // fn->insert(fn->end(), else_bb);
       builder->SetInsertPoint(else_bb);
 
       else_expr = build_expr(gctx, *node->else_expr);

@@ -98,6 +98,12 @@ main :: fn (|) {
     printf "4: if called!\n"
   }
 
+  if false {
+    printf "4: cannot be printed\n"
+  } else {
+    printf "4: else called!\n"
+  }
+
   i := 0
   loop i < 10 {
     printf "5: loop %d\n" i
