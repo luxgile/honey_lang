@@ -63,6 +63,8 @@ struct LlvmIrGenAstVisitor {
     bool var_lassign_mode = false;
     bool get_ref_mode = false;
 
+    std::optional<llvm::Value *> method_parent;
+
     std::optional<DefinedVariable *> get_defined_var(std::string name) {
       if (defined_variables.find(name) == defined_variables.end())
         return std::nullopt;
@@ -213,7 +215,8 @@ struct LlvmIrGenAstVisitor {
     return {};
   }
 
-  std::expected<void, std::string> build_struct(StructDefAst &node) {
+  std::expected<void, std::string> build_struct(GenCtx *gctx,
+                                                StructDefAst &node) {
     std::vector<llvm::Type *> field_types;
     for (auto &field : node.fields) {
       auto type = ctx->get_llvm_type(field->type);
@@ -226,6 +229,12 @@ struct LlvmIrGenAstVisitor {
     auto struct_type =
         llvm::StructType::create(*llvm_ctx, field_types, struct_name);
     ctx->define_llvm_type(node.type, struct_type);
+
+    for (auto &method : node.methods) {
+      auto fn = build_fn(gctx, *method.get());
+      if (!fn)
+        return std::unexpected(fn.error());
+    }
 
     return {};
   }
@@ -296,7 +305,7 @@ struct LlvmIrGenAstVisitor {
     }
 
     if (std::holds_alternative<uptr<StructDefAst>>(statement)) {
-      auto stc = build_struct(*std::get<uptr<StructDefAst>>(statement));
+      auto stc = build_struct(gctx, *std::get<uptr<StructDefAst>>(statement));
       if (!stc)
         return std::unexpected(stc.error());
       return nullptr;
@@ -674,6 +683,11 @@ struct LlvmIrGenAstVisitor {
     AstExprTypeVisitor type_visitor = {ctx};
     auto base_expr_type_id = std::visit(type_visitor, node->base);
     auto base_expr_type = ctx->type_db.get_type(base_expr_type_id).value();
+    if (base_expr_type->is_ref()) {
+      base_expr_type_id = base_expr_type->get_subtype();
+      base_expr_type =
+          ctx->type_db.get_type(base_expr_type->get_subtype()).value();
+    }
 
     // Found a field:
     if (node->field) {
@@ -700,6 +714,16 @@ struct LlvmIrGenAstVisitor {
                                  node->field.value()->name);
     }
 
+    // Found a method:
+    if (node->method) {
+      auto ref_expr = std::make_unique<RefExprAst>(std::move(node->base));
+      auto base_ref_val = visit_expr(gctx, ref_expr);
+      if (!base_ref_val)
+        return std::unexpected(base_ref_val.error());
+      gctx->method_parent = *base_ref_val;
+      return visit_expr(gctx, *node->method);
+    }
+
     return std::unexpected(std::format("no member found for type '{}'",
                                        base_expr_type->get_name()));
   }
@@ -707,14 +731,18 @@ struct LlvmIrGenAstVisitor {
   // Expressions
   std::expected<llvm::Value *, std::string>
   visit_expr(GenCtx *gctx, uptr<CallExprAst> &node) {
-    auto callee_fn = module->getFunction(node->fn_name);
+    auto fn_ty = ctx->type_db.get_type(node->fn_id).value();
+
+    auto callee_fn = module->getFunction(fn_ty->get_fullname());
 
     if (!callee_fn)
       return std::unexpected("tried to call unknown fn");
 
-    if (callee_fn->arg_size() !=
-            node->prefix_args.size() + node->suffix_args.size() &&
-        !callee_fn->isVarArg())
+    auto arg_number = node->prefix_args.size() + node->suffix_args.size();
+    if (gctx->method_parent)
+      arg_number += 1;
+
+    if (callee_fn->arg_size() != arg_number && !callee_fn->isVarArg())
       return std::unexpected("incorrect number of arguments used.");
 
     std::vector<llvm::Value *> args;
@@ -724,6 +752,11 @@ struct LlvmIrGenAstVisitor {
       if (!arg_val)
         return std::unexpected(arg_val.error());
       args.push_back(*arg_val);
+    }
+
+    if (gctx->method_parent) {
+      args.push_back(*gctx->method_parent);
+      gctx->method_parent.reset();
     }
 
     for (auto &arg : node->suffix_args) {

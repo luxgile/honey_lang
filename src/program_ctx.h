@@ -11,77 +11,6 @@
 #include <optional>
 #include <string>
 
-struct AstExprTypeVisitor;
-
-/// Holds a group of functions with the same name but different definitions
-// struct OverloadFnGroup {
-//   std::vector<AstTypeId> fns;
-//
-//   bool eq_arg_types(std::vector<AstNamedType> lhs, std::vector<AstTypeId>
-//   rhs,
-//                     bool is_varadic = false) {
-//     if (lhs.size() != rhs.size() && !is_varadic)
-//       return false;
-//
-//     for (int i = 0; i < (int)lhs.size(); i++) {
-//       if (!lhs[i].is_varadic && lhs[i].type != rhs[i])
-//         return false;
-//     }
-//
-//     return true;
-//   }
-//
-//   /// Returns the fn and the index it was found.
-//   std::optional<std::tuple<int, AstTypeId>> get_fn(AstTypeDb *db,
-//                                                    std::vector<AstTypeId>
-//                                                    pre,
-//                                                    std::vector<AstTypeId>
-//                                                    suf) {
-//     for (int i = 0; i < (int)fns.size(); i++) {
-//       auto fn = fns[i];
-//       auto fn_ty = db->get_type(fn).value();
-//
-//       if (!eq_arg_types(fn_ty->get_pre_args(), pre))
-//         continue;
-//
-//       if (!eq_arg_types(fn_ty->get_su_args(), suf, fn_ty->is_varadic()))
-//         continue;
-//
-//       return std::tuple(i, fn);
-//     }
-//     return {};
-//   }
-//
-//   /// Returns the fn and the index it was found.
-//   std::optional<std::tuple<int, AstTypeId>> get_fn(AstTypeDb *db,
-//                                                    FnHeaderAst *eq_fn) {
-//     if (fns.size() == 0)
-//       return std::nullopt;
-//
-//     auto fn_ty = db->get_type(fns[0]).value();
-//     if (fn_ty->get_name() != eq_fn->name)
-//       return std::nullopt;
-//
-//     std::vector<AstTypeId> prefix_args;
-//     for (auto &prefix : eq_fn->prefix_args) {
-//       prefix_args.push_back(prefix->type);
-//     }
-//
-//     std::vector<AstTypeId> suffix_args;
-//     for (auto &suffix : eq_fn->suffix_args) {
-//       suffix_args.push_back(suffix->type);
-//     }
-//
-//     return get_fn(db, prefix_args, suffix_args);
-//   }
-//
-//   /* std::optional<std::string> get_mangled_name(FnHeaderAst *fn); */
-//   /**/
-//   /* std::optional<std::string> get_mangled_name(CallExprAst *call, */
-//   /*                                             AstExprTypeVisitor
-//    * *type_visitor); */
-// };
-
 struct ProgramCtx {
 private:
   /* std::map<std::string, uptr<OverloadFnGroup>> fns; */
@@ -143,10 +72,9 @@ public:
       return llvm::ArrayType::get(base_type, ty.value()->get_array_size());
     }
 
-    auto type = llvm_types[id];
-    if (type == nullptr)
+    if (!llvm_types.contains(id))
       return std::nullopt;
-    return type;
+    return llvm_types[id];
   }
 
   void define_enum(std::string name, EnumDefAst *value) { enums[name] = value; }

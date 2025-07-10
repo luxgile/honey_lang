@@ -7,15 +7,17 @@ Person :: struct {
 
   get_gender :: fn(|self) RawString {
     if self.gender {
-       "male"
+      "male"
     } else {
-       "female"
+      "female"
     }
   }
 }
 
 main :: fn (|) {
   person := Person .{ .name = "El Pepe", .gender = true }
-  printf "I'm %s\n" person.name
-  printf "%s\n" person.get_gender
+  printf "I'm %s and I'm a %s\n" person.name person.get_gender
+
+  person := Person .{ .name = "Michi", .gender = false }
+  printf "I'm %s and I'm a %s\n" person.name person.get_gender
 }

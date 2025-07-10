@@ -281,6 +281,7 @@ struct BodyExprAst {
 
 /// Function declaration 'main := | | {}'
 struct FnDefAst {
+  AstTypeId id;
   uptr<FnHeaderAst> fn_header;
   std::optional<AstExpression> body;
 };

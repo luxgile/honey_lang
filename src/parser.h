@@ -413,11 +413,15 @@ public:
       auto s_id = ctx->type_db.new_struct(struct_name, {}, {});
       asttype_stack.push_back(s_id);
 
+      auto s_type = ctx->type_db.get_type_mut(s_id).value();
+
       // Get struct fields
       std::vector<uptr<FnDefAst>> methods;
+      std::vector<AstTypeId> method_types;
       std::vector<uptr<ArgDefAst>> fields;
       std::vector<AstNamedType> field_types;
       while (!check_tokens({RBrace}, offset)) {
+        // Try parse method
         auto fn = parse_fn_def(s_id, offset);
         if (fn.is_err()) {
           errors.push_back(fn.get_err());
@@ -430,10 +434,13 @@ public:
           while (check_tokens({NewLine}, offset))
             offset += 1;
 
+          method_types.push_back(fn.get_res()->id);
           methods.push_back(std::move(fn.get_res()));
+          s_type->set_methods(method_types);
           continue;
         }
 
+        // Try parse field
         auto field = parse_arg_def(offset);
         if (field.is_err()) {
           errors.push_back(field.get_err());
@@ -457,6 +464,7 @@ public:
           field_types.push_back(
               AstNamedType{field.get_res()->name, field.get_res()->type});
           fields.push_back(std::move(field.get_res()));
+          s_type->set_fields(field_types);
           continue;
         }
       }
@@ -464,8 +472,6 @@ public:
 
       asttype_stack.pop_back();
 
-      auto s_type = ctx->type_db.get_type_mut(s_id).value();
-      s_type->set_fields(field_types);
       if (asttype_stack.size() > 0)
         s_type->set_parent_id(asttype_stack.back());
       auto s = std::make_unique<StructDefAst>(s_id, std::move(fields),
@@ -554,7 +560,7 @@ public:
     if (!body && !is_external)
       return ParserError::fn_missing_body(get_tk(offset));
 
-    auto fn = std::make_unique<FnDefAst>(std::move(header_r.get_res()),
+    auto fn = std::make_unique<FnDefAst>(fn_ty, std::move(header_r.get_res()),
                                          std::move(body));
 
     // fn header moved, needs to be defined again
@@ -1011,6 +1017,10 @@ public:
 
     auto id = get_tk(offset + 1).value;
     auto base_ty = AstExprTypeVisitor::get_type(ctx, base_expr);
+    if (base_ty->is_ref())
+      base_ty = ctx->type_db.get_type(base_ty->get_subtype()).value();
+
+    // Check if member is a field or method
     if (base_ty->get_field_by_name(id)) {
       auto field = std::make_unique<VarExprAst>(id);
       offset += 2;
@@ -1019,7 +1029,12 @@ public:
     } else if (base_ty->get_method_by_name(id)) {
       offset += 1;
       auto call = parse_call_expr(offset, base_ty->get_id());
+      if (call.is_err())
+        return call.get_err();
+      return std::make_unique<MemberAccesorExprAst>(
+          std::move(base_expr), std::nullopt, std::move(call.get_res()));
     }
+
     return ParserError::member_not_found(get_tk(offset), base_ty, id);
   }
 
@@ -1203,7 +1218,12 @@ public:
       } else {
         int expected_arg_count = fn_ty->get_su_args().size();
         for (int i = 0; i < expected_arg_count; i++) {
+          if (parent && i == 0 && fn_ty->get_su_args()[0].name == "self" &&
+              fn_ty->get_su_args()[0].type == ctx->type_db.new_ref(*parent)) {
+            continue;
+          }
           auto expr = parse_expr(tmp_offset);
+
           if (!expr)
             return expr.get_err();
 

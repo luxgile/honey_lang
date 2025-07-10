@@ -96,6 +96,7 @@ public:
   void set_name(std::string name) { this->name = name; }
   std::vector<AstNamedType> get_fields() const { return fields; }
   void set_fields(std::vector<AstNamedType> fields) { this->fields = fields; }
+  void set_methods(std::vector<AstTypeId> methods) { this->methods = methods; }
 
   std::vector<AstNamedType> get_pre_args() const { return pre_args; }
   std::vector<AstNamedType> get_su_args() const { return su_args; }
