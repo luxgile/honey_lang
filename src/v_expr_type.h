@@ -81,13 +81,16 @@ struct AstExprTypeVisitor {
   AstTypeId operator()(uptr<MemberAccesorExprAst> &node) const {
     auto base_type_id = std::visit(*this, node->base);
     auto base_type = ctx->type_db.get_type(base_type_id).value();
+
+    if (base_type->is_ref()) {
+      base_type_id = base_type->get_subtype();
+      base_type = ctx->type_db.get_type(base_type_id).value();
+    }
+
     if (node->field)
       return base_type->get_field_by_name(node->field.value()->name)
           .value()
           ->type;
-    /* auto method_type = base_type->get_method_by_name(node->member); */
-    /* if (method_type) */
-    /*   return method_type.value()->type; */
     throw "no member found on type";
   }
 

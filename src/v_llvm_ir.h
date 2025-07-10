@@ -448,16 +448,14 @@ struct LlvmIrGenAstVisitor {
     if (!expr)
       return std::unexpected(expr.error());
 
-    std::println("out - rvalue: {}", gctx->rvalue_mode ? "true" : "false");
-    if (gctx->rvalue_mode) {
-      std::println("in - rvalue: {}", gctx->rvalue_mode ? "true" : "false");
+    if(gctx->var_lassign_mode) {
+      expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
+    } else {
       auto expr_type = AstExprTypeVisitor::get_type(ctx, node);
       auto llvm_type = ctx->get_llvm_type(expr_type->get_id());
       std::println("type: {} - rvalue: {}", expr_type->get_name(),
                    gctx->rvalue_mode ? "true" : "false");
       expr = builder->CreateLoad(*llvm_type, *expr);
-    } else {
-      expr = builder->CreateLoad(llvm::PointerType::get(*llvm_ctx, 0), *expr);
     }
     return expr;
   }
@@ -676,7 +674,9 @@ struct LlvmIrGenAstVisitor {
 
   std::expected<llvm::Value *, std::string>
   visit_expr(GenCtx *gctx, uptr<MemberAccesorExprAst> &node) {
-    auto base_expr = build_expr(gctx, node->base);
+    GenCtx _gctx = *gctx;
+    _gctx.var_lassign_mode = false;
+    auto base_expr = build_expr(&_gctx, node->base);
     if (!base_expr)
       return std::unexpected(base_expr.error());
 
@@ -706,7 +706,7 @@ struct LlvmIrGenAstVisitor {
       auto member_ptr = builder->CreateStructGEP(
           struct_type, *base_expr, *member_idx, node->field.value()->name);
 
-      if (gctx->rvalue_mode || gctx->get_ref_mode ||
+      if (gctx->rvalue_mode || gctx->get_ref_mode || gctx->var_lassign_mode ||
           member_llvm_type.value()->isStructTy())
         return member_ptr;
 
@@ -781,10 +781,12 @@ struct LlvmIrGenAstVisitor {
 
     // TODO: As soon as additional meta fn are defined, they might have
     // different number of arguments
-    auto lhs = build_expr(gctx, node->args[0]);
+    GenCtx gctx_temp = *gctx;
+    gctx_temp.rvalue_mode = false;
+    auto lhs = build_expr(&gctx_temp, node->args[0]);
     if (!lhs)
       return std::unexpected("error generating lhs of int add");
-    auto rhs = build_expr(gctx, node->args[1]);
+    auto rhs = build_expr(&gctx_temp, node->args[1]);
     if (!rhs)
       return std::unexpected("error generating rhs of int add");
 

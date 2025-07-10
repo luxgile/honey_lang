@@ -4,6 +4,7 @@ extern printf :: fn (|format: RawString, args: ...)
 Person :: struct {
   name: RawString,
   gender: Bool,
+  age: Int,
 
   get_gender :: fn(|self) RawString {
     if self.gender {
@@ -12,12 +13,19 @@ Person :: struct {
       "female"
     }
   }
+
+  age_up :: fn(|self) {
+    self.age = @i+ self.age 1
+  }
 }
 
 main :: fn (|) {
-  person := Person .{ .name = "El Pepe", .gender = true }
-  printf "I'm %s and I'm a %s\n" person.name person.get_gender
+  a := Person .{ .name = "El Pepe", .gender = true, .age = 30}
+  printf "I'm %s and I'm a %s\n" a.name a.get_gender
 
-  person := Person .{ .name = "Michi", .gender = false }
-  printf "I'm %s and I'm a %s\n" person.name person.get_gender
+  b := Person .{ .name = "Michi", .gender = false, .age = 18}
+  printf "I'm %s and I'm a %s\n" b.name b.get_gender
+
+  b.age_up
+  printf "I'm %d years old\n" b.age
 }
