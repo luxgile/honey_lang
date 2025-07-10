@@ -76,8 +76,8 @@ print_member_access :: fn (|) {
 
 print_cat :: fn(|) {
   a := AnimalKind.Cat .{ .color = "orange" }
-  match a : AnimalKind.Cat cat {
-    printf "3: I'm a cat with color %s\n" cat.color
+  match a : AnimalKind.Cat c {
+    printf "3: I'm a cat with color %s\n" c.color
   }
 }
 
@@ -96,6 +96,12 @@ main :: fn (|) {
   my_bool := ! (my_int != 18)
   if my_bool {
     printf "4: if called!\n"
+  }
+
+  if false {
+    printf "4: cannot be printed\n"
+  } else {
+    printf "4: else called!\n"
   }
 
   i := 0

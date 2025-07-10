@@ -63,7 +63,7 @@ struct ParserError {
 
   static ParserError type_not_found(Token curr, std::string type_name) {
     return ParserError{curr.position,
-                       std::format("Use of undeclared type '{}'", type_name)};
+                       std::format("use of undeclared type '{}'", type_name)};
   }
 
   static ParserError
@@ -73,24 +73,24 @@ struct ParserError {
       msg += token_kind_to_string(kind) + ",";
     }
     msg.pop_back();
-    msg += std::format(" was expected, but {} was found instead.",
+    msg += std::format(" was expected, but {} was found instead",
                        token_kind_to_string(curr.kind));
     return ParserError{curr.position, msg};
   }
 
   static ParserError undefined_identifier(Token curr, std::string id) {
-    return ParserError{curr.position, std::format("{} is not defined.", id)};
+    return ParserError{curr.position, std::format("{} is not defined", id)};
   }
 
   static ParserError unexpected_token(Token curr, std::string expected) {
     return ParserError{curr.position,
-                       std::format("{} was expected, but {} was found instead.",
+                       std::format("{} was expected, but {} was found instead",
                                    expected, token_kind_to_string(curr.kind))};
   }
 
   static ParserError unexpected_token(Token curr, TokenKind expected) {
     return ParserError{curr.position,
-                       std::format("{} was expected, but {} was found instead.",
+                       std::format("{} was expected, but {} was found instead",
                                    token_kind_to_string(expected),
                                    token_kind_to_string(curr.kind))};
   }
@@ -99,57 +99,58 @@ struct ParserError {
                                            std::string member) {
     return ParserError{
         curr.position,
-        std::format("Enum '{}' does not contain member '{}'", _enum, member)};
+        std::format("enum '{}' does not contain member '{}'", _enum, member)};
   }
 
   static ParserError unsupported_enum_variant(Token curr) {
     return ParserError{curr.position,
-                       "Unexpected statement found while parsing an enum "
-                       "variant. Only structs and enums are supported."};
+                       "unexpected statement found while parsing an enum "
+                       "variant \nonly structs and enums are supported"};
   }
 
   static ParserError non_struct_enum_variant(Token curr) {
     return ParserError{curr.position,
-                       "Statement found while parsing an enum is not a struct. "
-                       "Only structs and enums are supported."};
+                       "statement found while parsing an enum is not a struct\n"
+                       "only structs and enums are supported"};
   }
 
   static ParserError fn_missing_body(Token curr) {
-    return ParserError{curr.position, "Function is missing a body definition."};
+    return ParserError{curr.position, "function is missing a body definition"};
   }
 
   static ParserError argument_expected(Token curr) {
     return ParserError{
         curr.position,
-        std::format("An argument was expected, but {} was found instead.",
+        std::format("an argument was expected, but {} was found instead",
                     token_kind_to_string(curr.kind))};
   }
 
   static ParserError expected_type_enum(Token curr, const AstType *type) {
     return ParserError{
         curr.position,
-        std::format("An enum type was expected, but {} was found instead.",
+        std::format("an enum type was expected, but {} was found instead",
                     type->get_name())};
   }
 
   static ParserError undefined_meta_fn(Token curr, std::string name) {
     return ParserError{curr.position,
-                       std::format("'{}' is not a valid meta function.", name)};
+                       std::format("'{}' is not a valid meta function", name)};
   }
 
   static ParserError undefined_call(Token curr, std::string name) {
     return ParserError{curr.position,
-                       std::format("'{}' is not a valid function.", name)};
+                       std::format("'{}' is not a valid function", name)};
   }
 
   static ParserError no_overload_call_matched(Token curr, AstTypeDb *type_db,
-                                              OverloadFnGroup *group) {
-    auto fn_ty = type_db->get_type(group->fns[0]).value();
-    std::string msg = std::format("No overload found for function '{}' with "
-                                  "the given arguments. Available overloads:\n",
-                                  fn_ty->get_name());
+                                              std::vector<AstTypeId> fns) {
+    auto fn_ty = type_db->get_type(fns[0]).value();
+    std::string msg =
+        std::format("no overload found for function '{}' with "
+                    "the given arguments \navailable overloads:\n",
+                    fn_ty->get_name());
 
-    for (auto &fn : group->fns) {
+    for (auto &fn : fns) {
       msg += "\t (";
       fn_ty = type_db->get_type(fn).value();
       for (auto &arg : fn_ty->get_pre_args()) {
@@ -174,27 +175,33 @@ struct ParserError {
 
   static ParserError undefined_struct(Token curr, std::string name) {
     return ParserError{curr.position,
-                       std::format("'{}' is not a valid struct.", name)};
+                       std::format("'{}' is not a valid struct", name)};
   }
 
   static ParserError expression_expected(Token curr) {
-    return ParserError{curr.position, "An expression was expected here."};
+    return ParserError{curr.position, "an expression was expected here"};
   }
 
   static ParserError undefined_statement(Token curr) {
-    return ParserError{curr.position, "Undefined statement found."};
+    return ParserError{curr.position, "undefined statement found"};
   }
 
   static ParserError eof_found(Token curr) {
-    return ParserError{curr.position, "Unexpectedly reached end of file."};
+    return ParserError{curr.position, "unexpectedly reached end of file"};
   }
   static ParserError multityped_array(Token curr, const AstType *array_type,
                                       const AstType *unexpected_type) {
     return ParserError{curr.position,
-                       std::format("Array with type '{}' cannot contain an "
+                       std::format("array with type '{}' cannot contain an "
                                    "expression of a different type '{}'",
                                    array_type->get_name(),
                                    unexpected_type->get_name())};
+  }
+  static ParserError member_not_found(Token curr, const AstType *type,
+                                      std::string member) {
+    return ParserError{curr.position,
+                       std::format("no member '{}' found for type '{}'", member,
+                                   type->get_name())};
   }
 };
 
@@ -759,6 +766,13 @@ public:
   }
 
   ParserResult<AstStatement> parse_statement(int &offset) {
+
+    if (auto ret = parse_return(offset)) {
+      return ret;
+    } else if (ret.is_err()) {
+      return ret.get_err();
+    }
+
     // Var declaration
     if (auto var_decl = parse_var_decl(offset)) {
       return var_decl;
@@ -771,12 +785,6 @@ public:
       return var_assign;
     } else if (var_assign.is_err()) {
       return var_assign.get_err();
-    }
-
-    if (auto ret = parse_return(offset)) {
-      return ret;
-    } else if (ret.is_err()) {
-      return ret.get_err();
     }
 
     // If nothing else found, try to find a expression like a call function.
@@ -811,11 +819,19 @@ public:
             parser_member_access_expr(offset, inner_expr.get_res())) {
       AstExpression _inner_expr = std::move(mem_acc.get_res());
       mem_acc = parser_member_access_expr(offset, _inner_expr);
+      if (mem_acc.is_err()) {
+        return mem_acc.get_err();
+      }
       while (mem_acc) {
         _inner_expr = std::move(mem_acc.get_res());
         mem_acc = parser_member_access_expr(offset, _inner_expr);
+        if (mem_acc.is_err()) {
+          return mem_acc.get_err();
+        }
       }
       return std::move(_inner_expr);
+    } else if (mem_acc.is_err()) {
+      return mem_acc.get_err();
     }
 
     return inner_expr;
@@ -836,8 +852,8 @@ public:
       }
 
       // Call expr
-      if (ctx->get_overloads(identifier).has_value()) {
-        if (auto call = parse_call_expr(offset))
+      if (ctx->type_db.get_fns_by_name(identifier).size() > 0) {
+        if (auto call = parse_call_expr(offset, {}))
           return call;
         else if (call.is_err())
           return call.get_err();
@@ -851,7 +867,7 @@ public:
       }
 
       // Variable
-      if (ctx->defined_vars[identifier] == nullptr)
+      if (!ctx->defined_vars.contains(identifier))
         return ParserError::undefined_identifier(get_tk(offset), identifier);
 
       auto var = std::make_unique<VarExprAst>(identifier);
@@ -990,16 +1006,21 @@ public:
 
   ParserResult<uptr<MemberAccesorExprAst>>
   parser_member_access_expr(int &offset, AstExpression &base_expr) {
-    LOG("starting parsing access member");
-
     if (!check_tokens({Dot, Id}, offset))
       return {};
 
-    offset += 2;
-    auto id = get_tk(offset - 1).value;
-
-    LOG("member access parsed");
-    return std::make_unique<MemberAccesorExprAst>(std::move(base_expr), id);
+    auto id = get_tk(offset + 1).value;
+    auto base_ty = AstExprTypeVisitor::get_type(ctx, base_expr);
+    if (base_ty->get_field_by_name(id)) {
+      auto field = std::make_unique<VarExprAst>(id);
+      offset += 2;
+      return std::make_unique<MemberAccesorExprAst>(
+          std::move(base_expr), std::move(field), std::nullopt);
+    } else if (base_ty->get_method_by_name(id)) {
+      offset += 1;
+      auto call = parse_call_expr(offset, base_ty->get_id());
+    }
+    return ParserError::member_not_found(get_tk(offset), base_ty, id);
   }
 
   ParserResult<uptr<SingleMatchExprAst>> parse_single_match_expr(int &offset) {
@@ -1038,11 +1059,11 @@ public:
     if (!enum_member_type)
       return ParserError::undefined_enum_member(get_tk(offset), enum_name,
                                                 enum_member_name);
-    /* auto enum_member_ty =
-     * ctx->type_db.get_type(enum_member_type.value()->type); */
 
     auto casted_var = std::make_unique<VarDefStmtAst>(
         casted_var_name, enum_member_type.value()->type, std::nullopt);
+
+    ctx->defined_vars[casted_var->name] = casted_var.get();
 
     auto then_expr = parse_expr(tmp_offset);
     if (!then_expr)
@@ -1114,17 +1135,16 @@ public:
     return {};
   }
 
-  ParserResult<std::unique_ptr<CallExprAst>> parse_call_expr(int &offset) {
+  ParserResult<std::unique_ptr<CallExprAst>>
+  parse_call_expr(int &offset, std::optional<AstTypeId> parent) {
     LOG("parsing call");
     auto identifier = get_tk(offset).value;
-    auto overloads = ctx->get_overloads(identifier);
-    if (!overloads) {
-      LOG("parsing call failed - no overload found");
-      return ParserError::undefined_call(get_tk(offset), identifier);
-    }
 
-    for (auto fn : overloads.value()->fns) {
+    auto fns = ctx->type_db.get_fns_by_name(identifier);
+    for (auto fn : fns) {
       auto fn_ty = ctx->type_db.get_type(fn).value();
+      if (fn_ty->get_name() != identifier)
+        continue;
 
       // Consume the identifier
       auto tmp_offset = offset;
@@ -1204,14 +1224,14 @@ public:
 
       LOG("call expr found");
       offset = tmp_offset;
-      return std::make_unique<CallExprAst>(fn_ty->get_fullname(), fn,
+      return std::make_unique<CallExprAst>(fn_ty->get_name(), fn,
                                            std::move(prefix_args),
                                            std::move(suffix_args));
     }
 
     LOG("parsing call failed");
     return ParserError::no_overload_call_matched(get_tk(offset), &ctx->type_db,
-                                                 overloads.value());
+                                                 fns);
   }
 
   ParserResult<std::unique_ptr<StructExprAst>> parse_struct_expr(int &offset) {

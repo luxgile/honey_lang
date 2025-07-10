@@ -125,13 +125,13 @@ struct LlvmIrGenAstVisitor {
     auto fn_type =
         llvm::FunctionType::get(ret_type, args_types, header.is_vararic());
 
-    auto fn_overloads = ctx->get_overloads(header.name);
-    if (!fn_overloads)
-      return std::unexpected("no overloads found for fn header");
-
     auto fn_id =
-        std::get<1>(*fn_overloads.value()->get_fn(&ctx->type_db, &header));
-    auto fn_ty = ctx->type_db.get_type(fn_id).value();
+        ctx->type_db.get_fn_by_args(header.name, header.get_prefix_named_ids(),
+                                    header.get_suffix_named_ids());
+    if (!fn_id)
+      return std::unexpected("no fn id found for fn header");
+
+    auto fn_ty = ctx->type_db.get_type(*fn_id).value();
     auto fn = llvm::Function::Create(fn_type, llvm::Function::ExternalLinkage,
                                      fn_ty->get_fullname(), module.get());
 
@@ -597,7 +597,7 @@ struct LlvmIrGenAstVisitor {
     // Emit else block
     std::expected<llvm::Value *, std::string> else_expr = nullptr;
     if (node->else_expr) {
-      fn->insert(fn->end(), else_bb);
+      // fn->insert(fn->end(), else_bb);
       builder->SetInsertPoint(else_bb);
 
       else_expr = build_expr(gctx, *node->else_expr);
@@ -675,28 +675,33 @@ struct LlvmIrGenAstVisitor {
     auto base_expr_type_id = std::visit(type_visitor, node->base);
     auto base_expr_type = ctx->type_db.get_type(base_expr_type_id).value();
 
-    auto member_idx = base_expr_type->get_field_index_by_name(node->member);
-    if (!member_idx)
-      return std::unexpected(member_idx.error());
+    // Found a field:
+    if (node->field) {
+      auto member_idx =
+          base_expr_type->get_field_index_by_name(node->field.value()->name);
+      auto member_type = base_expr_type->get_field_by_idx(*member_idx).value();
+      auto member_llvm_type = ctx->get_llvm_type(member_type->type);
+      if (!member_llvm_type)
+        return std::unexpected("no llvm type found for member accessor");
 
-    auto member_type = base_expr_type->get_field_by_idx(*member_idx).value();
-    auto member_llvm_type = ctx->get_llvm_type(member_type->type);
-    if (!member_llvm_type)
-      return std::unexpected("no llvm type found for member accessor");
+      auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type_id);
+      if (!base_expr_llvm_type)
+        return std::unexpected("no type found for base expr");
 
-    auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type_id);
-    if (!base_expr_llvm_type)
-      return std::unexpected("no type found for base expr");
+      auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
+      auto member_ptr = builder->CreateStructGEP(
+          struct_type, *base_expr, *member_idx, node->field.value()->name);
 
-    auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
-    auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
-                                               *member_idx, node->member);
+      if (gctx->rvalue_mode || gctx->get_ref_mode ||
+          member_llvm_type.value()->isStructTy())
+        return member_ptr;
 
-    if (gctx->rvalue_mode || gctx->get_ref_mode ||
-        member_llvm_type.value()->isStructTy())
-      return member_ptr;
+      return builder->CreateLoad(*member_llvm_type, member_ptr,
+                                 node->field.value()->name);
+    }
 
-    return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
+    return std::unexpected(std::format("no member found for type '{}'",
+                                       base_expr_type->get_name()));
   }
 
   // Expressions

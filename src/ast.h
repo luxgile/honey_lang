@@ -119,7 +119,8 @@ struct VarAssignStmtAst {
 
 struct MemberAccesorExprAst {
   AstExpression base;
-  std::string member;
+  std::optional<uptr<VarExprAst>> field;
+  std::optional<uptr<CallExprAst>> method;
 };
 
 struct FileStmtAst {
@@ -248,6 +249,19 @@ struct FnHeaderAst {
   bool is_vararic() {
     return suffix_args.size() > 0 &&
            suffix_args[suffix_args.size() - 1]->is_varadic;
+  }
+
+  std::vector<AstNamedType> get_prefix_named_ids() {
+    std::vector<AstNamedType> ids;
+    for (auto &arg : prefix_args)
+      ids.push_back(AstNamedType{arg->name, arg->type, arg->is_varadic});
+    return ids;
+  }
+  std::vector<AstNamedType> get_suffix_named_ids() {
+    std::vector<AstNamedType> ids;
+    for (auto &arg : suffix_args)
+      ids.push_back(AstNamedType{arg->name, arg->type, arg->is_varadic});
+    return ids;
   }
 
   /// Will treat prefix and suffix as a single list and retrieve by index.

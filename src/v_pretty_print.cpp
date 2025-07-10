@@ -64,7 +64,7 @@ void PrettyPrintAstVisitor::operator()(uptr<FnHeaderAst> &node) {
 
   for (int i = 0; i < (int)node->suffix_args.size(); i++) {
     (*this)(node->suffix_args[i]);
-    if(i != node->suffix_args.size() - 1)
+    if (i != node->suffix_args.size() - 1)
       std::print(", ");
   }
   std::print(")");
@@ -190,7 +190,10 @@ void PrettyPrintAstVisitor::operator()(uptr<StructExprAst> &node) {
 
 void PrettyPrintAstVisitor::operator()(uptr<MemberAccesorExprAst> &node) {
   std::visit(*this, node->base);
-  std::print(".{}", node->member);
+  if (node->field)
+    (*this)(node->field.value());
+  if (node->method)
+    (*this)(node->method.value());
 }
 void PrettyPrintAstVisitor::operator()(uptr<EnumDefAst> &node) {
   std::println("{} :: enum {{", get_type_name(node->type));

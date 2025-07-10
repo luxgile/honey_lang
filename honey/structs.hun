@@ -9,7 +9,7 @@ Person :: struct {
     if self.gender {
        "male"
     } else {
-    "female"
+       "female"
     }
   }
 }
@@ -17,4 +17,5 @@ Person :: struct {
 main :: fn (|) {
   person := Person .{ .name = "El Pepe", .gender = true }
   printf "I'm %s\n" person.name
+  printf "%s\n" person.get_gender
 }

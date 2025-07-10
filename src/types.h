@@ -110,6 +110,7 @@ public:
   bool is_void() const;
   bool is_primitive() const { return kind == AstTypeKind::Primitive; }
   bool is_struct() const { return kind == AstTypeKind::Struct; }
+  bool is_fn() const { return kind == AstTypeKind::Function; }
   bool is_unit() const { return is_struct() && fields.size() == 0; }
   bool is_enum() const { return kind == AstTypeKind::Enum; }
   bool is_ref() const { return kind == AstTypeKind::Reference; }
@@ -144,22 +145,10 @@ public:
         std::format("no field '{}' found in type '{}'", name, get_name()));
   }
 
-  // TODO: No idea how to get the overload from this
-  /* std::expected<const AstNamedType *, std::string> */
-  /* get_method_by_name(std::string name) const { */
-  /*   if (!is_struct() && !is_enum()) */
-  /*     return std::unexpected("trying to get field from a non-struct type");
-   */
-  /**/
-  /*   for (auto &method : methods) { */
-  /*     if (method.name == name) */
-  /*       return &method; */
-  /*   } */
-  /**/
-  /*   return std::unexpected( */
-  /*       std::format("no field '{}' found in type '{}'", name, get_name()));
-   */
-  /* } */
+  std::vector<AstTypeId> get_methods() const { return methods; }
+
+  std::expected<AstTypeId, std::string>
+  get_method_by_name(std::string name) const;
 
   std::expected<int, std::string>
   get_field_index_by_name(std::string name) const {
@@ -247,4 +236,50 @@ public:
   std::optional<const AstType *> get_type_by_name(std::string name);
   std::optional<const AstType *> get_type(AstTypeId id);
   std::optional<AstType *> get_type_mut(AstTypeId id);
+
+  std::vector<AstTypeId> get_fns_by_name(std::string name) {
+    std::vector<AstTypeId> fns;
+    for (auto &ty_pair : types) {
+      auto ty = ty_pair.second;
+      if (ty.is_fn() && ty.get_name() == name)
+        fns.push_back(ty_pair.first);
+    }
+    return fns;
+  }
+
+  std::optional<AstTypeId> get_fn_by_args(std::string name,
+                                          std::vector<AstNamedType> pre,
+                                          std::vector<AstNamedType> su) {
+    auto eq_arg_types = [](std::vector<AstNamedType> lhs,
+                           std::vector<AstNamedType> rhs,
+                           bool is_varadic = false) {
+      if (lhs.size() != rhs.size() && !is_varadic)
+        return false;
+
+      for (int i = 0; i < (int)lhs.size(); i++) {
+        if (!lhs[i].is_varadic && lhs[i].type != rhs[i].type)
+          return false;
+      }
+
+      return true;
+    };
+
+    auto fns = get_fns_by_name(name);
+    if (fns.size() == 0)
+      return std::nullopt;
+
+    for (int i = 0; i < (int)fns.size(); i++) {
+      auto fn = fns[i];
+      auto fn_ty = get_type(fn).value();
+
+      if (!eq_arg_types(fn_ty->get_pre_args(), pre))
+        continue;
+
+      if (!eq_arg_types(fn_ty->get_su_args(), su, fn_ty->is_varadic()))
+        continue;
+
+      return fn;
+    }
+    return {};
+  }
 };

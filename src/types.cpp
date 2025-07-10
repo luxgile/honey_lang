@@ -175,3 +175,19 @@ AstTypeId AstTypeDb::new_fn(std::string name, std::uint32_t overload,
   types.insert({type.get_id(), type});
   return type.get_id();
 }
+
+std::expected<AstTypeId, std::string>
+AstType::get_method_by_name(std::string name) const {
+  if (!is_struct() && !is_enum())
+    return std::unexpected("trying to get field from a non-struct type");
+
+  for (auto &method : methods) {
+    auto m_ty = db->get_type(method).value();
+    if (m_ty->get_name() == name)
+      return method;
+  }
+
+  return std::unexpected(
+      std::format("no field '{}' found in type '{}'", name, get_name()));
+}
+
