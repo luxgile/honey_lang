@@ -759,6 +759,13 @@ public:
   }
 
   ParserResult<AstStatement> parse_statement(int &offset) {
+
+    if (auto ret = parse_return(offset)) {
+      return ret;
+    } else if (ret.is_err()) {
+      return ret.get_err();
+    }
+
     // Var declaration
     if (auto var_decl = parse_var_decl(offset)) {
       return var_decl;
@@ -771,12 +778,6 @@ public:
       return var_assign;
     } else if (var_assign.is_err()) {
       return var_assign.get_err();
-    }
-
-    if (auto ret = parse_return(offset)) {
-      return ret;
-    } else if (ret.is_err()) {
-      return ret.get_err();
     }
 
     // If nothing else found, try to find a expression like a call function.

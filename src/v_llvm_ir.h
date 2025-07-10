@@ -675,28 +675,33 @@ struct LlvmIrGenAstVisitor {
     auto base_expr_type_id = std::visit(type_visitor, node->base);
     auto base_expr_type = ctx->type_db.get_type(base_expr_type_id).value();
 
+    // Found a field:
     auto member_idx = base_expr_type->get_field_index_by_name(node->member);
-    if (!member_idx)
-      return std::unexpected(member_idx.error());
+    if (member_idx) {
 
-    auto member_type = base_expr_type->get_field_by_idx(*member_idx).value();
-    auto member_llvm_type = ctx->get_llvm_type(member_type->type);
-    if (!member_llvm_type)
-      return std::unexpected("no llvm type found for member accessor");
+      auto member_type = base_expr_type->get_field_by_idx(*member_idx).value();
+      auto member_llvm_type = ctx->get_llvm_type(member_type->type);
+      if (!member_llvm_type)
+        return std::unexpected("no llvm type found for member accessor");
 
-    auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type_id);
-    if (!base_expr_llvm_type)
-      return std::unexpected("no type found for base expr");
+      auto base_expr_llvm_type = ctx->get_llvm_type(base_expr_type_id);
+      if (!base_expr_llvm_type)
+        return std::unexpected("no type found for base expr");
 
-    auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
-    auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
-                                               *member_idx, node->member);
+      auto struct_type = llvm::cast<llvm::StructType>(*base_expr_llvm_type);
+      auto member_ptr = builder->CreateStructGEP(struct_type, *base_expr,
+                                                 *member_idx, node->member);
 
-    if (gctx->rvalue_mode || gctx->get_ref_mode ||
-        member_llvm_type.value()->isStructTy())
-      return member_ptr;
+      if (gctx->rvalue_mode || gctx->get_ref_mode ||
+          member_llvm_type.value()->isStructTy())
+        return member_ptr;
 
-    return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
+      return builder->CreateLoad(*member_llvm_type, member_ptr, node->member);
+    }
+
+    return std::unexpected(std::format("no member '{}' found for type '{}'",
+                                       node->member,
+                                       base_expr_type->get_name()));
   }
 
   // Expressions

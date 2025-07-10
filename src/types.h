@@ -145,21 +145,8 @@ public:
   }
 
   // TODO: No idea how to get the overload from this
-  /* std::expected<const AstNamedType *, std::string> */
-  /* get_method_by_name(std::string name) const { */
-  /*   if (!is_struct() && !is_enum()) */
-  /*     return std::unexpected("trying to get field from a non-struct type");
-   */
-  /**/
-  /*   for (auto &method : methods) { */
-  /*     if (method.name == name) */
-  /*       return &method; */
-  /*   } */
-  /**/
-  /*   return std::unexpected( */
-  /*       std::format("no field '{}' found in type '{}'", name, get_name()));
-   */
-  /* } */
+  std::expected<AstTypeId, std::string>
+  get_method_by_name(std::string name) const;
 
   std::expected<int, std::string>
   get_field_index_by_name(std::string name) const {

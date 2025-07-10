@@ -19,6 +19,7 @@
 #include <exception>
 #include <optional>
 #include <print>
+#include <variant>
 
 void Compiler::add_internal_types() {
   ctx.define_llvm_type(VOID_TYPE.get_id(),
@@ -72,32 +73,9 @@ void Compiler::add_internal_types() {
 }
 
 uptr<FileStmtAst> Compiler::parse_file(std::string source) {
-  /* if (print_tokens) { */
-  /*   std::println(); */
-  /*   std::println(" ----- LEXER RESULTS -----"); */
-  /*   std::println(); */
-  /* } */
-
-  return parser.parse_file(source, print_tokens);
-  /**/
-  /* do { */
-  /*   auto tkn_res = lexer.get_token(); */
-  /*   if (!tkn_res) { */
-  /*     return std::unexpected(std::format("failed tokenizing at {} - {}", */
-  /*                                        lexer.current_pos.line, */
-  /*                                        lexer.current_pos.start)); */
-  /*   } */
-  /**/
-  /*   last_token = *tkn_res; */
-  /*   if (print_tokens) */
-  /*     last_token.print_token(); */
-  /**/
-  /*   auto statement = parser.parse_token(last_token); */
-  /*   if (!statement) */
-  /*     continue; */
-  /*   statements.push_back(std::move(*statement)); */
-  /* } while (last_token.kind != EoF && last_token.kind != Undefined); */
-  /* return statements; */
+  auto file = parser.parse_file(source, print_tokens);
+  // TODO: Resolve syntactic sugar
+  return file;
 }
 
 std::expected<void, std::string>
@@ -192,10 +170,10 @@ std::expected<void, std::string> Compiler::compile_source(std::string source) {
     return std::unexpected(gen_res.error());
 
   try {
-  auto com_res = compile_to_obj_file("honey.o");
-  if (!com_res)
-    return std::unexpected(com_res.error());
-  } catch (const std::exception& e) {
+    auto com_res = compile_to_obj_file("honey.o");
+    if (!com_res)
+      return std::unexpected(com_res.error());
+  } catch (const std::exception &e) {
     std::println("{}", e.what());
   }
 
