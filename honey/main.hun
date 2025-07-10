@@ -1,4 +1,6 @@
 extern printf :: fn (|format: RawString, args: ...)
+extern scanf :: fn (|format: RawString, input: ^Int)
+extern snprintf :: fn (|buffer: RawString, n: Int, format: RawString, args: ...)
 
 related_to :: fn (lhs: RawString | rhs: RawString) {
   printf "%s is related to %s \n" lhs rhs
@@ -125,5 +127,10 @@ main :: fn (|) {
     i = i + 1
   }
   average = average / 7.0
+
   printf "8: array average is %f\n" average
+
+  buffer := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  snprintf &buffer 15 "9: my n is %d" 5
+  printf "%s\n" buffer
 }
