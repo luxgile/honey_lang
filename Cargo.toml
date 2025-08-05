@@ -1,0 +1,17 @@
+[package]
+name = "honey-bootstrapper"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "honey_bootstrapper_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "honey_boostrapper_cli"
+path = "src/cli.rs"
+
+[dependencies]
+colored = "3.0.0"
+lazy_static = "1.5.0"
+thiserror = "2.0.12"

@@ -1,0 +1,15 @@
+extern printf :: fn (|format: RawString, args: ...)
+
+main :: fn(|) {
+  array := [8.0, 3.2, 2.0, 1.5, 9.0, 13.0, 9.7]
+  i := 0
+  average := 0.0
+  loop @i< i 7 {
+    element := array[i]
+    average = @f+ average element
+    printf "array[%d] %f\n" i element
+    i = @i+ i 1
+  }
+  average = @f/ average 7.0
+  printf "array average is %f\n" average
+}

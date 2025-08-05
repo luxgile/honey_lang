@@ -6,4 +6,8 @@ project(
   default_options : ['warning_level=3', 'cpp_std=c++23'],
 )
 
+inc = include_directories('src')
+llvm_dep = dependency('llvm', required: true)
+
 subdir('src')
+subdir('tests')

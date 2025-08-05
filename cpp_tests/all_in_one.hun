@@ -1,0 +1,148 @@
+extern printf :: fn (|format: RawString, args: ...)
+extern scanf :: fn (|format: RawString, input: ^Int)
+extern snprintf :: fn (|buffer: RawString, n: Int, format: RawString, args: ...)
+
+related_to :: fn (lhs: RawString | rhs: RawString) {
+  printf "%s is related to %s \n" lhs rhs
+}
+
+# Some boilerplate functions to ease readability
++ :: fn (lhs: Int | rhs: Int) Int {
+  @i+ lhs rhs
+} 
+
+* :: fn (lhs: Int | rhs: Int) Int {
+  @i* lhs rhs
+} 
+
++ :: fn (lhs: Float | rhs: Float) Float {
+  @f+ lhs rhs
+}
+
+/ :: fn (lhs: Float | rhs: Float) Float {
+  @f/ lhs rhs
+}
+
+== :: fn (lhs: Int | rhs: Int) Bool { 
+  @i== lhs rhs
+} 
+
+!= :: fn (lhs: Int | rhs: Int) Bool {
+  @i!= lhs rhs
+}
+
+< :: fn (lhs: Int | rhs: Int) Bool {
+  @i< lhs rhs
+}
+
+<= :: fn (lhs: Int | rhs: Int) Bool {
+  @i<= lhs rhs
+}
+
+! :: fn (| rhs: Bool) Bool {
+  @b== rhs false
+}
+
+? :: fn (check: Bool| if_true: Int, if_false: Int) Int {
+  if check {
+    if_true
+  } else {
+    if_false
+  }
+}
+
+Person :: struct {
+  name: RawString,
+  gender: Bool,
+}
+
+AnimalKind :: enum {
+  Dog,
+  Cat :: struct { color: RawString, },
+  Spider,
+}
+
+Animal :: struct {
+  kind: AnimalKind,
+  name: RawString,
+  age: Int,
+  owner: Person,
+}
+
+build_dog :: fn (|) {
+  dog := AnimalKind.Dog
+}
+
+build_cat :: fn (|) {
+  cat := AnimalKind.Cat .{ .color = "Red" }
+}
+
+print_member_access :: fn (|) {
+  person := Person .{ .name = "Guille", .gender = true }
+  animal := Animal .{ .kind = AnimalKind.Cat .{ .color = "Orange "}, .name = "Copper", .age = 8, .owner = person }
+  printf "2: my animal is %d years old\n" animal.age
+  printf "2: my owner is %s\n" animal.owner.name
+}
+
+print_cat :: fn(|) {
+  a := AnimalKind.Cat .{ .color = "orange" }
+  match a : AnimalKind.Cat c {
+    printf "3: I'm a cat with color %s\n" c.color
+  }
+}
+
+#+ Here's how multiline commands work
+   You can use as many lines as needed
+   It will work until the escape sequence: +#
+main :: fn (|) Int {
+  "1: Guille" related_to "Ichi"
+  my_int := 3 * 5 + 3
+  print_member_access
+  print_cat
+
+  # TODO: Problem: How to get a ptr to a fn without calling it?
+  # fn_ptr := &print_cat # This might call it and get the returning value reference
+
+  my_bool := ! (my_int != 18)
+  if my_bool {
+    printf "4: if called!\n"
+  }
+
+  if false {
+    printf "4: cannot be printed\n"
+  } else {
+    printf "4: else called!\n"
+  }
+
+  i := 0
+  loop i < 10 {
+    printf "5: loop %d\n" i
+    i = i + 1
+  }
+    
+  printf "6: 3 * 5 + 3 = %d \n" my_int
+  
+  add := 3.2 + 6.5
+  printf "7: 3.2 + 6.5 = %.1f\n" add
+
+  array := [8.0, 3.0, 2.0, 1.0, 9.0, 10.0, 9.0]
+  i = 0
+  average := 0.0
+  loop i < 7 {
+    element := array[i]
+    average = average + element
+    printf "8: array[%d] %f\n" i element
+    i = i + 1
+  }
+  average = average / 7.0
+
+  printf "8: array average is %f\n" average
+
+  buffer := [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+  snprintf &buffer 15 "9: my n is %d" 5
+  printf "%s\n" buffer
+
+  x := false ? 5 0 
+  printf "10: ternary: %d\n" x
+  0
+}

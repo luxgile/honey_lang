@@ -1,0 +1,96 @@
+extern printf :: fn (|format: RawString, args: ...)
+extern scanf :: fn (|format: RawString, input: ^Int)
+extern snprintf :: fn (|buffer: RawString, n: Int, format: RawString, args: ...)
+
+# Some boilerplate functions to ease readability
++ :: fn (lhs: Int | rhs: Int) Int {
+  @i+ lhs rhs
+} 
+
+* :: fn (lhs: Int | rhs: Int) Int {
+  @i* lhs rhs
+} 
+
++ :: fn (lhs: Float | rhs: Float) Float {
+  @f+ lhs rhs
+}
+
+/ :: fn (lhs: Float | rhs: Float) Float {
+  @f/ lhs rhs
+}
+
+== :: fn (lhs: Int | rhs: Int) Bool { 
+  @i== lhs rhs
+} 
+
+!= :: fn (lhs: Int | rhs: Int) Bool {
+  @i!= lhs rhs
+}
+
+< :: fn (lhs: Int | rhs: Int) Bool {
+  @i< lhs rhs
+}
+
+<= :: fn (lhs: Int | rhs: Int) Bool {
+  @i<= lhs rhs
+}
+
+! :: fn (| rhs: Bool) Bool {
+  @b== rhs false
+}
+
+? :: fn (check: Bool| if_true: Int, if_false: Int) Int {
+  if check {
+    if_true
+  } else {
+    if_false
+  }
+}
+
+Person :: struct {
+  name: RawString,
+  gender: Bool,
+}
+
+AnimalKind :: enum {
+  Dog,
+  Cat :: struct { color: RawString, },
+  Spider,
+}
+
+Animal :: struct {
+  kind: AnimalKind,
+  name: RawString,
+  age: Int,
+  owner: Person,
+}
+
+build_dog :: fn (|) {
+  dog := AnimalKind.Dog
+}
+
+build_cat :: fn (|) {
+  cat := AnimalKind.Cat .{ .color = "Red" }
+}
+
+print_member_access :: fn (|) {
+  person := Person .{ .name = "Guille", .gender = true }
+  animal := Animal .{ .kind = AnimalKind.Cat .{ .color = "Orange "}, .name = "Copper", .age = 8, .owner = person }
+  printf "2: my animal is %d years old\n" animal.age
+  printf "2: my owner is %s\n" animal.owner.name
+}
+
+print_cat :: fn(|) {
+  a := AnimalKind.Cat .{ .color = "orange" }
+  match a : AnimalKind.Cat c {
+    printf "3: I'm a cat with color %s\n" c.color
+  }
+}
+
+#+ Here's how multiline commands work
+   You can use as many lines as needed
+   It will work until the escape sequence: +#
+main :: fn (|) {
+  print_member_access
+  print_cat
+}
