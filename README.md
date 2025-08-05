@@ -1,3 +1,8 @@
+### 🛑 Project moved to here: 
+### https://github.com/honeylang/honey-bootstrapper
+
+---
+
 ### Build Instructions
 Update meson with (only once):
 `meson setup build`
