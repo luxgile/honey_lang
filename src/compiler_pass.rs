@@ -35,6 +35,10 @@ impl CTranspilerPass {
             return CTranspilerPass::hun_type_to_c(ctx, &ty.get_subtype());
         }
 
+        if ty.is_ref() {
+            return CTranspilerPass::hun_type_to_c(ctx, &ty.get_subtype()) + "*";
+        }
+
         match ty.get_name() {
             "Void" => "void",
             "Int" => "long",
@@ -77,7 +81,7 @@ impl CTranspilerPass {
     fn transpile_file(&mut self, ctx: &ProgramCtx, file: &FileStmtAst) {
         self.source += "// auto generated file from honey - don't modify manually\n";
         self.source += format!("// file: {}\n\n", file.filename).as_str();
-        self.source += "#include <stdio.h>";
+        self.source += "#include <stdio.h>\n";
         for stmt in &file.statements {
             self.transpile_statement(ctx, stmt);
             self.source += "\n";
@@ -165,16 +169,14 @@ impl CTranspilerPass {
         }
         self.indent -= 1;
 
-        self.indent += 1;
-        for method in &s.methods {
-            self.transpile_fn(ctx, method);
-        }
-        self.indent -= 1;
-
         self.add_indent();
         self.source += "} ";
         self.source += &struct_name;
-        self.source += ";\n"
+        self.source += ";\n";
+
+        for method in &s.methods {
+            self.transpile_fn(ctx, method);
+        }
     }
 
     fn transpile_enum(&mut self, ctx: &ProgramCtx, e: &EnumDefAst) {
@@ -346,7 +348,8 @@ impl CTranspilerPass {
             "{} {} = {}.__variant_value.__variant_{};\n",
             CTranspilerPass::hun_type_to_c(ctx, &m.casted_enum_var.type_id),
             m.casted_enum_var.name,
-            expr_str, variant_idx
+            expr_str,
+            variant_idx
         );
 
         let old_tmp = self.curr_return.clone();
@@ -385,6 +388,11 @@ impl CTranspilerPass {
     ) -> String {
         let (ty, val) = self.gen_temp_expr(ctx, &member.get_type_id(ctx));
         let base = self.transpile_expr(ctx, &member.base);
+        let member_op = if member.base.get_type(ctx).is_ref() {
+            "->"
+        } else {
+            "."
+        };
         let member = if let Some(field) = &member.field {
             self.transpile_var(ctx, field)
         } else if let Some(method) = &member.method {
@@ -393,7 +401,7 @@ impl CTranspilerPass {
             unreachable!()
         };
         self.add_indent();
-        self.source += &format!("{} {} = {}.{};\n", ty, val, base, member);
+        self.source += &format!("{} {} = {}{}{};\n", ty, val, base, member_op, member);
         val
     }
 

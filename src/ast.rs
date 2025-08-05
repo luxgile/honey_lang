@@ -1,4 +1,5 @@
 use crate::{
+    ast_typer::AstTyped,
     program_ctx::ProgramCtx,
     types::{AstNamedType, AstTypeId, BOOL_TYPE, FLOAT_TYPE, INT_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
@@ -44,7 +45,7 @@ impl AstExpression {
             AstExpression::Ref(ref_expr_ast) => {
                 ctx.type_db.get_ref(ref_expr_ast.expr.get_type_id(ctx))
             }
-            AstExpression::Deref(deref_expr_ast) => deref_expr_ast.expr.get_type_id(ctx),
+            AstExpression::Deref(deref_expr_ast) => deref_expr_ast.expr.get_type(ctx).get_subtype(),
             AstExpression::Call(call_expr_ast) => ctx
                 .type_db
                 .get_type(call_expr_ast.fn_id)
@@ -62,7 +63,10 @@ impl AstExpression {
             AstExpression::For(for_expr_ast) => for_expr_ast.for_body.get_type_id(ctx),
             AstExpression::Struct(struct_expr_ast) => struct_expr_ast.type_id,
             AstExpression::MemberAccessor(ma) => {
-                let base_ty = ctx.type_db.get_type(ma.base.get_type_id(ctx)).unwrap();
+                let mut base_ty = ctx.type_db.get_type(ma.base.get_type_id(ctx)).unwrap();
+                if base_ty.is_ref() {
+                    base_ty = ctx.type_db.get_type(base_ty.get_subtype()).unwrap();
+                }
                 if let Some(field) = &ma.field {
                     base_ty.get_field_by_name(field.name.as_str()).unwrap().id
                 } else if let Some(method) = &ma.method {

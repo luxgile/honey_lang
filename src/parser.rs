@@ -248,6 +248,7 @@ impl<'a> Parser<'a> {
                         })
                     })?;
                     s_type_mut.set_methods(method_types.clone()); // Update methods on the type
+                    self.skip_all(&[TokenKind::NewLine], offset); // Skip new lines inside struct
                     continue;
                 } else if let Err(err) = self.parse_fn_def(Some(s_id), offset) {
                     self.errors.push(err);
@@ -258,7 +259,7 @@ impl<'a> Parser<'a> {
 
             // Try parse field
             if let Some(field_def) = self.parse_arg_def(offset)? {
-                if !self.check_tokens(&[TokenKind::Comma], *offset) {
+                if !self.check_any_tokens(&[TokenKind::Comma, TokenKind::RBrace], *offset) {
                     self.errors.push(CompilerError::from_token(
                         self.get_tk(*offset),
                         ParserErrorKind::UnexpectedTokenKind {
@@ -269,7 +270,10 @@ impl<'a> Parser<'a> {
                     self.skip_until_single(TokenKind::RBrace, offset);
                     break;
                 }
-                *offset += 1;
+
+                if self.check_tokens(&[TokenKind::Comma], *offset) {
+                    *offset += 1;
+                }
 
                 self.skip_all(&[TokenKind::NewLine], offset);
 
@@ -286,6 +290,7 @@ impl<'a> Parser<'a> {
                     })
                 })?;
                 s_type_mut.set_fields(field_types.clone()); // Update fields on the type
+                self.skip_all(&[TokenKind::NewLine], offset); // Skip new lines inside struct
                 continue;
             } else if let Err(err) = self.parse_arg_def(offset) {
                 self.errors.push(err);
@@ -757,7 +762,7 @@ impl<'a> Parser<'a> {
 
         // If nothing else, try to parse an expression as a statement
         let last_expr_res =
-            self.consume_expressions(offset, &[TokenKind::NewLine, TokenKind::RBrace], true)?;
+            self.consume_expressions(offset, &[TokenKind::NewLine, TokenKind::RBrace], false)?;
         let last_expr = match last_expr_res {
             Some(expr) => expr,
             None => {
@@ -1451,7 +1456,7 @@ impl<'a> Parser<'a> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
         if !self.check_tokens(&[TokenKind::Dot, TokenKind::LBrace], *offset) {
-            return Ok(None); 
+            return Ok(None);
         }
         *offset += 2; // Consume .{
 
@@ -1579,7 +1584,7 @@ impl<'a> Parser<'a> {
         loop {
             let arg_res: OptionalParserResult<ArgDefAst>;
             // Handle 'self' argument for methods
-            if let Some(p_struct_id) = parent_struct.as_ref() {
+            if let Some(p_struct_id) = &parent_struct {
                 if self.check_tokens(&[TokenKind::Id], *offset)
                     && self.get_tk(*offset).value == "self"
                 {

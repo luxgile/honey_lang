@@ -23,7 +23,9 @@ impl AstTypeDb {
 
     fn add_type(&mut self, ty: AstType) {
         let t = AstType::new_primitive(ty.get_name().into());
-        self.types.insert(t.get_id(), t);
+        let t_id = t.get_id();
+        self.types.insert(t_id, t);
+        self.new_ref(t_id);
     }
 
     fn get_next_synthetic_id(&mut self) -> AstTypeId {
@@ -41,6 +43,7 @@ impl AstTypeDb {
         let ty = AstType::new_struct(name, fields, parent_id, self);
         let id = ty.get_id();
         self.types.insert(id, ty);
+        self.new_ref(id);
         id
     }
 
@@ -53,6 +56,7 @@ impl AstTypeDb {
         let ty = AstType::new_enum(name, fields, parent_id, self);
         let id = ty.get_id();
         self.types.insert(id, ty);
+        self.new_ref(id);
         id
     }
 
@@ -89,6 +93,7 @@ impl AstTypeDb {
         let ty = AstType::new_array(subtype_id, size, self);
         let id = ty.get_id();
         self.types.insert(id, ty);
+        self.new_ref(id);
         id
     }
 
@@ -112,6 +117,7 @@ impl AstTypeDb {
         );
         let id = ty.get_id();
         self.types.insert(id, ty);
+        self.new_ref(id);
         id
     }
 

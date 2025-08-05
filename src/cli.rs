@@ -11,5 +11,5 @@ fn main() {
         return;
     }
 
-    Compiler::run_file(args[1].clone());
+    Compiler::run_file(args[1].clone()).unwrap();
 }

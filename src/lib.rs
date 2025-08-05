@@ -2,7 +2,7 @@
 
 use std::{
     io::Write,
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
 };
 
 use ast_printer::AstPrint;
@@ -26,12 +26,13 @@ mod types;
 
 pub struct Compiler;
 impl Compiler {
-    pub fn run_file(filename: String) {
-        let source_code: String = std::fs::read_to_string(filename).expect("error reading file");
-        Compiler::run_src(source_code);
+    pub fn run_file(filename: String) -> Result<ExitStatus, ()> {
+        let source_code: String =
+            std::fs::read_to_string(filename.clone()).expect("error reading file");
+        Compiler::run_src(source_code, filename)
     }
 
-    pub fn run_src(src: String) {
+    pub fn run_src(src: String, exe_name: String) -> Result<ExitStatus, ()> {
         let mut program_ctx = ProgramCtx::new();
         Compiler::add_meta_definitions(&mut program_ctx);
         let (file, errors) = {
@@ -45,13 +46,13 @@ impl Compiler {
         if !errors.is_empty() {
             println!();
             errors.iter().for_each(|e| e.print_error(src.as_str()));
-            return;
+            return Err(());
         }
 
         let transpiler = CTranspilerPass::default();
         let c_src = transpiler.run(&program_ctx, &file);
         let mut line = -1;
-        let c_src_debug : String = c_src
+        let c_src_debug: String = c_src
             .lines()
             .map(|x| {
                 line += 1;
@@ -62,7 +63,7 @@ impl Compiler {
         println!("{}", c_src_debug);
 
         let mut gcc = Command::new("gcc")
-            .args(["-x", "c", "-", "-o", "honey"])
+            .args(["-x", "c", "-", "-o", &exe_name])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -77,20 +78,23 @@ impl Compiler {
         if output.status.success() {
             println!("\nhun code compiled successfully");
             println!("\nrunning code...");
-            let run_cmd = Command::new("./honey")
+            let run_cmd = Command::new(format!("./{}", exe_name))
                 .stdin(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .spawn()
                 .unwrap();
             let run = run_cmd.wait_with_output().unwrap();
-            println!("{}", String::from_utf8_lossy(&run.stdout));
+            let run_str = String::from_utf8_lossy(&run.stdout);
+            println!("{}", &run_str);
 
-            let _rm = Command::new("rm").args(["honey"]).output().unwrap();
+            let _rm = Command::new("rm").args([exe_name]).output().unwrap();
+            Ok(run.status)
         } else {
             println!("\ncompilation failed:");
             println!("{}", String::from_utf8_lossy(&output.stdout));
             println!("{}", String::from_utf8_lossy(&output.stderr));
+            Err(())
         }
     }
 
