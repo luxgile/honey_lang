@@ -362,6 +362,35 @@ fn struct_methods_call() {
 }
 
 #[test]
+fn method_call_fn_same_name() {
+    assert_src(
+        "struct_methods_call",
+        "
+    Person :: struct {
+      name: RawString,
+      gender: Bool,
+      age: Int,
+
+      age_up :: fn(|self) {
+        self.age = @i+ self.age 1
+      }
+    }
+
+    age_up :: fn(|p: ^Person) {
+      p.age = @i+ p.age 1
+    }
+
+    main :: fn (|) Int {
+      a := Person .{ .name = \"El Pepe\", .gender = true, .age = 30}
+      a.age_up
+      a.age
+    }
+  ",
+        31,
+    );
+}
+
+#[test]
 fn enum_declaration() {
     assert_src(
         "enum_declaration",

@@ -80,6 +80,7 @@ build_cat :: fn (|) {
 print_member_access :: fn (|) {
   person := Person .{ .name = "Guille", .gender = true }
   animal := Animal .{ .kind = AnimalKind.Cat .{ .color = "Orange "}, .name = "Copper", .age = 8, .owner = person }
+  animal.age_up
   printf "2: my animal is %d years old\n" animal.age
   printf "2: my owner is %s\n" animal.owner.name
 }

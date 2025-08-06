@@ -18,6 +18,7 @@ pub struct CTranspilerPass {
     indent: usize,
     expr_temp_idx: u32,
     curr_return: Option<String>,
+    assign_mode: bool,
     source: String,
 }
 
@@ -81,10 +82,9 @@ impl CTranspilerPass {
     fn transpile_file(&mut self, ctx: &ProgramCtx, file: &FileStmtAst) {
         self.source += "// auto generated file from honey - don't modify manually\n";
         self.source += format!("// file: {}\n\n", file.filename).as_str();
-        self.source += "#include <stdio.h>\n";
+        self.source += "#include <stdio.h>\n\n";
         for stmt in &file.statements {
             self.transpile_statement(ctx, stmt);
-            self.source += "\n";
         }
     }
 
@@ -117,10 +117,12 @@ impl CTranspilerPass {
     }
 
     fn transpile_var_assign(&mut self, ctx: &ProgramCtx, assign: &VarAssignStmtAst) {
-        let lvalue = self.transpile_expr(ctx, &assign.lvalue);
         let rvalue = self.transpile_expr(ctx, &assign.rvalue);
-        self.add_indent();
-        self.source += &format!("{} = {};\n", lvalue, rvalue);
+        let old_assign_mode = self.assign_mode;
+        self.assign_mode = true;
+        self.transpile_expr(ctx, &assign.lvalue);
+        self.assign_mode = old_assign_mode;
+        self.source += &format!(" = {rvalue};\n");
         // self.source += &rvalue;
     }
 
@@ -172,10 +174,11 @@ impl CTranspilerPass {
         self.add_indent();
         self.source += "} ";
         self.source += &struct_name;
-        self.source += ";\n";
+        self.source += ";\n\n";
 
         for method in &s.methods {
             self.transpile_fn(ctx, method);
+            self.source += "\n";
         }
     }
 
@@ -200,6 +203,7 @@ impl CTranspilerPass {
                 methods: Vec::new(),
             };
             self.transpile_struct(ctx, &struct_def);
+            self.source += "\n";
         }
 
         // Enum union
@@ -219,7 +223,7 @@ impl CTranspilerPass {
         }
         self.indent -= 1;
         self.add_indent();
-        self.source += &format!("}} {} ;\n", union_name);
+        self.source += &format!("}} {} ;\n\n", union_name);
 
         // Enum declaration as a tagged union
         self.source += format!("typedef struct {} {{\n", enum_name).as_str();
@@ -295,7 +299,7 @@ impl CTranspilerPass {
             AstExpression::Index(idx) => self.transpile_index(ctx, idx),
             AstExpression::Ref(r) => self.transpile_ref(ctx, r),
             AstExpression::Deref(d) => self.transpile_deref(ctx, d),
-            AstExpression::Call(call) => self.transpile_call(ctx, call),
+            AstExpression::Call(call) => self.transpile_call(ctx, call, None),
             AstExpression::Body(body) => self.transpile_body(ctx, body),
             AstExpression::Var(var) => self.transpile_var(ctx, var),
             AstExpression::MetaDef(meta) => self.transpile_meta(ctx, meta),
@@ -375,7 +379,7 @@ impl CTranspilerPass {
         enum_str += " { ";
         enum_str += variant_idx.to_string().as_str();
         enum_str += ", ";
-        enum_str += format!("{{ .__variant_{} = ", variant_idx).as_str();
+        enum_str += &format!("{{ .__variant_{variant_idx} = ");
         enum_str += &self.transpile_struct_expr(ctx, &e.struct_expr);
         enum_str += " }}";
         enum_str
@@ -386,7 +390,12 @@ impl CTranspilerPass {
         ctx: &ProgramCtx,
         member: &MemberAccesorExprAst,
     ) -> String {
-        let (ty, val) = self.gen_temp_expr(ctx, &member.get_type_id(ctx));
+        let member_ty = member.get_type_id(ctx);
+        let is_void = member_ty == VOID_TYPE.get_id();
+        let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
+
+        let old_assign_mode = self.assign_mode;
+        self.assign_mode = false;
         let base = self.transpile_expr(ctx, &member.base);
         let member_op = if member.base.get_type(ctx).is_ref() {
             "->"
@@ -396,13 +405,24 @@ impl CTranspilerPass {
         let member = if let Some(field) = &member.field {
             self.transpile_var(ctx, field)
         } else if let Some(method) = &member.method {
-            self.transpile_call(ctx, method)
+            self.transpile_call(ctx, method, Some(base.clone()))
         } else {
             unreachable!()
         };
-        self.add_indent();
-        self.source += &format!("{} {} = {}{}{};\n", ty, val, base, member_op, member);
-        val
+        self.assign_mode = old_assign_mode;
+
+        if !is_void {
+            self.add_indent();
+            if self.assign_mode {
+                self.source += &format!("{base}{member_op}{member}");
+                return String::new();
+            } else {
+                self.source += &format!("{ty} {val} = {base}{member_op}{member};\n");
+                return val;
+            }
+        }
+
+        String::new()
     }
 
     fn transpile_struct_expr(&mut self, ctx: &ProgramCtx, s: &StructExprAst) -> String {
@@ -453,10 +473,20 @@ impl CTranspilerPass {
     }
 
     fn transpile_var(&mut self, _ctx: &ProgramCtx, var: &VarExprAst) -> String {
-        var.name.clone()
+        if self.assign_mode {
+            self.source += &var.name;
+            String::new()
+        } else {
+            var.name.clone()
+        }
     }
 
-    fn transpile_call(&mut self, ctx: &ProgramCtx, call: &CallExprAst) -> String {
+    fn transpile_call(
+        &mut self,
+        ctx: &ProgramCtx,
+        call: &CallExprAst,
+        parent: Option<String>,
+    ) -> String {
         let fn_ty = ctx.type_db.get_type(call.fn_id).unwrap();
         let (ty, val) = self.gen_temp_expr(ctx, &fn_ty.get_return_type_id());
 
@@ -468,12 +498,27 @@ impl CTranspilerPass {
             .iter()
             .chain(call.suffix_args.iter())
             .collect();
+
+        // Check for self and add it as a first argument
+        if let Some(parent) = &parent
+            && !fn_ty.get_su_args().is_empty()
+            && fn_ty.get_su_args()[0].name == "self"
+        {
+            call_str += "&";
+            call_str += parent;
+            if !args.is_empty() {
+                call_str += ", ";
+            }
+        }
+
+        // Add the rest of the arguments
         for (i, arg) in args.iter().enumerate() {
             call_str += self.transpile_expr(ctx, arg).as_str();
             if i != args.len() - 1 {
                 call_str += ", ";
             }
         }
+
         call_str += ")";
 
         if fn_ty.get_return_type_id() == VOID_TYPE.get_id() {
@@ -584,11 +629,23 @@ impl CTranspilerPass {
     }
 
     fn transpile_ref(&mut self, ctx: &ProgramCtx, r: &RefExprAst) -> String {
-        "&".to_string() + self.transpile_expr(ctx, &r.expr).as_str()
+        if self.assign_mode {
+            self.source += "&";
+            self.transpile_expr(ctx, &r.expr);
+            String::new()
+        } else {
+            "&".to_string() + self.transpile_expr(ctx, &r.expr).as_str()
+        }
     }
 
     fn transpile_deref(&mut self, ctx: &ProgramCtx, d: &DerefExprAst) -> String {
-        "*".to_string() + self.transpile_expr(ctx, &d.expr).as_str()
+        if self.assign_mode {
+            self.source += "*";
+            self.transpile_expr(ctx, &d.expr);
+            String::new()
+        } else {
+            "*".to_string() + self.transpile_expr(ctx, &d.expr).as_str()
+        }
     }
 
     fn transpile_fn_body(&mut self, ctx: &ProgramCtx, body: &BodyExprAst) {
@@ -617,7 +674,7 @@ impl CTranspilerPass {
 
         self.indent -= 1;
         self.add_indent();
-        self.source += "}\n";
+        self.source += "}\n\n";
     }
 
     fn transpile_body(&mut self, ctx: &ProgramCtx, body: &BodyExprAst) -> String {

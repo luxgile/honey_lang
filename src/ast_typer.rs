@@ -173,6 +173,11 @@ impl AstTyped for MemberAccesorExprAst {
                     )
                 })
                 .id
+        } else if let Some(method) = &self.method {
+            let method_ty = base_type
+                .get_method_by_name(&method.fn_name, &ctx.type_db)
+                .unwrap();
+            ctx.type_db.get_type(method_ty).unwrap().get_return_type_id()
         } else {
             panic!("No member (field or method) specified for member accessor.");
         }

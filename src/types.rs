@@ -194,6 +194,9 @@ impl AstType {
     pub fn get_su_args(&self) -> &Vec<AstNamedType> {
         &self.su_args
     }
+    pub fn get_all_args(&self) -> Vec<AstNamedType> {
+        [&self.get_pre_args()[..], &self.get_su_args()[..]].concat()
+    }
     pub fn is_varadic(&self) -> bool {
         !self.su_args.is_empty() && self.su_args.last().is_some_and(|arg| arg.is_varadic)
     }

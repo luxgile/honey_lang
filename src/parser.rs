@@ -1042,6 +1042,7 @@ impl<'a> Parser<'a> {
         } else {
             self.errors
                 .push(CompilerError::member_not_found(&id_tk, &base_ty_ref, id));
+            *offset += 2; // Skip . and id
             return (base_expr, false);
         }
     }
@@ -1195,6 +1196,17 @@ impl<'a> Parser<'a> {
 
         for fn_id in &fns {
             let fn_ty = self.ctx.type_db.get_type(*fn_id).unwrap().clone();
+            if let Some(parent_id) = parent {
+                match fn_ty.get_parent_id() {
+                    Some(fn_parent_id) => {
+                        if parent_id != fn_parent_id {
+                            continue;
+                        }
+                    }
+                    None => continue,
+                }
+            }
+
             let mut tmp_offset = *offset;
             tmp_offset += 1; // Consume identifier
 
