@@ -158,12 +158,12 @@ impl CTranspilerPass {
         let struct_name = struct_ty.get_fullname(&ctx.type_db);
         if struct_ty.is_unit() {
             self.add_indent();
-            self.source += &format!("typedef struct {} {{}} {};\n", struct_name, struct_name);
+            self.source += &format!("typedef struct {struct_name} {{}} {struct_name};\n");
             return;
         }
 
         self.add_indent();
-        self.source += format!("typedef struct {} {{\n", struct_name).as_str();
+        self.source += format!("typedef struct {struct_name} {{\n").as_str();
 
         self.indent += 1;
         for field in &s.fields {
@@ -214,8 +214,8 @@ impl CTranspilerPass {
 
         // Enum union
         self.add_indent();
-        let union_name = &format!("__{}_union", enum_name);
-        self.source += &format!("typedef union {} {{\n", union_name);
+        let union_name = &format!("__{enum_name}_union");
+        self.source += &format!("typedef union {union_name} {{\n");
         self.indent += 1;
         for (i, variant) in e_ty.get_fields().iter().enumerate() {
             let v_ty = ctx.type_db.get_type(variant.id).unwrap();
@@ -229,10 +229,10 @@ impl CTranspilerPass {
         }
         self.indent -= 1;
         self.add_indent();
-        self.source += &format!("}} {} ;\n\n", union_name);
+        self.source += &format!("}} {union_name} ;\n\n");
 
         // Enum declaration as a tagged union
-        self.source += format!("typedef struct {} {{\n", enum_name).as_str();
+        self.source += format!("typedef struct {enum_name} {{\n").as_str();
         self.indent += 1;
 
         // Index
@@ -241,7 +241,7 @@ impl CTranspilerPass {
 
         // Union
         self.add_indent();
-        self.source += &format!("{} __variant_value;\n", union_name);
+        self.source += &format!("{union_name} __variant_value;\n");
 
         self.indent -= 1;
         self.add_indent();
@@ -340,7 +340,7 @@ impl CTranspilerPass {
 
         if !is_void {
             self.add_indent();
-            self.source += &format!("{} {};\n", ty, val);
+            self.source += &format!("{ty} {val};\n");
         }
 
         self.add_indent();
@@ -474,7 +474,7 @@ impl CTranspilerPass {
         index_str += self.transpile_expr(ctx, &idx.index).as_str();
         index_str += "]";
         self.add_indent();
-        self.source += &format!("{} {} = {};\n", ty, val, index_str);
+        self.source += &format!("{ty} {val} = {index_str};\n");
         val
     }
 
@@ -534,7 +534,7 @@ impl CTranspilerPass {
             "".to_string()
         } else {
             self.add_indent();
-            self.source += &format!("{} {} = {};\n", ty, val, call_str);
+            self.source += &format!("{ty} {val} = {call_str};\n");
             val
         }
     }
@@ -556,7 +556,7 @@ impl CTranspilerPass {
         // The condition needs to be evaluated again at the end of the while loop
         let condition_2 = self.transpile_expr(ctx, &for_expr.condition);
         self.add_indent();
-        self.source += &format!("{} = {};\n", condition, condition_2);
+        self.source += &format!("{condition} = {condition_2};\n");
 
         self.indent -= 1;
         self.add_indent();
@@ -571,7 +571,7 @@ impl CTranspilerPass {
 
         if !is_void {
             self.add_indent();
-            self.source += &format!("{} {};\n", ty, val);
+            self.source += &format!("{ty} {val};\n");
         }
 
         // Condition
@@ -663,7 +663,7 @@ impl CTranspilerPass {
         self.indent += 1;
         if !is_void {
             self.add_indent();
-            self.source += &format!("{} {};\n", ty, val);
+            self.source += &format!("{ty} {val};\n");
         }
 
         let last_expr = self.transpile_statements(ctx, &body.statements, &val);
@@ -675,7 +675,7 @@ impl CTranspilerPass {
             self.add_indent();
             self.source += &format!("{} = {};\n", val, last_expr.unwrap());
             self.add_indent();
-            self.source += &format!("return {};\n", val);
+            self.source += &format!("return {val};\n");
         }
 
         self.indent -= 1;
@@ -685,7 +685,7 @@ impl CTranspilerPass {
 
     fn transpile_body(&mut self, ctx: &ProgramCtx, body: &BodyExprAst) -> String {
         let (ty, val) = self.gen_temp_expr(ctx, &body.get_type_id(ctx));
-        self.source += &format!("{} {};\n", ty, val);
+        self.source += &format!("{ty} {val};\n");
 
         self.source += "{\n";
         self.indent += 1;
@@ -755,7 +755,7 @@ impl CTranspilerPass {
             }
         };
         self.add_indent();
-        self.source += &format!("{} {} = {};\n", tmp_ty, tmp_val, meta_str);
+        self.source += &format!("{tmp_ty} {tmp_val} = {meta_str};\n");
         tmp_val
     }
 }

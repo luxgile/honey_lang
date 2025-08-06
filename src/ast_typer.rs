@@ -10,7 +10,7 @@ pub trait AstTyped {
         let id = self.get_type_id(ctx);
         ctx.type_db
             .get_type(id) // `ctx.type_db` is still mutably borrowed from `get_type_id`, but `TypeDB::get_type` takes `&self`. This is okay.
-            .unwrap_or_else(|| panic!("Type with ID {:?} not found in TypeDB", id))
+            .unwrap_or_else(|| panic!("Type with ID {id:?} not found in TypeDB"))
     }
     fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId;
 }

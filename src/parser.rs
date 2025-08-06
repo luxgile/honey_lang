@@ -122,8 +122,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_file(&mut self, source: &String, print_tokens: bool) -> FileStmtAst {
-        self.lexer.set_source(source.as_str());
+    pub fn parse_file(&mut self, source: &str, print_tokens: bool) -> FileStmtAst {
+        self.lexer.set_source(source);
         self.tk_queue.clear(); // Clear any previous tokens
 
         loop {
@@ -963,8 +963,7 @@ impl<'a> Parser<'a> {
             .get_field_by_name(&enum_member_name)
             .unwrap_or_else(|| {
                 panic!(
-                    "no field '{}' found on type '{}'",
-                    enum_member_name, enum_name
+                    "no field '{enum_member_name}' found on type '{enum_name}'"
                 )
             });
         let enum_member_type = self.ctx.type_db.get_type(enum_member_named_type.id);

@@ -97,7 +97,7 @@ impl AstPrint for StringExprAst {
         let mut str = self.value.clone(); // Clone to modify
         str = str.replace('\n', "\\n");
         str = str.replace('\t', "\\t");
-        print!("\"{}\"", str);
+        print!("\"{str}\"");
     }
 }
 
@@ -340,7 +340,7 @@ impl AstPrint for EnumExprAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
         let enum_type_name = get_type_name(self.enum_type, ctx);
         let struct_expr_type_name = get_type_name(self.struct_expr.type_id, ctx); // Assuming struct_expr has a 'ty' field
-        print!("{}.{}", enum_type_name, struct_expr_type_name);
+        print!("{enum_type_name}.{struct_expr_type_name}");
         print!(".{{");
         let enum_member_type = ctx
             .type_db

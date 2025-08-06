@@ -1,4 +1,4 @@
-use std::{fs::read_to_string, process::ExitStatus};
+use std::fs::read_to_string;
 
 use honey_bootstrapper_lib::Compiler;
 

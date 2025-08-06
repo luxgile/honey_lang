@@ -151,7 +151,7 @@ impl CompilerError {
         );
 
         // Print the relevant line of code
-        eprintln!("{}", line_content_str);
+        eprintln!("{line_content_str}");
 
         // Print error marker (^)
         eprint!("{}", "".red());

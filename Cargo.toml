@@ -12,6 +12,7 @@ name = "honey_boostrapper_cli"
 path = "src/cli.rs"
 
 [dependencies]
+clap = "4.5.42"
 colored = "3.0.0"
 lazy_static = "1.5.0"
 thiserror = "2.0.12"

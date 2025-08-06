@@ -1,7 +1,7 @@
 use crate::{
     ast_typer::AstTyped,
     program_ctx::ProgramCtx,
-    types::{AstNamedType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, VOID_TYPE},
+    types::{AstNamedType, AstTypeId, BOOL_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
 
 #[derive(Debug)]

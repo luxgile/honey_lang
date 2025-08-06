@@ -66,7 +66,7 @@ impl AstType {
     pub fn new_reference(subtype_id: AstTypeId, db: &crate::type_db::AstTypeDb) -> Self {
         let subtype = db
             .get_type(subtype_id)
-            .unwrap_or_else(|| panic!("Subtype not found for ID: {}", subtype_id));
+            .unwrap_or_else(|| panic!("Subtype not found for ID: {subtype_id}"));
         let name = format!("^{}", subtype.name);
         let mut type_ = Self::new_base(AstTypeKind::Reference, name);
         type_.id = calculate_hash(&type_.name);
@@ -103,7 +103,7 @@ impl AstType {
     pub fn new_array(subtype_id: AstTypeId, size: usize, db: &crate::type_db::AstTypeDb) -> Self {
         let subtype = db
             .get_type(subtype_id)
-            .unwrap_or_else(|| panic!("Subtype not found for ID: {}", subtype_id));
+            .unwrap_or_else(|| panic!("Subtype not found for ID: {subtype_id}"));
         let name = format!("#{}[]", subtype.name);
         let mut type_ = Self::new_base(AstTypeKind::Array, name);
         type_.id = calculate_hash(&type_.name);
@@ -144,7 +144,7 @@ impl AstType {
             .parent
             .unwrap_or_else(|| panic!("Parent not found for type ID: {}", self.id));
         db.get_type(parent_id)
-            .unwrap_or_else(|| panic!("Parent type not found in DB for ID: {}", parent_id))
+            .unwrap_or_else(|| panic!("Parent type not found in DB for ID: {parent_id}"))
     }
     pub fn get_parent_id(&self) -> Option<AstTypeId> {
         self.parent
@@ -164,7 +164,7 @@ impl AstType {
         if let Some(parent_id) = self.parent {
             let parent_ty = db
                 .get_type(parent_id)
-                .unwrap_or_else(|| panic!("Parent type not found in DB for ID: {}", parent_id));
+                .unwrap_or_else(|| panic!("Parent type not found in DB for ID: {parent_id}"));
             fullname = format!("{}_{}", parent_ty.get_fullname(db), fullname);
         }
         if self.overload > 0 {
@@ -396,7 +396,7 @@ impl AstType {
         for method_id in &self.methods {
             let m_ty = db
                 .get_type(*method_id)
-                .unwrap_or_else(|| panic!("Type not found in DB for method ID: {}", method_id));
+                .unwrap_or_else(|| panic!("Type not found in DB for method ID: {method_id}"));
             if m_ty.get_name() == name {
                 return Some(*method_id);
             }

@@ -72,7 +72,7 @@ impl Display for TokenKind {
             _ => panic!("unimplemented display for token kind"),
         };
 
-        write!(f, "{}", s)
+        write!(f, "{s}")
     }
 }
 

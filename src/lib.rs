@@ -4,7 +4,6 @@ use std::{
     io::Write, process::{Command, ExitStatus, Stdio}
 };
 
-use ast_printer::AstPrint;
 use compiler_pass::{CTranspilerPass, CompilerPass};
 use meta_fn::*;
 use parser::Parser;
@@ -58,11 +57,11 @@ impl Compiler {
             .lines()
             .map(|x| {
                 line += 1;
-                format!("{}  ", line) + x + "\n"
+                format!("{line}  ") + x + "\n"
             })
             .collect();
         println!();
-        println!("{}", c_src_debug);
+        println!("{c_src_debug}");
 
         let mut gcc = Command::new("gcc")
             .args(["-x", "c", "-", "-o", &exe_name])
@@ -80,7 +79,7 @@ impl Compiler {
         if output.status.success() {
             println!("\nhun code compiled successfully");
             println!("\nrunning code...");
-            let run_cmd = Command::new(format!("./{}", exe_name))
+            let run_cmd = Command::new(format!("./{exe_name}"))
                 .stdin(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
