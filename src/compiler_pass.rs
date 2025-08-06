@@ -119,6 +119,7 @@ impl CTranspilerPass {
     fn transpile_var_assign(&mut self, ctx: &ProgramCtx, assign: &VarAssignStmtAst) {
         let rvalue = self.transpile_expr(ctx, &assign.rvalue);
         let old_assign_mode = self.assign_mode;
+        self.add_indent();
         self.assign_mode = true;
         self.transpile_expr(ctx, &assign.lvalue);
         self.assign_mode = old_assign_mode;

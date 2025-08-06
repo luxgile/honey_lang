@@ -1,4 +1,4 @@
-use std::process::ExitStatus;
+use std::{fs::read_to_string, process::ExitStatus};
 
 use honey_bootstrapper_lib::Compiler;
 
@@ -199,7 +199,7 @@ fn pointers() {
         2,
     );
 
-    // FILE("ptr.hun", 7);
+    assert_src("pointers", read_to_string("tests/ptr.hun").expect("issue opening ptr.hun"), 7);
 }
 
 #[test]
