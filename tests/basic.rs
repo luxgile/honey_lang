@@ -1,10 +1,10 @@
 use std::fs::read_to_string;
 
-use honey_bootstrapper_lib::Compiler;
+use hunc_lib::{CompConfig, Compiler};
 
 fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
     assert_eq!(
-        Compiler::run_src(src.into(), name.into())
+        Compiler::run_src(src.into(), &name.into(), &CompConfig::default())
             .unwrap()
             .code()
             .unwrap(),

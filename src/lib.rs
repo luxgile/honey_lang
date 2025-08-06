@@ -1,9 +1,13 @@
 #![allow(dead_code)]
 
 use std::{
-    io::Write, process::{Command, ExitStatus, Stdio}
+    fs::{self, File},
+    io::{Read, Write},
+    path::Path,
+    process::{Command, ExitStatus, Stdio},
 };
 
+use ast_printer::AstPrint;
 use compiler_pass::{CTranspilerPass, CompilerPass};
 use meta_fn::*;
 use parser::Parser;
@@ -22,15 +26,35 @@ mod program_ctx;
 mod type_db;
 mod types;
 
+#[derive(Default)]
+pub struct CompConfig {
+    pub pretty_print: bool,
+    pub print_c: bool,
+}
+
+#[derive(Debug)]
+pub enum BuildError {
+    FileDoesNotExist,
+    CompilationFailed,
+    GccFailed,
+}
+
 pub struct Compiler;
 impl Compiler {
-    pub fn run_file(filename: String) -> Result<ExitStatus, ()> {
-        let source_code: String =
-            std::fs::read_to_string(filename.clone()).expect("error reading file");
-        Compiler::run_src(source_code, filename)
+    pub fn run_file(file_path: &Path, config: &CompConfig) -> Result<ExitStatus, BuildError> {
+        let source_code = fs::read_to_string(file_path).unwrap();
+        Compiler::run_src(
+            source_code,
+            file_path.file_stem().unwrap().to_str().unwrap(),
+            config,
+        )
     }
 
-    pub fn run_src(src: String, exe_name: String) -> Result<ExitStatus, ()> {
+    pub fn run_src(
+        src: String,
+        exe_name: &str,
+        config: &CompConfig,
+    ) -> Result<ExitStatus, BuildError> {
         let std_src = String::from_utf8_lossy(include_bytes!("std.hun")).into_owned();
         let hun_src = std_src + &src;
 
@@ -41,30 +65,35 @@ impl Compiler {
             (parser.parse_file(&hun_src, false), parser.errors.clone())
         };
 
-        // println!();
-        // file.print_ast(&program_ctx, 0);
+        if config.pretty_print {
+            println!();
+            file.print_ast(&program_ctx, 0);
+        }
 
         if !errors.is_empty() {
             println!();
             errors.iter().for_each(|e| e.print_error(&hun_src));
-            return Err(());
+            return Err(BuildError::CompilationFailed);
         }
 
         let transpiler = CTranspilerPass::default();
         let c_src = transpiler.run(&program_ctx, &file);
-        let mut line = -1;
-        let c_src_debug: String = c_src
-            .lines()
-            .map(|x| {
-                line += 1;
-                format!("{line}  ") + x + "\n"
-            })
-            .collect();
-        println!();
-        println!("{c_src_debug}");
+
+        if config.print_c {
+            let mut line = -1;
+            let c_src_debug: String = c_src
+                .lines()
+                .map(|x| {
+                    line += 1;
+                    format!("{line}  ") + x + "\n"
+                })
+                .collect();
+            println!();
+            println!("{c_src_debug}");
+        }
 
         let mut gcc = Command::new("gcc")
-            .args(["-x", "c", "-", "-o", &exe_name])
+            .args(["-x", "c", "-", "-o", exe_name])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -95,25 +124,17 @@ impl Compiler {
             println!("\ncompilation failed:");
             println!("{}", String::from_utf8_lossy(&output.stdout));
             println!("{}", String::from_utf8_lossy(&output.stderr));
-            Err(())
+            Err(BuildError::GccFailed)
         }
     }
 
     fn add_meta_definitions(c: &mut ProgramCtx) {
         let def_bin = |c: &mut ProgramCtx, id: &str, op: BinOpKind, ret: MetaReturnType| {
-            c.define_meta(MetaFn::new(
-                id.to_string(),
-                MetaFnKind::BinOp(op),
-                ret,
-            ))
+            c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::BinOp(op), ret))
         };
 
         let def_cmp = |c: &mut ProgramCtx, id: &str, op: CmpOpKind, ret: MetaReturnType| {
-            c.define_meta(MetaFn::new(
-                id.to_string(),
-                MetaFnKind::CmpOp(op),
-                ret,
-            ))
+            c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::CmpOp(op), ret))
         };
 
         let int = MetaReturnType::Int;
