@@ -1,11 +1,13 @@
 #![allow(dead_code)]
 
 use std::{
+    env,
     fs::{self, File},
     io::{Read, Write},
-    path::Path,
+    path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
 };
+use colored::Colorize;
 
 use ast_printer::AstPrint;
 use compiler_pass::{CTranspilerPass, CompilerPass};
@@ -26,10 +28,11 @@ mod program_ctx;
 mod type_db;
 mod types;
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct CompConfig {
     pub pretty_print: bool,
     pub print_c: bool,
+    pub build_path: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -41,23 +44,31 @@ pub enum BuildError {
 
 pub struct Compiler;
 impl Compiler {
-    pub fn run_file(file_path: &Path, config: &CompConfig) -> Result<ExitStatus, BuildError> {
+    pub fn run_file(file_path: &Path, config: CompConfig) -> Result<ExitStatus, BuildError> {
         let source_code = fs::read_to_string(file_path).unwrap();
+
+        let mut _config = config;
+        if _config.build_path.is_none() {
+            _config.build_path = Some(file_path.parent().unwrap().join(".hun_build"));
+        }
+        
         Compiler::run_src(
             source_code,
             file_path.file_stem().unwrap().to_str().unwrap(),
-            config,
+            _config,
         )
     }
 
     pub fn run_src(
         src: String,
         exe_name: &str,
-        config: &CompConfig,
+        config: CompConfig,
     ) -> Result<ExitStatus, BuildError> {
+        // Read std file and append it to source
         let std_src = String::from_utf8_lossy(include_bytes!("std.hun")).into_owned();
         let hun_src = std_src + &src;
 
+        // Parse source
         let mut program_ctx = ProgramCtx::new();
         Compiler::add_meta_definitions(&mut program_ctx);
         let (file, errors) = {
@@ -70,12 +81,14 @@ impl Compiler {
             file.print_ast(&program_ctx, 0);
         }
 
+        // Print errors if any found
         if !errors.is_empty() {
             println!();
             errors.iter().for_each(|e| e.print_error(&hun_src));
             return Err(BuildError::CompilationFailed);
         }
 
+        // Transpile to C
         let transpiler = CTranspilerPass::default();
         let c_src = transpiler.run(&program_ctx, &file);
 
@@ -92,8 +105,21 @@ impl Compiler {
             println!("{c_src_debug}");
         }
 
+        // Ensuring build folder exists
+        let build_path = config
+            .build_path
+            .clone()
+            .unwrap_or(env::current_dir().unwrap());
+
+        if !build_path.exists() {
+            fs::create_dir(&build_path).expect("issue creating build path");
+        }
+
+        let file_path = build_path.as_path().join(exe_name);
+
+        // Build C source using gcc
         let mut gcc = Command::new("gcc")
-            .args(["-x", "c", "-", "-o", exe_name])
+            .args(["-x", "c", "-", "-o", file_path.to_str().unwrap()])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -106,9 +132,8 @@ impl Compiler {
 
         let output = gcc.wait_with_output().unwrap();
         if output.status.success() {
-            println!("\nhun code compiled successfully");
-            println!("\nrunning code...");
-            let run_cmd = Command::new(format!("./{exe_name}"))
+            println!("honey compilation - {}", "success".green().bold());
+            let run_cmd = Command::new(format!("./{}", file_path.to_str().unwrap()))
                 .stdin(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())
@@ -117,8 +142,6 @@ impl Compiler {
             let run = run_cmd.wait_with_output().unwrap();
             let run_str = String::from_utf8_lossy(&run.stdout);
             println!("{}", &run_str);
-
-            let _rm = Command::new("rm").args([exe_name]).output().unwrap();
             Ok(run.status)
         } else {
             println!("\ncompilation failed:");

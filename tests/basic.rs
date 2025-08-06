@@ -1,10 +1,17 @@
-use std::fs::read_to_string;
+use std::{fs::read_to_string, path::PathBuf, str::FromStr};
 
 use hunc_lib::{CompConfig, Compiler};
 
+// FIXME: The first time tests are run, fail because the files are being created all at the same
+// time. Some most likely are overlapping.
 fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
+    let config = CompConfig {
+        pretty_print: false,
+        print_c: false,
+        build_path: Some(PathBuf::from_str("tests/.hun_build").unwrap()),
+    };
     assert_eq!(
-        Compiler::run_src(src.into(), &name.into(), &CompConfig::default())
+        Compiler::run_src(src.into(), &name.into(), config)
             .unwrap()
             .code()
             .unwrap(),
@@ -14,14 +21,14 @@ fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
 
 #[test]
 fn main_func() {
-    assert_src("main", "main :: fn(|) i32 { 0 }", 0);
-    assert_src("main", "main :: fn(|) i32 { 1 }", 1);
+    assert_src("main0", "main :: fn(|) i32 { 0 }", 0);
+    assert_src("main1", "main :: fn(|) i32 { 1 }", 1);
 }
 
 #[test]
 fn var_declaration() {
     assert_src(
-        "var_declaration",
+        "var_declaration1",
         "main :: fn(|) i32 {
             var := 3
             0
@@ -30,7 +37,7 @@ fn var_declaration() {
     );
 
     assert_src(
-        "var_declaration",
+        "var_declaration2",
         "main :: fn(|) i32 {
             var := 2.5
             0
@@ -39,7 +46,7 @@ fn var_declaration() {
     );
 
     assert_src(
-        "var_declaration",
+        "var_declaration3",
         "main :: fn(|) i32 {
             var := true
             0
@@ -48,7 +55,7 @@ fn var_declaration() {
     );
 
     assert_src(
-        "var_declaration",
+        "var_declaration4",
         "main :: fn(|) i32 {
             var := false
             0
@@ -57,7 +64,7 @@ fn var_declaration() {
     );
 
     assert_src(
-        "var_declaration",
+        "var_declaration5",
         "main :: fn(|) i32 {
             var := \"hi!\"
             0
@@ -77,7 +84,7 @@ fn ints_decl() {
 #[test]
 fn if_statements() {
     assert_src(
-        "if_statements",
+        "if_statements0",
         "main :: fn(|) i32 {
             var := 3
             if @i== var 3 {
@@ -89,7 +96,7 @@ fn if_statements() {
     );
 
     assert_src(
-        "if_statements",
+        "if_statements1",
         "main :: fn(|) i32 {
             var := true
             if var {
@@ -101,7 +108,7 @@ fn if_statements() {
     );
 
     assert_src(
-        "if_statements",
+        "if_statements2",
         "main :: fn(|) i32 {
             var := true
             if var {
@@ -114,7 +121,7 @@ fn if_statements() {
     );
 
     assert_src(
-        "if_statements",
+        "if_statements3",
         "main :: fn(|) i32 {
             var := false
             if var {
@@ -130,7 +137,7 @@ fn if_statements() {
 #[test]
 fn var_assigment() {
     assert_src(
-        "var_assigment",
+        "var_assigment0",
         " main :: fn(|) i32 {
     var := 3
     var = 5
@@ -143,7 +150,7 @@ fn var_assigment() {
     );
 
     assert_src(
-        "var_assigment",
+        "var_assigment1",
         " main :: fn(|) i32 {
     var := false
     var = true
@@ -174,7 +181,7 @@ fn loops() {
 #[test]
 fn math() {
     assert_src(
-        "maths",
+        "maths0",
         "main :: fn(|) i32 {
     @i+ @i* 3 5 3
   }",
@@ -182,7 +189,7 @@ fn math() {
     );
 
     assert_src(
-        "maths",
+        "maths1",
         "main :: fn(|) i32 {
     val := @f- @f+ 3.2 5.5 17.6
     if @f< val 17.61 { # to account for floating point precission
@@ -213,7 +220,7 @@ fn pointers() {
 #[test]
 fn arrays() {
     assert_src(
-        "arrays",
+        "arrays0",
         "main :: fn(|) i32 {
     array := [8.3, 1.2, 0.4]
     0
@@ -222,7 +229,7 @@ fn arrays() {
     );
 
     assert_src(
-        "arrays",
+        "arrays1",
         "main :: fn(|) i32 {
     array := [8, 1, 0, 6, 10, 2]
     a := array[3]
@@ -232,7 +239,7 @@ fn arrays() {
     );
 
     assert_src(
-        "arrays",
+        "arrays2",
         "main :: fn(|) i32 {
     array := [8, 1, 0, 6, 10, 2]
     array[3]
@@ -244,7 +251,7 @@ fn arrays() {
 #[test]
 fn calling_functions() {
     assert_src(
-        "calling_functions",
+        "calling_functions0",
         "
     foo :: fn(|) {}
     main :: fn(|) i32 {
@@ -256,7 +263,7 @@ fn calling_functions() {
     );
 
     assert_src(
-        "calling_functions",
+        "calling_functions1",
         "
     foo :: fn(|a: i32) i32 {
       @i+ a 1
@@ -270,7 +277,7 @@ fn calling_functions() {
     );
 
     assert_src(
-        "calling_functions",
+        "calling_functions2",
         "
     foo :: fn(l: i32 | r: i32) i32 {
       @i+ l r
@@ -372,7 +379,7 @@ fn struct_methods_call() {
 #[test]
 fn method_call_fn_same_name() {
     assert_src(
-        "struct_methods_call",
+        "method_call_fn_same_name",
         "
     Person :: struct {
       name: cstring,

@@ -35,7 +35,7 @@ fn main() {
             todo!();
         }
         Commands::Run { file_path, print_c, pretty_print } => {
-            Compiler::run_file(Path::new(&file_path), &CompConfig { print_c, pretty_print }).unwrap();
+            Compiler::run_file(Path::new(&file_path), CompConfig { print_c, pretty_print, build_path: None }).unwrap();
         }
     }
 }
