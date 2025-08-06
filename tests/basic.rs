@@ -14,15 +14,15 @@ fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
 
 #[test]
 fn main_func() {
-    assert_src("main", "main :: fn(|) Int { 0 }", 0);
-    assert_src("main", "main :: fn(|) Int { 1 }", 1);
+    assert_src("main", "main :: fn(|) i32 { 0 }", 0);
+    assert_src("main", "main :: fn(|) i32 { 1 }", 1);
 }
 
 #[test]
 fn var_declaration() {
     assert_src(
         "var_declaration",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := 3
             0
         }",
@@ -31,7 +31,7 @@ fn var_declaration() {
 
     assert_src(
         "var_declaration",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := 2.5
             0
         }",
@@ -40,7 +40,7 @@ fn var_declaration() {
 
     assert_src(
         "var_declaration",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := true
             0
         }",
@@ -49,7 +49,7 @@ fn var_declaration() {
 
     assert_src(
         "var_declaration",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := false
             0
         }",
@@ -58,7 +58,7 @@ fn var_declaration() {
 
     assert_src(
         "var_declaration",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := \"hi!\"
             0
         }",
@@ -70,7 +70,7 @@ fn var_declaration() {
 fn if_statements() {
     assert_src(
         "if_statements",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := 3
             if @i== var 3 {
                 ret 0
@@ -82,7 +82,7 @@ fn if_statements() {
 
     assert_src(
         "if_statements",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := true
             if var {
                 ret 0
@@ -94,7 +94,7 @@ fn if_statements() {
 
     assert_src(
         "if_statements",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := true
             if var {
                 0
@@ -107,7 +107,7 @@ fn if_statements() {
 
     assert_src(
         "if_statements",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
             var := false
             if var {
                 1
@@ -123,7 +123,7 @@ fn if_statements() {
 fn var_assigment() {
     assert_src(
         "var_assigment",
-        " main :: fn(|) Int {
+        " main :: fn(|) i32 {
     var := 3
     var = 5
     if @i== var 5 {
@@ -136,7 +136,7 @@ fn var_assigment() {
 
     assert_src(
         "var_assigment",
-        " main :: fn(|) Int {
+        " main :: fn(|) i32 {
     var := false
     var = true
     if var {
@@ -152,7 +152,7 @@ fn var_assigment() {
 fn loops() {
     assert_src(
         "loops",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
         i := 0
         loop @i< i 10 {
           i = @i+ i 1
@@ -167,7 +167,7 @@ fn loops() {
 fn math() {
     assert_src(
         "maths",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     @i+ @i* 3 5 3
   }",
         18,
@@ -175,7 +175,7 @@ fn math() {
 
     assert_src(
         "maths",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     val := @f- @f+ 3.2 5.5 17.6
     if @f< val 17.61 { # to account for floating point precission
       ret 0
@@ -190,7 +190,7 @@ fn math() {
 fn pointers() {
     assert_src(
         "pointers",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     i := 5
     p := &i
     ^p = 2
@@ -206,7 +206,7 @@ fn pointers() {
 fn arrays() {
     assert_src(
         "arrays",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     array := [8.3, 1.2, 0.4]
     0
   }",
@@ -215,7 +215,7 @@ fn arrays() {
 
     assert_src(
         "arrays",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     array := [8, 1, 0, 6, 10, 2]
     a := array[3]
     a
@@ -225,7 +225,7 @@ fn arrays() {
 
     assert_src(
         "arrays",
-        "main :: fn(|) Int {
+        "main :: fn(|) i32 {
     array := [8, 1, 0, 6, 10, 2]
     array[3]
   }",
@@ -239,7 +239,7 @@ fn calling_functions() {
         "calling_functions",
         "
     foo :: fn(|) {}
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       foo
       0
     }
@@ -250,11 +250,11 @@ fn calling_functions() {
     assert_src(
         "calling_functions",
         "
-    foo :: fn(|a: Int) Int {
+    foo :: fn(|a: i32) i32 {
       @i+ a 1
     }
 
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       foo 4
     }
   ",
@@ -264,11 +264,11 @@ fn calling_functions() {
     assert_src(
         "calling_functions",
         "
-    foo :: fn(l:Int | r: Int) Int {
+    foo :: fn(l: i32 | r: i32) i32 {
       @i+ l r
     }
 
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       8 foo 4
     }
   ",
@@ -282,12 +282,12 @@ fn struct_decl() {
         "struct_decl",
         "
     Person :: struct {
-      name: RawString,
-      gender: Bool,
-      age: Int,
+      name: cstring,
+      gender: bool,
+      age: i32,
     }
 
-    main :: fn (|) Int { 0 }
+    main :: fn (|) i32 { 0 }
   ",
         0,
     );
@@ -299,12 +299,12 @@ fn struct_expr() {
         "struct_expr",
         "
     Person :: struct {
-      name: RawString,
-      gender: Bool,
-      age: Int,
+      name: cstring,
+      gender: bool,
+      age: i32,
     }
 
-    main :: fn (|) Int {
+    main :: fn (|) i32 {
       a := Person .{ .name = \"El Pepe\", .gender = true, .age = 30}
       a.age
     }
@@ -319,16 +319,16 @@ fn struct_methods_decl() {
         "struct_method_decl",
         "
     Person :: struct {
-      name: RawString,
-      gender: Bool,
-      age: Int,
+      name: cstring,
+      gender: bool,
+      age: i32,
 
       age_up :: fn(|self) {
         self.age = @i+ self.age 1
       }
     }
 
-    main :: fn (|) Int {
+    main :: fn (|) i32 {
       0
     }
   ",
@@ -342,16 +342,16 @@ fn struct_methods_call() {
         "struct_methods_call",
         "
     Person :: struct {
-      name: RawString,
-      gender: Bool,
-      age: Int,
+      name: cstring,
+      gender: bool,
+      age: i32,
 
       age_up :: fn(|self) {
         self.age = @i+ self.age 1
       }
     }
 
-    main :: fn (|) Int {
+    main :: fn (|) i32 {
       a := Person .{ .name = \"El Pepe\", .gender = true, .age = 30}
       a.age_up
       a.age
@@ -367,9 +367,9 @@ fn method_call_fn_same_name() {
         "struct_methods_call",
         "
     Person :: struct {
-      name: RawString,
-      gender: Bool,
-      age: Int,
+      name: cstring,
+      gender: bool,
+      age: i32,
 
       age_up :: fn(|self) {
         self.age = @i+ self.age 1
@@ -380,7 +380,7 @@ fn method_call_fn_same_name() {
       p.age = @i+ p.age 1
     }
 
-    main :: fn (|) Int {
+    main :: fn (|) i32 {
       a := Person .{ .name = \"El Pepe\", .gender = true, .age = 30}
       a.age_up
       a.age
@@ -397,11 +397,11 @@ fn enum_declaration() {
         "
     AnimalKind :: enum {
       Dog,
-      Cat :: struct { color: RawString },
+      Cat :: struct { color: cstring },
       Spider,
     }
 
-    main :: fn(|) Int {0}
+    main :: fn(|) i32 {0}
   ",
         0,
     );
@@ -414,11 +414,11 @@ fn enum_expression() {
         "
     AnimalKind :: enum {
       Dog,
-      Cat :: struct { color: RawString },
+      Cat :: struct { color: cstring },
       Spider,
     }
 
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       animal := AnimalKind.Dog 
       0
     }
@@ -434,11 +434,11 @@ fn enum_specialization() {
         "
     AnimalKind :: enum {
       Dog,
-      Cat :: struct { color: RawString, },
+      Cat :: struct { color: cstring, },
       Spider,
     }
 
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       animal := AnimalKind.Cat .{ .color = \"red\" } 
       0
     }
@@ -454,11 +454,11 @@ fn single_match_expression() {
         "
     AnimalKind :: enum {
       Dog,
-      Cat :: struct { color: RawString, },
+      Cat :: struct { color: cstring, },
       Spider,
     }
 
-    main :: fn(|) Int {
+    main :: fn(|) i32 {
       animal := AnimalKind.Cat .{ .color = \"red\" } 
       match animal : AnimalKind.Cat cat {
         ret 0
@@ -475,15 +475,15 @@ fn local_context() {
     assert_src(
         "local_context",
         "
-  foo :: fn(|a: Int) Int {
+  foo :: fn(|a: i32) i32 {
     a
   }
 
-  bar :: fn(|a: Float) Float {
+  bar :: fn(|a: f32) f32 {
     a
   }
   
-  main :: fn(|) Int {
+  main :: fn(|) i32 {
     a := foo 7
     b := bar 5.0
     a

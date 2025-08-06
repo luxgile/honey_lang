@@ -1,14 +1,14 @@
-extern printf :: fn (|format: RawString, args: ...)
+extern printf :: fn (|format: cstring, args: ...)
 
-add_one :: fn (| i: ^Int) {
+add_one :: fn (| i: ^i32) {
   ^i = @i+ ^i 1
 }
 
-+= :: fn (lhs: ^Int | rhs: Int) {
++= :: fn (lhs: ^i32 | rhs: i32) {
   ^lhs = @i+ ^lhs rhs 
 }
 
-main :: fn (|) Int {
+main :: fn (|) i32 {
   my_int := 5
   my_ptr := &my_int
   ^my_ptr = 3

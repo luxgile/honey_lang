@@ -1,7 +1,7 @@
 use crate::{
     ast_typer::AstTyped,
     program_ctx::ProgramCtx,
-    types::{AstNamedType, AstTypeId, BOOL_TYPE, FLOAT_TYPE, INT_TYPE, RAW_STRING_TYPE, VOID_TYPE},
+    types::{AstNamedType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
 
 #[derive(Debug)]
@@ -38,8 +38,8 @@ impl AstExpression {
                 .get_type(index_expr_ast.base.get_type_id(ctx))
                 .unwrap()
                 .get_subtype(),
-            AstExpression::Int(_) => INT_TYPE.get_id(),
-            AstExpression::Float(_) => FLOAT_TYPE.get_id(),
+            AstExpression::Int(i) => i.id,
+            AstExpression::Float(f) => f.id,
             AstExpression::String(_) => RAW_STRING_TYPE.get_id(),
             AstExpression::Bool(_) => BOOL_TYPE.get_id(),
             AstExpression::Ref(ref_expr_ast) => {
@@ -56,7 +56,9 @@ impl AstExpression {
                 _ => VOID_TYPE.get_id(),
             },
             AstExpression::Var(var_expr_ast) => ctx.defined_vars[&var_expr_ast.name].ty,
-            AstExpression::MetaDef(meta) => ctx.get_meta(meta.name.as_str()).unwrap().ret_type,
+            AstExpression::MetaDef(meta) => {
+                ctx.get_meta(meta.name.as_str()).unwrap().get_type_id(ctx)
+            }
             AstExpression::Statement(stmt) => stmt.expr.get_type_id(ctx),
             AstExpression::Group(group) => group.expr.get_type_id(ctx),
             AstExpression::If(if_expr_ast) => if_expr_ast.then_expr.get_type_id(ctx),
@@ -216,12 +218,14 @@ pub struct IndexExprAst {
 
 #[derive(Debug)]
 pub struct IntExprAst {
-    pub value: i32, // Assuming int maps to i32
+    pub id: AstTypeId, // Which int type is
+    pub value: i64,    // Assuming int maps to i32
 }
 
 #[derive(Debug)]
 pub struct FloatExprAst {
-    pub value: f64, // Assuming double maps to f64
+    pub id: AstTypeId, // Which float type is
+    pub value: f64,    // Assuming double maps to f64
 }
 
 #[derive(Debug)]

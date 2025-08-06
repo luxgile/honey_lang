@@ -99,52 +99,56 @@ impl Compiler {
     }
 
     fn add_meta_definitions(c: &mut ProgramCtx) {
-        let def_bin = |c: &mut ProgramCtx, id: &str, op: BinOpKind, ret: &AstType| {
+        let def_bin = |c: &mut ProgramCtx, id: &str, op: BinOpKind, ret: MetaReturnType| {
             c.define_meta(MetaFn::new(
                 id.to_string(),
                 MetaFnKind::BinOp(op),
-                ret.get_id(),
+                ret,
             ))
         };
 
-        let def_cmp = |c: &mut ProgramCtx, id: &str, op: CmpOpKind, ret: &AstType| {
+        let def_cmp = |c: &mut ProgramCtx, id: &str, op: CmpOpKind, ret: MetaReturnType| {
             c.define_meta(MetaFn::new(
                 id.to_string(),
                 MetaFnKind::CmpOp(op),
-                ret.get_id(),
+                ret,
             ))
         };
 
-        def_bin(c, "i+", BinOpKind::Add, &INT_TYPE);
-        def_bin(c, "i-", BinOpKind::Minus, &INT_TYPE);
-        def_bin(c, "i*", BinOpKind::Mult, &INT_TYPE);
-        def_bin(c, "i/", BinOpKind::Div, &INT_TYPE);
-        def_bin(c, "i%", BinOpKind::Rem, &INT_TYPE);
-        def_cmp(c, "i==", CmpOpKind::Eq, &INT_TYPE);
-        def_cmp(c, "i!=", CmpOpKind::Ne, &INT_TYPE);
-        def_cmp(c, "i<", CmpOpKind::Less, &INT_TYPE);
-        def_cmp(c, "i<=", CmpOpKind::LessEq, &INT_TYPE);
-        def_cmp(c, "i>", CmpOpKind::Greater, &INT_TYPE);
-        def_cmp(c, "i>=", CmpOpKind::GreaterEq, &INT_TYPE);
+        let int = MetaReturnType::Int;
+        let float = MetaReturnType::Float;
+        let bool = MetaReturnType::Type(BOOL_TYPE.get_id());
 
-        def_bin(c, "f+", BinOpKind::Add, &FLOAT_TYPE);
-        def_bin(c, "f-", BinOpKind::Minus, &FLOAT_TYPE);
-        def_bin(c, "f*", BinOpKind::Mult, &FLOAT_TYPE);
-        def_bin(c, "f/", BinOpKind::Div, &FLOAT_TYPE);
-        def_bin(c, "f%", BinOpKind::Rem, &FLOAT_TYPE);
-        def_cmp(c, "f==", CmpOpKind::Eq, &FLOAT_TYPE);
-        def_cmp(c, "f!=", CmpOpKind::Ne, &FLOAT_TYPE);
-        def_cmp(c, "f<", CmpOpKind::Less, &FLOAT_TYPE);
-        def_cmp(c, "f<=", CmpOpKind::LessEq, &FLOAT_TYPE);
-        def_cmp(c, "f>", CmpOpKind::Greater, &FLOAT_TYPE);
-        def_cmp(c, "f>=", CmpOpKind::GreaterEq, &FLOAT_TYPE);
+        def_bin(c, "i+", BinOpKind::Add, int);
+        def_bin(c, "i-", BinOpKind::Minus, int);
+        def_bin(c, "i*", BinOpKind::Mult, int);
+        def_bin(c, "i/", BinOpKind::Div, int);
+        def_bin(c, "i%", BinOpKind::Rem, int);
+        def_cmp(c, "i==", CmpOpKind::Eq, int);
+        def_cmp(c, "i!=", CmpOpKind::Ne, int);
+        def_cmp(c, "i<", CmpOpKind::Less, int);
+        def_cmp(c, "i<=", CmpOpKind::LessEq, int);
+        def_cmp(c, "i>", CmpOpKind::Greater, int);
+        def_cmp(c, "i>=", CmpOpKind::GreaterEq, int);
 
-        def_bin(c, "b&&", BinOpKind::And, &BOOL_TYPE);
-        def_bin(c, "b||)", BinOpKind::Or, &BOOL_TYPE);
-        def_cmp(c, "b==", CmpOpKind::Eq, &BOOL_TYPE);
-        def_cmp(c, "b!=", CmpOpKind::Ne, &BOOL_TYPE);
+        def_bin(c, "f+", BinOpKind::Add, float);
+        def_bin(c, "f-", BinOpKind::Minus, float);
+        def_bin(c, "f*", BinOpKind::Mult, float);
+        def_bin(c, "f/", BinOpKind::Div, float);
+        def_bin(c, "f%", BinOpKind::Rem, float);
+        def_cmp(c, "f==", CmpOpKind::Eq, float);
+        def_cmp(c, "f!=", CmpOpKind::Ne, float);
+        def_cmp(c, "f<", CmpOpKind::Less, float);
+        def_cmp(c, "f<=", CmpOpKind::LessEq, float);
+        def_cmp(c, "f>", CmpOpKind::Greater, float);
+        def_cmp(c, "f>=", CmpOpKind::GreaterEq, float);
 
-        def_bin(c, ">>", BinOpKind::LShr, &INT_TYPE);
-        def_bin(c, "<<", BinOpKind::Shl, &INT_TYPE);
+        def_bin(c, "b&&", BinOpKind::And, bool);
+        def_bin(c, "b||)", BinOpKind::Or, bool);
+        def_cmp(c, "b==", CmpOpKind::Eq, bool);
+        def_cmp(c, "b!=", CmpOpKind::Ne, bool);
+
+        def_bin(c, ">>", BinOpKind::LShr, int);
+        def_bin(c, "<<", BinOpKind::Shl, int);
     }
 }

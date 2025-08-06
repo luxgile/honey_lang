@@ -15,8 +15,12 @@ impl AstTypeDb {
         };
         db.add_type(VOID_TYPE.clone());
         db.add_type(BOOL_TYPE.clone());
-        db.add_type(INT_TYPE.clone());
-        db.add_type(FLOAT_TYPE.clone());
+        db.add_type(I8_TYPE.clone());
+        db.add_type(I16_TYPE.clone());
+        db.add_type(I32_TYPE.clone());
+        db.add_type(I64_TYPE.clone());
+        db.add_type(F32_TYPE.clone());
+        db.add_type(F64_TYPE.clone());
         db.add_type(RAW_STRING_TYPE.clone());
         db
     }
@@ -80,10 +84,7 @@ impl AstTypeDb {
         }
 
         if types.len() > 1 {
-            panic!(
-                "more than one reference type found for subtype {}",
-                subtype_id
-            );
+            panic!("more than one reference type found for subtype {subtype_id}");
         }
 
         *types.first().unwrap()

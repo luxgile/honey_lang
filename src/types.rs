@@ -211,6 +211,57 @@ impl AstType {
     pub fn is_void(&self) -> bool {
         self.id == VOID_TYPE.get_id()
     }
+
+    fn is_int(&self) -> bool {
+        self.id == I8_TYPE.get_id()
+            || self.id == I16_TYPE.get_id()
+            || self.id == I32_TYPE.get_id()
+            || self.id == I64_TYPE.get_id()
+    }
+
+    fn is_uint(&self) -> bool {
+        self.id == U8_TYPE.get_id()
+            || self.id == U16_TYPE.get_id()
+            || self.id == U32_TYPE.get_id()
+            || self.id == U64_TYPE.get_id()
+    }
+
+    fn get_int_size(&self) -> u32 {
+        if self.id == I8_TYPE.get_id() || self.id == U8_TYPE.get_id() {
+            return 8;
+        }
+
+        if self.id == I16_TYPE.get_id() || self.id == U16_TYPE.get_id() {
+            return 16;
+        }
+
+        if self.id == I32_TYPE.get_id() || self.id == U32_TYPE.get_id() {
+            return 32;
+        }
+
+        if self.id == I64_TYPE.get_id() || self.id == U64_TYPE.get_id() {
+            return 64;
+        }
+
+        panic!("type {} is not an int", self.get_name());
+    }
+
+    fn is_float(&self) -> bool {
+        self.id == F32_TYPE.get_id() || self.id == F64_TYPE.get_id()
+    }
+
+    fn get_float_size(&self) -> u32 {
+        if self.id == F32_TYPE.get_id() {
+            return 32;
+        }
+
+        if self.id == F64_TYPE.get_id() {
+            return 64;
+        }
+
+        panic!("type {} is not a float", self.get_name());
+    }
+
     pub fn is_primitive(&self) -> bool {
         self.kind == AstTypeKind::Primitive
     }
@@ -362,9 +413,17 @@ fn calculate_hash<T: Hash>(t: &T) -> AstTypeId {
 }
 
 lazy_static! {
-    pub static ref VOID_TYPE: AstType = AstType::new_primitive("Void".to_string());
-    pub static ref BOOL_TYPE: AstType = AstType::new_primitive("Bool".to_string());
-    pub static ref INT_TYPE: AstType = AstType::new_primitive("Int".to_string());
-    pub static ref FLOAT_TYPE: AstType = AstType::new_primitive("Float".to_string());
-    pub static ref RAW_STRING_TYPE: AstType = AstType::new_primitive("RawString".to_string());
+    pub static ref VOID_TYPE: AstType = AstType::new_primitive("void".to_string());
+    pub static ref BOOL_TYPE: AstType = AstType::new_primitive("bool".to_string());
+    pub static ref I8_TYPE: AstType = AstType::new_primitive("i8".to_string());
+    pub static ref I16_TYPE: AstType = AstType::new_primitive("i16".to_string());
+    pub static ref I32_TYPE: AstType = AstType::new_primitive("i32".to_string());
+    pub static ref I64_TYPE: AstType = AstType::new_primitive("i64".to_string());
+    pub static ref U8_TYPE: AstType = AstType::new_primitive("u8".to_string());
+    pub static ref U16_TYPE: AstType = AstType::new_primitive("u16".to_string());
+    pub static ref U32_TYPE: AstType = AstType::new_primitive("u32".to_string());
+    pub static ref U64_TYPE: AstType = AstType::new_primitive("u64".to_string());
+    pub static ref F32_TYPE: AstType = AstType::new_primitive("f32".to_string());
+    pub static ref F64_TYPE: AstType = AstType::new_primitive("f64".to_string());
+    pub static ref RAW_STRING_TYPE: AstType = AstType::new_primitive("cstring".to_string());
 }

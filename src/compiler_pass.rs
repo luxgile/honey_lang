@@ -4,9 +4,9 @@ use crate::{
     ast::*,
     ast_typer::AstTyped,
     lexer::ALLOWED_ID_CHARS,
-    meta_fn::{self, MetaFn, MetaFnKind},
+    meta_fn::{self, MetaFnKind},
     program_ctx::ProgramCtx,
-    types::{AstNamedType, AstTypeId, VOID_TYPE},
+    types::{AstTypeId, VOID_TYPE},
 };
 
 pub trait CompilerPass<T> {
@@ -41,11 +41,14 @@ impl CTranspilerPass {
         }
 
         match ty.get_name() {
-            "Void" => "void",
-            "Int" => "long",
-            "Float" => "float",
-            "Bool" => "bool",
-            "RawString" => "char*",
+            "i8" => "int8_t",
+            "i16" => "int16_t",
+            "i32" => "int32_t",
+            "i64" => "int64_t",
+            "f32" => "float",
+            "f64" => "double",
+            "bool" => "bool",
+            "cstring" => "char*",
             _ => return ty.get_fullname(&ctx.type_db).to_string(),
         }
         .to_string()
@@ -82,7 +85,9 @@ impl CTranspilerPass {
     fn transpile_file(&mut self, ctx: &ProgramCtx, file: &FileStmtAst) {
         self.source += "// auto generated file from honey - don't modify manually\n";
         self.source += format!("// file: {}\n\n", file.filename).as_str();
-        self.source += "#include <stdio.h>\n\n";
+        self.source += "#include <stdio.h>\n";
+        self.source += "#include <stdint.h>\n";
+        self.source += "\n";
         for stmt in &file.statements {
             self.transpile_statement(ctx, stmt);
         }
@@ -719,7 +724,7 @@ impl CTranspilerPass {
 
     fn transpile_meta(&mut self, ctx: &ProgramCtx, meta_expr: &MetaDefExprAst) -> String {
         let meta = ctx.get_meta(&meta_expr.name).unwrap();
-        let (tmp_ty, tmp_val) = self.gen_temp_expr(ctx, &meta.ret_type);
+        let (tmp_ty, tmp_val) = self.gen_temp_expr(ctx, &meta.get_type_id(ctx));
         let meta_str = match meta.kind {
             MetaFnKind::BinOp(op) => {
                 self.transpile_expr(ctx, &meta_expr.args[0])

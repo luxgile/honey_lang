@@ -4,7 +4,7 @@ use crate::{
     errors::{CompilerError, ParserErrorKind},
     lexer::*,
     program_ctx::{ProgramCtx, VarDefCtx},
-    types::{AstNamedType, AstTypeId, VOID_TYPE},
+    types::{AstNamedType, AstTypeId, F32_TYPE, I32_TYPE, VOID_TYPE},
 };
 
 pub type ParserResult<T> = Result<T, CompilerError>;
@@ -27,6 +27,9 @@ pub struct Parser<'a> {
 
     /// Stack of types for types declared inside other types.
     pub asttype_stack: Vec<AstTypeId>,
+
+    /// Used when the expression has an unclear type, but can be deduced from a previous statement
+    expected_type: Option<AstTypeId>,
 }
 
 impl<'a> Parser<'a> {
@@ -43,6 +46,7 @@ impl<'a> Parser<'a> {
             line_expressions: Vec::new(),
             line_meta_def: Vec::new(),
             asttype_stack: Vec::new(),
+            expected_type: None,
         }
     }
 
@@ -904,6 +908,7 @@ impl<'a> Parser<'a> {
             *offset += 1;
             return Ok(Some(AstExpression::Int(Box::new(IntExprAst {
                 value: int_str.parse().unwrap_or_default(),
+                id: self.expected_type.unwrap_or(I32_TYPE.get_id())
             }))));
         }
         if self.check_tokens(&[TokenKind::Float], *offset) {
@@ -911,6 +916,7 @@ impl<'a> Parser<'a> {
             *offset += 1;
             return Ok(Some(AstExpression::Float(Box::new(FloatExprAst {
                 value: float_str.parse().unwrap_or_default(),
+                id: self.expected_type.unwrap_or(F32_TYPE.get_id())
             }))));
         }
 

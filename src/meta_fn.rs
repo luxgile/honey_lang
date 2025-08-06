@@ -29,15 +29,22 @@ pub enum MetaFnKind {
     CmpOp(CmpOpKind),
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum MetaReturnType {
+    Int,
+    Float,
+    Type(AstTypeId),
+}
+
 #[derive(Clone, Debug)]
 pub struct MetaFn {
     pub id: String,
     pub kind: MetaFnKind,
-    pub ret_type: AstTypeId,
+    pub ret_type: MetaReturnType,
 }
 
 impl MetaFn {
-    pub fn new(id: impl Into<String>, kind: MetaFnKind, ret_type: AstTypeId) -> Self {
+    pub fn new(id: impl Into<String>, kind: MetaFnKind, ret_type: MetaReturnType) -> Self {
         Self {
             id: id.into(),
             kind,

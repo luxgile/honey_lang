@@ -1,8 +1,8 @@
 use crate::{
     ast::*,
-    meta_fn::MetaFn,
+    meta_fn::{MetaFn, MetaReturnType},
     program_ctx::ProgramCtx,
-    types::{AstType, AstTypeId, BOOL_TYPE, FLOAT_TYPE, INT_TYPE, RAW_STRING_TYPE, VOID_TYPE},
+    types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
 
 pub trait AstTyped {
@@ -49,7 +49,11 @@ impl AstTyped for AstExpression {
 
 impl AstTyped for MetaFn {
     fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
-        self.ret_type
+        match self.ret_type {
+            MetaReturnType::Int => I32_TYPE.get_id(),
+            MetaReturnType::Float => F32_TYPE.get_id(),
+            MetaReturnType::Type(id) => id,
+        }
     }
 }
 
@@ -57,19 +61,19 @@ impl AstTyped for MetaDefExprAst {
     fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
         ctx.get_meta(&self.name)
             .unwrap_or_else(|| panic!("Meta definition '{}' not found", self.name))
-            .ret_type
+            .get_type_id(ctx)
     }
 }
 
 impl AstTyped for IntExprAst {
     fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
-        INT_TYPE.get_id()
+        self.id
     }
 }
 
 impl AstTyped for FloatExprAst {
     fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
-        FLOAT_TYPE.get_id()
+        self.id
     }
 }
 
@@ -177,7 +181,10 @@ impl AstTyped for MemberAccesorExprAst {
             let method_ty = base_type
                 .get_method_by_name(&method.fn_name, &ctx.type_db)
                 .unwrap();
-            ctx.type_db.get_type(method_ty).unwrap().get_return_type_id()
+            ctx.type_db
+                .get_type(method_ty)
+                .unwrap()
+                .get_return_type_id()
         } else {
             panic!("No member (field or method) specified for member accessor.");
         }
