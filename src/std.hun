@@ -1,0 +1,7 @@
+extern printf :: fn (|format: cstring, args: ...)
+extern scanf :: fn (|format: cstring, input: ^i32)
+extern snprintf :: fn (|buffer: cstring, n: i32, format: cstring, args: ...)
+
+println :: fn(|str: cstring) {
+  printf "%s\n" str
+}

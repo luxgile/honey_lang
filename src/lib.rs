@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
 use std::{
-    io::Write,
-    process::{Command, ExitStatus, Stdio},
+    io::Write, process::{Command, ExitStatus, Stdio}
 };
 
 use ast_printer::AstPrint;
@@ -33,11 +32,14 @@ impl Compiler {
     }
 
     pub fn run_src(src: String, exe_name: String) -> Result<ExitStatus, ()> {
+        let std_src = String::from_utf8_lossy(include_bytes!("std.hun")).into_owned();
+        let hun_src = std_src + &src;
+
         let mut program_ctx = ProgramCtx::new();
         Compiler::add_meta_definitions(&mut program_ctx);
         let (file, errors) = {
             let mut parser = Parser::new(&mut program_ctx);
-            (parser.parse_file(&src, false), parser.errors.clone())
+            (parser.parse_file(&hun_src, false), parser.errors.clone())
         };
 
         // println!();
@@ -45,7 +47,7 @@ impl Compiler {
 
         if !errors.is_empty() {
             println!();
-            errors.iter().for_each(|e| e.print_error(src.as_str()));
+            errors.iter().for_each(|e| e.print_error(&hun_src));
             return Err(());
         }
 

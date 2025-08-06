@@ -67,6 +67,14 @@ fn var_declaration() {
 }
 
 #[test]
+fn ints_decl() {
+    assert_src("i8 decl", "main :: fn(|) i8 { 0 }", 0);
+    assert_src("i16 decl", "main :: fn(|) i16 { 0 }", 0);
+    assert_src("i32 decl", "main :: fn(|) i32 { 0 }", 0);
+    assert_src("i64 decl", "main :: fn(|) i64 { 0 }", 0);
+}
+
+#[test]
 fn if_statements() {
     assert_src(
         "if_statements",

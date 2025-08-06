@@ -1,4 +1,4 @@
-extern printf :: fn (|format: RawString, args: ...)
+extern printf :: fn (|format: cstring, args: ...)
 
 main :: fn(|) {
   printf "hello hun!\n"
