@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use colored::Colorize;
 use std::{
     env,
     fs::{self},
@@ -7,7 +8,6 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
 };
-use colored::Colorize;
 
 use ast_printer::AstPrint;
 use compiler_pass::{CTranspilerPass, CompilerPass};
@@ -51,7 +51,7 @@ impl Compiler {
         if _config.build_path.is_none() {
             _config.build_path = Some(file_path.parent().unwrap().join(".hun_build"));
         }
-        
+
         Compiler::run_src(
             source_code,
             file_path.file_stem().unwrap().to_str().unwrap(),
@@ -90,7 +90,7 @@ impl Compiler {
 
         // Transpile to C
         let transpiler = CTranspilerPass::default();
-        let c_src = transpiler.run(&program_ctx, &file);
+        let (c_header, c_src) = transpiler.run(&program_ctx, &file);
 
         if config.print_c {
             let mut line = -1;
@@ -101,7 +101,15 @@ impl Compiler {
                     format!("{line}  ") + x + "\n"
                 })
                 .collect();
+            let c_header_debug: String = c_header
+                .lines()
+                .map(|x| {
+                    line += 1;
+                    format!("{line}  ") + x + "\n"
+                })
+                .collect();
             println!();
+            println!("{c_header_debug}\n");
             println!("{c_src_debug}");
         }
 
@@ -127,7 +135,7 @@ impl Compiler {
             .expect("failed to compile c code with gcc");
 
         if let Some(mut stdin) = gcc.stdin.take() {
-            stdin.write_all(c_src.as_bytes()).unwrap();
+            stdin.write_all(format!("{c_header}\n{c_src}").as_bytes()).unwrap();
         }
 
         let output = gcc.wait_with_output().unwrap();

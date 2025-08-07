@@ -23,10 +23,11 @@ pub enum CmpOpKind {
     GreaterEq,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum MetaFnKind {
     BinOp(BinOpKind),
     CmpOp(CmpOpKind),
+    Import(String),
 }
 
 #[derive(Clone, Copy, Debug)]

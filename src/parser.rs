@@ -164,7 +164,7 @@ impl<'a> Parser<'a> {
         }
 
         FileStmtAst {
-            filename: "main.hun".to_string(),
+            filename: "main".to_string(),
             statements,
         }
     }
