@@ -4,7 +4,7 @@ use crate::{
     types::{AstNamedType, AstTypeId, BOOL_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstExpression {
     Array(Box<ArrayExprAst>),
     Index(Box<IndexExprAst>),
@@ -88,7 +88,7 @@ impl AstExpression {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AstStatement {
     ArgDef(Box<ArgDefAst>),
     FnHeader(Box<FnHeaderAst>),
@@ -100,9 +100,10 @@ pub enum AstStatement {
     StructDef(Box<StructDefAst>),
     EnumDef(Box<EnumDefAst>),
     File(Box<FileStmtAst>),
+    Defer(Box<DeferStmtAst>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MetaDefExprAst {
     pub name: String,
     pub args: Vec<AstExpression>,
@@ -110,12 +111,12 @@ pub struct MetaDefExprAst {
 
 /// Used for body statements that can be used as well as expressions.
 /// This ignores the value of the expression.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StatementExprAst {
     pub expr: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarDefStmtAst {
     pub name: String,
     /// It can be implicit based on the expression.
@@ -123,72 +124,72 @@ pub struct VarDefStmtAst {
     pub assignment: Option<AstExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NoOpAst;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarAssignStmtAst {
     pub lvalue: AstExpression,
     pub rvalue: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MemberAccesorExprAst {
     pub base: AstExpression,
     pub field: Option<Box<VarExprAst>>,
     pub method: Option<Box<CallExprAst>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FileStmtAst {
     // TODO: imports
     pub filename: String,
     pub statements: Vec<AstStatement>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumDefAst {
     pub type_id: AstTypeId,
     pub values: Vec<AstStatement>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EnumExprAst {
     pub enum_type: AstTypeId,
     pub struct_expr: Box<StructExprAst>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructDefAst {
     pub type_id: AstTypeId,
     pub fields: Vec<ArgDefAst>,
     pub methods: Vec<FnDefAst>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructExprAst {
     pub type_id: AstTypeId,
     pub fields: Vec<StructFieldAssign>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StructFieldAssign {
     pub name: String,
     pub rvalue: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TupleDefAst {
     pub type_id: AstTypeId,
     pub fields: Vec<ArgDefAst>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnStmtAst {
     pub expr: Option<AstExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArgDefAst {
     pub name: String,
     pub type_id: AstTypeId,
@@ -204,81 +205,81 @@ impl From<ArgDefAst> for VarDefStmtAst {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ArrayExprAst {
     pub type_id: AstTypeId,
     pub elements: Vec<AstExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IndexExprAst {
     pub base: AstExpression,
     pub index: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntExprAst {
     pub id: AstTypeId, // Which int type is
     pub value: i64,    // Assuming int maps to i32
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FloatExprAst {
     pub id: AstTypeId, // Which float type is
     pub value: f64,    // Assuming double maps to f64
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BoolExprAst {
     pub value: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct StringExprAst {
     pub value: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RefExprAst {
     pub expr: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DerefExprAst {
     pub expr: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VarExprAst {
     pub name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct GroupExprAst {
     pub expr: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SingleMatchExprAst {
     pub enum_expr: AstExpression,
     pub casted_enum_var: Box<VarDefStmtAst>,
     pub then_expr: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfExprAst {
     pub condition: AstExpression,
     pub then_expr: AstExpression,
     pub else_expr: Option<AstExpression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ForExprAst {
     pub condition: AstExpression,
     pub for_body: AstExpression,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallExprAst {
     /// Non-mangled name of the function
     pub fn_name: String,
@@ -289,7 +290,7 @@ pub struct CallExprAst {
 }
 
 /// 'main := prev | ret | next '
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FnHeaderAst {
     pub name: String,
     pub ret_type: AstTypeId,
@@ -340,15 +341,20 @@ impl FnHeaderAst {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BodyExprAst {
     pub statements: Vec<AstStatement>,
 }
 
 /// Function declaration 'main := | | {}'
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FnDefAst {
     pub id: AstTypeId,
     pub fn_header: Box<FnHeaderAst>,
     pub body: Option<AstExpression>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DeferStmtAst {
+    pub stmt: AstStatement,
 }

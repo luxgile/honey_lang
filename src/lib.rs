@@ -2,8 +2,8 @@
 
 use std::{
     env,
-    fs::{self, File},
-    io::{Read, Write},
+    fs::{self},
+    io::Write,
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
 };

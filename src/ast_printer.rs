@@ -31,7 +31,15 @@ impl AstPrint for AstStatement {
             AstStatement::StructDef(struct_def_ast) => struct_def_ast.print_ast(ctx, indent),
             AstStatement::EnumDef(enum_def_ast) => enum_def_ast.print_ast(ctx, indent),
             AstStatement::File(file) => file.print_ast(ctx, indent),
+            AstStatement::Defer(defer) => defer.print_ast(ctx, indent),
         }
+    }
+}
+
+impl AstPrint for DeferStmtAst {
+    fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
+        print!("defer ");
+        self.stmt.print_ast(ctx, indent);
     }
 }
 

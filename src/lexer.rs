@@ -31,6 +31,7 @@ pub enum TokenKind {
     Extern,
     Struct,
     Return,
+    Defer,
     Enum,
     Fn,
     If,
@@ -69,6 +70,7 @@ impl Display for TokenKind {
             TokenKind::Loop => "loop",
             TokenKind::Match => "match",
             TokenKind::Return => "return",
+            TokenKind::Defer => "defer",
             _ => panic!("unimplemented display for token kind"),
         };
 
@@ -305,6 +307,7 @@ impl Lexer {
                 "true" | "false" => return self.create_token(TokenKind::Bool, pos, false),
                 "if" => return self.create_token(TokenKind::If, pos, false),
                 "ret" => return self.create_token(TokenKind::Return, pos, false),
+                "defer" => return self.create_token(TokenKind::Defer, pos, false),
                 "else" => return self.create_token(TokenKind::Else, pos, false),
                 "loop" => return self.create_token(TokenKind::Loop, pos, false),
                 "match" => return self.create_token(TokenKind::Match, pos, false),
@@ -313,23 +316,6 @@ impl Lexer {
                 "enum" => return self.create_token(TokenKind::Enum, pos, false),
                 "fn" => return self.create_token(TokenKind::Fn, pos, false),
                 _ => {
-                    // BUG: This is not working properly, the lexer is not goind back
-                    // if self.temp_id.starts_with('&') {
-                    //     let steps_to_go_back = self.temp_id.len() - 1;
-                    //     if steps_to_go_back > 0 {
-                    //         self.go_back(steps_to_go_back);
-                    //     }
-                    //     self.temp_id = "&".to_string();
-                    //     return self.create_token(TokenKind::Amper, pos, false);
-                    // }
-                    // if self.temp_id.starts_with('^') {
-                    //     let steps_to_go_back = self.temp_id.len() - 1;
-                    //     if steps_to_go_back > 0 {
-                    //         self.go_back(steps_to_go_back);
-                    //     }
-                    //     self.temp_id = "^".to_string();
-                    //     return self.create_token(TokenKind::Pointy, pos, false);
-                    // }
                     return self.create_token(TokenKind::Id, pos, false);
                 }
             }

@@ -14,12 +14,20 @@ pub trait CompilerPass<T> {
 }
 
 #[derive(Default)]
+pub struct TranspilerFrame {
+    queued_defers: Vec<DeferStmtAst>,
+}
+
+#[derive(Default)]
 pub struct CTranspilerPass {
+    source: String,
     indent: usize,
+    frames: Vec<TranspilerFrame>,
     expr_temp_idx: u32,
     curr_return: Option<String>,
-    assign_mode: bool,
-    source: String,
+    /// If false, all expressions will create a value and return it.
+    /// If true, all expressions will return the expression directly instead.
+    raw_mode: bool,
 }
 
 impl CompilerPass<String> for CTranspilerPass {
@@ -30,6 +38,30 @@ impl CompilerPass<String> for CTranspilerPass {
 }
 
 impl CTranspilerPass {
+    fn push_frame(&mut self) -> &TranspilerFrame {
+        self.frames.push(TranspilerFrame::default());
+        self.frames.last().unwrap()
+    }
+
+    fn pop_frame(&mut self) {
+        self.frames.pop();
+    }
+
+    fn curr_frame(&mut self) -> &mut TranspilerFrame {
+        self.frames.last_mut().unwrap()
+    }
+
+    fn get_all_current_defers(&self) -> Vec<DeferStmtAst> {
+        let mut defers = Vec::new();
+        for frame in self.frames.iter().rev() {
+            frame
+                .queued_defers
+                .iter()
+                .for_each(|x| defers.push(x.clone()));
+        }
+        defers
+    }
+
     fn hun_type_to_c(ctx: &ProgramCtx, id: &AstTypeId) -> String {
         let ty = ctx.type_db.get_type(*id).unwrap();
         if ty.is_array() {
@@ -104,14 +136,19 @@ impl CTranspilerPass {
             }
             AstStatement::VarDefStmt(def) => self.transpile_var_def(ctx, def),
             AstStatement::VarAssignStmt(assign) => self.transpile_var_assign(ctx, assign),
-            AstStatement::ReturnStmt(ret) => self.transpile_return(ctx, ret),
+            AstStatement::ReturnStmt(ret) => self.transpile_return(ctx, ret, true),
+            AstStatement::Defer(defer) => self.curr_frame().queued_defers.push(*defer.clone()),
             _ => {
                 todo!("{:?} not implemented", stmt);
             }
         };
     }
 
-    fn transpile_return(&mut self, ctx: &ProgramCtx, ret: &ReturnStmtAst) {
+    fn transpile_return(&mut self, ctx: &ProgramCtx, ret: &ReturnStmtAst, include_defers: bool) {
+        if include_defers {
+            self.transpile_current_defers(ctx);
+        }
+
         self.add_indent();
         self.source += "return ";
         if let Some(expr) = &ret.expr {
@@ -123,11 +160,11 @@ impl CTranspilerPass {
 
     fn transpile_var_assign(&mut self, ctx: &ProgramCtx, assign: &VarAssignStmtAst) {
         let rvalue = self.transpile_expr(ctx, &assign.rvalue);
-        let old_assign_mode = self.assign_mode;
+        let old_assign_mode = self.raw_mode;
         self.add_indent();
-        self.assign_mode = true;
+        self.raw_mode = true;
         self.transpile_expr(ctx, &assign.lvalue);
-        self.assign_mode = old_assign_mode;
+        self.raw_mode = old_assign_mode;
         self.source += &format!(" = {rvalue};\n");
         // self.source += &rvalue;
     }
@@ -400,8 +437,8 @@ impl CTranspilerPass {
         let is_void = member_ty == VOID_TYPE.get_id();
         let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
 
-        let old_assign_mode = self.assign_mode;
-        self.assign_mode = false;
+        let old_assign_mode = self.raw_mode;
+        self.raw_mode = false;
         let base = self.transpile_expr(ctx, &member.base);
         let member_op = if member.base.get_type(ctx).is_ref() {
             "->"
@@ -415,11 +452,11 @@ impl CTranspilerPass {
         } else {
             unreachable!()
         };
-        self.assign_mode = old_assign_mode;
+        self.raw_mode = old_assign_mode;
 
         if !is_void {
             self.add_indent();
-            if self.assign_mode {
+            if self.raw_mode {
                 self.source += &format!("{base}{member_op}{member}");
                 return String::new();
             } else {
@@ -479,7 +516,7 @@ impl CTranspilerPass {
     }
 
     fn transpile_var(&mut self, _ctx: &ProgramCtx, var: &VarExprAst) -> String {
-        if self.assign_mode {
+        if self.raw_mode {
             self.source += &var.name;
             String::new()
         } else {
@@ -547,6 +584,7 @@ impl CTranspilerPass {
         self.source += ") {\n";
 
         self.indent += 1;
+        self.push_frame();
         if let AstExpression::Body(body) = &for_expr.for_body {
             self.transpile_statements(ctx, &body.statements, "");
         } else {
@@ -558,6 +596,7 @@ impl CTranspilerPass {
         self.add_indent();
         self.source += &format!("{condition} = {condition_2};\n");
 
+        self.pop_frame();
         self.indent -= 1;
         self.add_indent();
         self.source += "}\n";
@@ -583,6 +622,7 @@ impl CTranspilerPass {
         self.source += ") {\n";
 
         // Then
+        self.push_frame();
         let old_tmp = self.curr_return.clone();
         self.curr_return = Some(val.clone());
         if let AstExpression::Body(body) = &if_expr.then_expr {
@@ -603,9 +643,11 @@ impl CTranspilerPass {
         self.curr_return = old_tmp;
         self.add_indent();
         self.source += "}\n";
+        self.pop_frame();
 
         // Else
         if let Some(else_expr) = &if_expr.else_expr {
+            self.push_frame();
             self.add_indent();
             self.source += "else {\n";
 
@@ -629,13 +671,14 @@ impl CTranspilerPass {
             self.curr_return = old_tmp;
             self.add_indent();
             self.source += "}\n";
+            self.pop_frame();
         }
 
         if is_void { "".to_string() } else { val }
     }
 
     fn transpile_ref(&mut self, ctx: &ProgramCtx, r: &RefExprAst) -> String {
-        if self.assign_mode {
+        if self.raw_mode {
             self.source += "&";
             self.transpile_expr(ctx, &r.expr);
             String::new()
@@ -645,7 +688,7 @@ impl CTranspilerPass {
     }
 
     fn transpile_deref(&mut self, ctx: &ProgramCtx, d: &DerefExprAst) -> String {
-        if self.assign_mode {
+        if self.raw_mode {
             self.source += "*";
             self.transpile_expr(ctx, &d.expr);
             String::new()
@@ -666,17 +709,24 @@ impl CTranspilerPass {
             self.source += &format!("{ty} {val};\n");
         }
 
+        self.push_frame();
         let last_expr = self.transpile_statements(ctx, &body.statements, &val);
 
+        self.transpile_current_defers(ctx);
         if last_expr.is_none() {
-            self.add_indent();
-            self.source += "return;\n";
+            self.transpile_return(ctx, &ReturnStmtAst { expr: None }, false);
         } else if !is_void {
             self.add_indent();
             self.source += &format!("{} = {};\n", val, last_expr.unwrap());
-            self.add_indent();
-            self.source += &format!("return {val};\n");
+            self.transpile_return(
+                ctx,
+                &ReturnStmtAst {
+                    expr: Some(AstExpression::Var(Box::new(VarExprAst { name: val }))),
+                },
+                false,
+            );
         }
+        self.pop_frame();
 
         self.indent -= 1;
         self.add_indent();
@@ -757,5 +807,15 @@ impl CTranspilerPass {
         self.add_indent();
         self.source += &format!("{tmp_ty} {tmp_val} = {meta_str};\n");
         tmp_val
+    }
+
+    fn transpile_current_defers(&mut self, ctx: &ProgramCtx) {
+        for defer in self.get_all_current_defers() {
+            self.transpile_defer(ctx, &defer);
+        }
+    }
+
+    fn transpile_defer(&mut self, ctx: &ProgramCtx, defer: &DeferStmtAst) {
+        self.transpile_statement(ctx, &defer.stmt);
     }
 }

@@ -441,7 +441,7 @@ impl<'a> Parser<'a> {
 
         let mut body: Option<Box<BodyExprAst>> = None;
         if !is_external {
-            let body_r = self.parse_fn_body(offset)?;
+            let body_r = self.parse_body(offset)?;
             if body_r.is_none() {
                 // This indicates parse_fn_body couldn't find a body, but it's required for non-external
                 return Err(CompilerError::from_token(
@@ -672,11 +672,11 @@ impl<'a> Parser<'a> {
         halt_tokens: &[TokenKind],
     ) -> OptionalParserResult<Box<VarAssignStmtAst>> {
         let mut tmp_offset = *offset;
-        let lvalue_res = self.parse_expr(&mut tmp_offset)?; // Use ? for error propagation
+        let lvalue_res = self.parse_expr(&mut tmp_offset)?;
 
         let lvalue = match lvalue_res {
             Some(l) => l,
-            None => return Ok(None), // Not a var assignment if no lvalue found
+            None => return Ok(None),
         };
 
         if !self.check_tokens(&[TokenKind::Id], tmp_offset) || self.get_tk(tmp_offset).value != "="
@@ -731,7 +731,6 @@ impl<'a> Parser<'a> {
         Ok(Some(def_var))
     }
 
-    // parse_return
     pub fn parse_return(&mut self, offset: &mut usize) -> OptionalParserResult<Box<ReturnStmtAst>> {
         if !self.check_tokens(&[TokenKind::Return], *offset) {
             return Ok(None);
@@ -748,9 +747,24 @@ impl<'a> Parser<'a> {
         Ok(Some(Box::new(ReturnStmtAst { expr })))
     }
 
+    pub fn parse_defer(&mut self, offset: &mut usize) -> OptionalParserResult<Box<DeferStmtAst>> {
+        if !self.check_tokens(&[TokenKind::Defer], *offset) {
+            return Ok(None);
+        }
+        *offset += 1; // Consume 'defer'
+
+        let stmt = self.parse_statement(offset)?;
+
+        Ok(Some(Box::new(DeferStmtAst { stmt })))
+    }
+
     // parse_statement
     pub fn parse_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
         self.skip_all(&[TokenKind::NewLine], offset); // Ensure leading newlines are skipped
+
+        if let Some(defer) = self.parse_defer(offset)? {
+            return Ok(AstStatement::Defer(defer));
+        }
 
         if let Some(ret_stmt) = self.parse_return(offset)? {
             return Ok(AstStatement::ReturnStmt(ret_stmt));
@@ -849,7 +863,7 @@ impl<'a> Parser<'a> {
             }))));
         }
 
-        if let Some(body) = self.parse_fn_body(offset)? {
+        if let Some(body) = self.parse_body(offset)? {
             return Ok(Some(AstExpression::Body(body)));
         }
 
@@ -908,7 +922,7 @@ impl<'a> Parser<'a> {
             *offset += 1;
             return Ok(Some(AstExpression::Int(Box::new(IntExprAst {
                 value: int_str.parse().unwrap_or_default(),
-                id: self.expected_type.unwrap_or(I32_TYPE.get_id())
+                id: self.expected_type.unwrap_or(I32_TYPE.get_id()),
             }))));
         }
         if self.check_tokens(&[TokenKind::Float], *offset) {
@@ -916,7 +930,7 @@ impl<'a> Parser<'a> {
             *offset += 1;
             return Ok(Some(AstExpression::Float(Box::new(FloatExprAst {
                 value: float_str.parse().unwrap_or_default(),
-                id: self.expected_type.unwrap_or(F32_TYPE.get_id())
+                id: self.expected_type.unwrap_or(F32_TYPE.get_id()),
             }))));
         }
 
@@ -961,11 +975,7 @@ impl<'a> Parser<'a> {
 
         let enum_member_named_type = enum_type
             .get_field_by_name(&enum_member_name)
-            .unwrap_or_else(|| {
-                panic!(
-                    "no field '{enum_member_name}' found on type '{enum_name}'"
-                )
-            });
+            .unwrap_or_else(|| panic!("no field '{enum_member_name}' found on type '{enum_name}'"));
         let enum_member_type = self.ctx.type_db.get_type(enum_member_named_type.id);
 
         *offset += 3; // Consume `Id . Id`
@@ -1521,7 +1531,7 @@ impl<'a> Parser<'a> {
     }
 
     // ParserResult<std::unique_ptr<BodyExprAst>> parse_fn_body(int &offset);
-    pub fn parse_fn_body(&mut self, offset: &mut usize) -> OptionalParserResult<Box<BodyExprAst>> {
+    pub fn parse_body(&mut self, offset: &mut usize) -> OptionalParserResult<Box<BodyExprAst>> {
         if !self.check_tokens(&[TokenKind::LBrace], *offset) {
             return Ok(None);
         }
