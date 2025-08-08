@@ -1,5 +1,5 @@
 extern printf :: fn (|format: cstring, args: ...)
 
-main :: fn(|) {
+main :: fn(|) i32 {
   printf "hello hun!\n"
 }

@@ -73,7 +73,7 @@ impl Compiler {
         Compiler::add_meta_definitions(&mut program_ctx);
         let (file, errors) = {
             let mut parser = Parser::new(&mut program_ctx);
-            (parser.parse_file(&hun_src, false), parser.errors.clone())
+            (parser.parse_source(exe_name, &hun_src, false), parser.errors.clone())
         };
 
         if config.pretty_print {
@@ -92,27 +92,6 @@ impl Compiler {
         let transpiler = CTranspilerPass::default();
         let (c_header, c_src) = transpiler.run(&program_ctx, &file);
 
-        if config.print_c {
-            let mut line = -1;
-            let c_src_debug: String = c_src
-                .lines()
-                .map(|x| {
-                    line += 1;
-                    format!("{line}  ") + x + "\n"
-                })
-                .collect();
-            let c_header_debug: String = c_header
-                .lines()
-                .map(|x| {
-                    line += 1;
-                    format!("{line}  ") + x + "\n"
-                })
-                .collect();
-            println!();
-            println!("{c_header_debug}\n");
-            println!("{c_src_debug}");
-        }
-
         // Ensuring build folder exists
         let build_path = config
             .build_path
@@ -123,25 +102,33 @@ impl Compiler {
             fs::create_dir(&build_path).expect("issue creating build path");
         }
 
-        let file_path = build_path.as_path().join(exe_name);
+        // Create C files
+        let src_path = build_path.as_path().join(format!("{exe_name}.c"));
+        let header_path = build_path.as_path().join(format!("{exe_name}.h"));
+        fs::write(src_path.clone(), c_src).expect("error creating source file");
+        fs::write(header_path.clone(), c_header).expect("error creating header file");
 
         // Build C source using gcc
-        let mut gcc = Command::new("gcc")
-            .args(["-x", "c", "-", "-o", file_path.to_str().unwrap()])
+        let exe_path = build_path.as_path().join(exe_name);
+        let gcc = Command::new("gcc")
+            .args([
+                "-x",
+                "c",
+                src_path.to_str().unwrap(),
+                header_path.to_str().unwrap(),
+                "-o",
+                exe_path.to_str().unwrap(),
+            ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .expect("failed to compile c code with gcc");
 
-        if let Some(mut stdin) = gcc.stdin.take() {
-            stdin.write_all(format!("{c_header}\n{c_src}").as_bytes()).unwrap();
-        }
-
         let output = gcc.wait_with_output().unwrap();
         if output.status.success() {
             println!("honey compilation - {}", "success".green().bold());
-            let run_cmd = Command::new(format!("./{}", file_path.to_str().unwrap()))
+            let run_cmd = Command::new(format!("./{}", exe_path.to_str().unwrap()))
                 .stdin(Stdio::inherit())
                 .stderr(Stdio::inherit())
                 .stdout(Stdio::inherit())

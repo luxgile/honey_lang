@@ -1,3 +1,5 @@
+use std::{fs, path::PathBuf};
+
 use crate::{
     ast::*,
     ast_typer::AstTyped,
@@ -122,8 +124,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_file(&mut self, source: &str, print_tokens: bool) -> FileStmtAst {
-        self.lexer.set_source(source);
+    pub fn parse_source(&mut self, name: &str, src: &str, print_tokens: bool) -> FileStmtAst {
+        self.lexer.set_source(src);
         self.tk_queue.clear(); // Clear any previous tokens
 
         loop {
@@ -164,7 +166,7 @@ impl<'a> Parser<'a> {
         }
 
         FileStmtAst {
-            filename: "main".to_string(),
+            filename: name.to_string(),
             statements,
         }
     }

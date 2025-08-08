@@ -141,7 +141,7 @@ impl CTranspilerPass {
         self.source += "// auto generated file from honey - don't modify manually\n";
         self.source += format!("// file: {}.hun\n\n", file.filename).as_str();
         // This depends on if we are actually creating the files or just compiling from memory
-        // self.source += &format!("#include <{}.h>\n", file.filename);
+        self.source += &format!("#include \"{}.h\"\n\n", file.filename);
 
         for stmt in &file.statements {
             self.transpile_statement(ctx, stmt);
