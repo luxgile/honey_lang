@@ -1,6 +1,5 @@
-/.cache
-/build
-/examples/.hun_build
+examples/.hun_build
+tests/.hun_build
 
 
 # Added by cargo
