@@ -39,6 +39,7 @@ pub enum TokenKind {
     Loop,
     Match,
     NewLine,
+    Module,
     Meta,
     Undefined, // Consider removing or making this an error type
 }
@@ -71,6 +72,7 @@ impl Display for TokenKind {
             TokenKind::Match => "match",
             TokenKind::Return => "return",
             TokenKind::Defer => "defer",
+            TokenKind::Module => "module",
             _ => panic!("unimplemented display for token kind"),
         };
 
@@ -312,6 +314,7 @@ impl Lexer {
                 "loop" => return self.create_token(TokenKind::Loop, pos, false),
                 "match" => return self.create_token(TokenKind::Match, pos, false),
                 "extern" => return self.create_token(TokenKind::Extern, pos, false),
+                "module" => return self.create_token(TokenKind::Module, pos, false),
                 "struct" => return self.create_token(TokenKind::Struct, pos, false),
                 "enum" => return self.create_token(TokenKind::Enum, pos, false),
                 "fn" => return self.create_token(TokenKind::Fn, pos, false),

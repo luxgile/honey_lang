@@ -42,9 +42,14 @@ pub enum BuildError {
     GccFailed,
 }
 
+pub struct FileBuildInfo {
+    build_path: PathBuf,
+    exe_path: PathBuf,
+}
+
 pub struct Compiler;
 impl Compiler {
-    pub fn run_file(file_path: &Path, config: CompConfig) -> Result<ExitStatus, BuildError> {
+    pub fn build_file(file_path: &Path, config: CompConfig) -> Result<FileBuildInfo, BuildError> {
         let source_code = fs::read_to_string(file_path).unwrap();
 
         let mut _config = config;
@@ -52,18 +57,18 @@ impl Compiler {
             _config.build_path = Some(file_path.parent().unwrap().join(".hun_build"));
         }
 
-        Compiler::run_src(
+        Compiler::build_src(
             source_code,
             file_path.file_stem().unwrap().to_str().unwrap(),
             _config,
         )
     }
 
-    pub fn run_src(
+    pub fn build_src(
         src: String,
         exe_name: &str,
         config: CompConfig,
-    ) -> Result<ExitStatus, BuildError> {
+    ) -> Result<FileBuildInfo, BuildError> {
         // Read std file and append it to source
         let std_src = String::from_utf8_lossy(include_bytes!("std.hun")).into_owned();
         let hun_src = std_src + &src;
@@ -73,7 +78,10 @@ impl Compiler {
         Compiler::add_meta_definitions(&mut program_ctx);
         let (file, errors) = {
             let mut parser = Parser::new(&mut program_ctx);
-            (parser.parse_source(exe_name, &hun_src, false), parser.errors.clone())
+            (
+                parser.parse_source(exe_name, &hun_src, false),
+                parser.get_errors(),
+            )
         };
 
         if config.pretty_print {
@@ -91,6 +99,11 @@ impl Compiler {
         // Transpile to C
         let transpiler = CTranspilerPass::default();
         let (c_header, c_src) = transpiler.run(&program_ctx, &file);
+
+        if config.print_c {
+            println!("{c_header}\n\n");
+            println!("{c_src}\n");
+        }
 
         // Ensuring build folder exists
         let build_path = config
@@ -115,7 +128,6 @@ impl Compiler {
                 "-x",
                 "c",
                 src_path.to_str().unwrap(),
-                header_path.to_str().unwrap(),
                 "-o",
                 exe_path.to_str().unwrap(),
             ])
@@ -127,23 +139,29 @@ impl Compiler {
 
         let output = gcc.wait_with_output().unwrap();
         if output.status.success() {
-            println!("honey compilation - {}", "success".green().bold());
-            let run_cmd = Command::new(format!("./{}", exe_path.to_str().unwrap()))
-                .stdin(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .stdout(Stdio::inherit())
-                .spawn()
-                .unwrap();
-            let run = run_cmd.wait_with_output().unwrap();
-            let run_str = String::from_utf8_lossy(&run.stdout);
-            println!("{}", &run_str);
-            Ok(run.status)
+            Ok(FileBuildInfo {
+                build_path,
+                exe_path,
+            })
         } else {
-            println!("\ncompilation failed:");
             println!("{}", String::from_utf8_lossy(&output.stdout));
             println!("{}", String::from_utf8_lossy(&output.stderr));
             Err(BuildError::GccFailed)
         }
+    }
+
+    pub fn run_build(build: &FileBuildInfo) -> ExitStatus {
+        println!("honey compilation - {}", "success".green().bold());
+        let run_cmd = Command::new(format!("./{}", build.exe_path.to_str().unwrap()))
+            .stdin(Stdio::inherit())
+            .stderr(Stdio::inherit())
+            .stdout(Stdio::inherit())
+            .spawn()
+            .unwrap();
+        let run = run_cmd.wait_with_output().unwrap();
+        let run_str = String::from_utf8_lossy(&run.stdout);
+        println!("{}", &run_str);
+        run.status
     }
 
     fn add_meta_definitions(c: &mut ProgramCtx) {
@@ -155,10 +173,18 @@ impl Compiler {
             c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::CmpOp(op), ret))
         };
 
+        // 'Define' meta
+        c.define_meta(MetaFn::new(
+            "import",
+            MetaFnKind::Import,
+            MetaReturnType::Type(VOID_TYPE.get_id()),
+        ));
+
         let int = MetaReturnType::Int;
         let float = MetaReturnType::Float;
         let bool = MetaReturnType::Type(BOOL_TYPE.get_id());
 
+        // All binary operations
         def_bin(c, "i+", BinOpKind::Add, int);
         def_bin(c, "i-", BinOpKind::Minus, int);
         def_bin(c, "i*", BinOpKind::Mult, int);

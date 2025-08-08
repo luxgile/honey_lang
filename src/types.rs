@@ -2,6 +2,9 @@ use lazy_static::lazy_static;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+use crate::ast::{self, ModuleId};
+use crate::type_db::AstTypeDb;
+
 pub type AstTypeId = usize;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -20,6 +23,7 @@ pub enum AstTypeKind {
     Alias,
     Struct,
     Function,
+    Module,
     Enum,
 }
 
@@ -127,6 +131,13 @@ impl AstType {
         type_.ret_type = ret_type;
         type_.pre_args = pre_args;
         type_.su_args = su_args;
+        type_.id = calculate_hash(&type_.get_fullname(db));
+        type_
+    }
+
+    pub fn new_module(name: String, parent: Option<&AstTypeId>, db: &AstTypeDb) -> Self {
+        let mut type_ = Self::new_base(AstTypeKind::Module, name);
+        type_.parent = parent.cloned();
         type_.id = calculate_hash(&type_.get_fullname(db));
         type_
     }
@@ -290,6 +301,9 @@ impl AstType {
         } else {
             false
         }
+    }
+    pub fn is_module(&self) -> bool {
+        self.kind == AstTypeKind::Module
     }
 
     // Field and method access

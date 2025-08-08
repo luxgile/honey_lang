@@ -42,8 +42,15 @@ impl AstTyped for AstExpression {
             AstExpression::SingleMatch(single_match_expr_ast) => {
                 single_match_expr_ast.get_type_id(ctx)
             }
+            AstExpression::ModuleAccess(module) => module.get_type_id(ctx),
             AstExpression::NoOp(no_op_ast) => no_op_ast.get_type_id(ctx),
         }
+    }
+}
+
+impl AstTyped for ModuleAccessExprAst {
+    fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
+        self.expr.get_type_id(ctx)
     }
 }
 

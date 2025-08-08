@@ -161,10 +161,17 @@ impl CTranspilerPass {
             AstStatement::VarAssignStmt(assign) => self.transpile_var_assign(ctx, assign),
             AstStatement::ReturnStmt(ret) => self.transpile_return(ctx, ret, true),
             AstStatement::Defer(defer) => self.curr_frame().queued_defers.push(*defer.clone()),
+            AstStatement::Module(module) => self.transpile_module(ctx, module),
             _ => {
                 todo!("{:?} not implemented", stmt);
             }
         };
+    }
+
+    fn transpile_module(&mut self, ctx: &ProgramCtx, module: &ModuleStmtAst) {
+        for stmt in &module.stmts {
+            self.transpile_statement(ctx, stmt);
+        }
     }
 
     fn transpile_return(&mut self, ctx: &ProgramCtx, ret: &ReturnStmtAst, include_defers: bool) {
@@ -383,8 +390,17 @@ impl CTranspilerPass {
             AstExpression::SingleMatch(match_expr) => {
                 self.transpile_single_match_expr(ctx, match_expr)
             }
+            AstExpression::ModuleAccess(module) => self.transpile_module_access(ctx, module),
             AstExpression::NoOp(_) => "".to_string(),
         }
+    }
+
+    fn transpile_module_access(
+        &mut self,
+        ctx: &ProgramCtx,
+        module: &ModuleAccessExprAst,
+    ) -> String {
+        self.transpile_expr(ctx, &module.expr)
     }
 
     fn transpile_single_match_expr(&mut self, ctx: &ProgramCtx, m: &SingleMatchExprAst) -> String {
@@ -803,9 +819,8 @@ impl CTranspilerPass {
         let meta = ctx.get_meta(&meta_expr.name).unwrap();
         let (tmp_ty, tmp_val) = self.gen_temp_expr(ctx, &meta.get_type_id(ctx));
         let meta_str = match &meta.kind {
-            MetaFnKind::Import(_file) => {
+            MetaFnKind::Import => {
                 todo!();
-                // String::new()
             }
             MetaFnKind::BinOp(op) => {
                 self.transpile_expr(ctx, &meta_expr.args[0])

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::types::*;
+use crate::{ast::{self, ModuleId}, types::*};
 
 pub struct AstTypeDb {
     types: HashMap<AstTypeId, AstType>,
@@ -119,6 +119,16 @@ impl AstTypeDb {
         let id = ty.get_id();
         self.types.insert(id, ty);
         self.new_ref(id);
+        id
+    }
+
+    pub fn new_module(&mut self, id: &ModuleId, parent: Option<&AstTypeId>) -> AstTypeId {
+        let ty = AstType::new_module(id.name.clone(), parent, self);
+        if let Some(child) = &id.child {
+            self.new_module(child, Some(&ty.get_id()));
+        }
+        let id = ty.get_id();
+        self.types.insert(id, ty);
         id
     }
 

@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf};
+use std::{any::Any, fs, path::PathBuf};
 
 use crate::{
     ast::*,
@@ -13,22 +13,21 @@ pub type ParserResult<T> = Result<T, CompilerError>;
 pub type OptionalParserResult<T> = Result<Option<T>, CompilerError>;
 
 pub struct Parser<'a> {
-    pub errors: Vec<CompilerError>, // Owned list of errors
-    pub debug_scan: bool,
-    pub debug_checks: bool,
-    pub ctx: &'a mut ProgramCtx, // Mutable reference to ProgramContext
-    pub lexer: Lexer,            // Owned Lexer
-    // pub type_visitor: AstExprTypeVisitor<'a>, // Owned visitor
-    pub tk_queue: Vec<Token>, // Owned token queue
+    errors: Vec<CompilerError>,
+    debug_scan: bool,
+    debug_checks: bool,
+    ctx: &'a mut ProgramCtx,
+    lexer: Lexer,
+    tk_queue: Vec<Token>,
 
     /// Holds all expressions not used in a line. Used for prefix arguments.
-    pub line_expressions: Vec<AstExpression>,
+    line_expressions: Vec<AstExpression>,
 
     /// Meta tags fn defined and not used
-    pub line_meta_def: Vec<MetaDefExprAst>, // Changed to Box<MetaDefExprAst>
+    line_meta_def: Vec<MetaDefExprAst>, // Changed to Box<MetaDefExprAst>
 
     /// Stack of types for types declared inside other types.
-    pub asttype_stack: Vec<AstTypeId>,
+    asttype_stack: Vec<AstTypeId>,
 
     /// Used when the expression has an unclear type, but can be deduced from a previous statement
     expected_type: Option<AstTypeId>,
@@ -54,6 +53,10 @@ impl<'a> Parser<'a> {
 
     pub fn has_parsing_errors(&self) -> bool {
         !self.errors.is_empty()
+    }
+
+    pub fn get_errors(&self) -> Vec<CompilerError> {
+        self.errors.clone()
     }
 
     pub fn print_parsing_errors(&self, source: &str) {
@@ -143,32 +146,46 @@ impl<'a> Parser<'a> {
         self.asttype_stack.clear();
         self.errors.clear(); // Clear errors before new parse
 
+        let statements = self.parse_file_statements(
+            &[TokenKind::EoF],
+            &[TokenKind::NewLine, TokenKind::EoF],
+            &mut offset,
+        );
+
+        FileStmtAst {
+            filename: name.to_string(),
+            statements,
+        }
+    }
+
+    pub fn parse_file_statements(
+        &mut self,
+        end_tokens: &[TokenKind],
+        halt_tokens: &[TokenKind],
+        offset: &mut usize,
+    ) -> Vec<AstStatement> {
         let mut statements: Vec<AstStatement> = Vec::new();
-        while !self.check_tokens(&[TokenKind::EoF], offset) && offset < self.tk_queue.len() {
-            let statement_res = self.parse_file_statement(&mut offset);
+        while !self.check_tokens(end_tokens, *offset) && *offset < self.tk_queue.len() {
+            let statement_res = self.parse_file_statement(offset);
             match statement_res {
                 Ok(statement) => {
                     statements.push(statement);
                 }
                 Err(err) => {
                     self.errors.push(err);
-                    self.skip_until(&[TokenKind::NewLine, TokenKind::EoF], &mut offset); // Skip to next line or EOF on error
+                    self.skip_until(halt_tokens, offset); // Skip to next line or EOF on error
                     if self
                         .tk_queue
-                        .get(offset)
+                        .get(*offset)
                         .is_some_and(|t| t.kind == TokenKind::NewLine)
                     {
-                        offset += 1; // Consume newline if present
+                        *offset += 1; // Consume newline if present
                     }
                 }
             }
-            self.skip_all(&[TokenKind::NewLine], &mut offset);
+            self.skip_all(&[TokenKind::NewLine], offset);
         }
-
-        FileStmtAst {
-            filename: name.to_string(),
-            statements,
-        }
+        statements
     }
 
     pub fn parse_file_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
@@ -182,9 +199,13 @@ impl<'a> Parser<'a> {
             return Ok(AstStatement::EnumDef(Box::new(_enum)));
         }
 
-        if let Some(fn_def) = self.parse_fn_def(None, offset)? {
+        if let Some(fn_def) = self.parse_fn_def(offset)? {
             // None for parent_struct
             return Ok(AstStatement::FnDef(Box::new(fn_def)));
+        }
+
+        if let Some(mod_def) = self.parse_module(offset)? {
+            return Ok(AstStatement::Module(Box::new(mod_def)));
         }
 
         if let Some(meta_expr) = self.parse_meta_expr(offset)? {
@@ -196,6 +217,75 @@ impl<'a> Parser<'a> {
 
         self.skip_until(&[TokenKind::NewLine, TokenKind::EoF], offset);
         Err(CompilerError::undefined_statement(self.get_tk(*offset)))
+    }
+
+    pub fn parse_module(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleStmtAst> {
+        self.skip_all(&[TokenKind::NewLine], offset);
+
+        if !self.check_tokens(&[TokenKind::Module], *offset) {
+            return Ok(None);
+        }
+        *offset += 1; // Consume 'module'
+
+        let id = self
+            .parse_module_id(offset)?
+            .expect("no module id found for module");
+
+        if !self.check_tokens(&[TokenKind::LBrace], *offset) {
+            return Err(CompilerError::unexpected_token(
+                self.get_tk(*offset),
+                &[TokenKind::LBrace],
+            ));
+        }
+        *offset += 1;
+
+        let ty = self.ctx.type_db.new_module(&id, self.asttype_stack.last());
+        self.asttype_stack.push(ty);
+
+        let statements =
+            self.parse_file_statements(&[TokenKind::RBrace], &[TokenKind::RBrace], offset);
+
+        if !self.check_tokens(&[TokenKind::RBrace], *offset) {
+            return Err(CompilerError::unexpected_token(
+                self.get_tk(*offset),
+                &[TokenKind::RBrace],
+            ));
+        }
+        *offset += 1;
+
+        self.asttype_stack.pop();
+
+        Ok(Some(ModuleStmtAst {
+            ty,
+            id,
+            stmts: statements,
+        }))
+    }
+
+    pub fn parse_module_id(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleId> {
+        if !self.check_tokens(&[TokenKind::Id], *offset) {
+            return Ok(None);
+        }
+
+        let id = self.get_tk(*offset).value.clone();
+        *offset += 1;
+
+        if !self.check_tokens(&[TokenKind::Dot], *offset) {
+            return Ok(Some(ModuleId {
+                name: id,
+                child: None,
+            }));
+        }
+
+        let child = self.parse_module_id(offset)?;
+        if child.is_none() {
+            panic!("expected module id");
+        }
+
+        Ok(Some(ModuleId {
+            name: id,
+            child: Some(Box::new(child.unwrap())),
+        }))
     }
 
     pub fn parse_struct_def(&mut self, offset: &mut usize) -> OptionalParserResult<StructDefAst> {
@@ -244,7 +334,7 @@ impl<'a> Parser<'a> {
                 ],
                 *offset,
             ) {
-                if let Some(fn_def) = self.parse_fn_def(Some(s_id), offset)? {
+                if let Some(fn_def) = self.parse_fn_def(offset)? {
                     method_types.push(fn_def.id);
                     methods.push(fn_def);
 
@@ -256,7 +346,7 @@ impl<'a> Parser<'a> {
                     s_type_mut.set_methods(method_types.clone()); // Update methods on the type
                     self.skip_all(&[TokenKind::NewLine], offset); // Skip new lines inside struct
                     continue;
-                } else if let Err(err) = self.parse_fn_def(Some(s_id), offset) {
+                } else if let Err(err) = self.parse_fn_def(offset) {
                     self.errors.push(err);
                     self.skip_until_single(TokenKind::RBrace, offset);
                     break;
@@ -383,11 +473,7 @@ impl<'a> Parser<'a> {
         })))
     }
 
-    pub fn parse_fn_def(
-        &mut self,
-        parent_struct: Option<AstTypeId>,
-        offset: &mut usize,
-    ) -> OptionalParserResult<FnDefAst> {
+    pub fn parse_fn_def(&mut self, offset: &mut usize) -> OptionalParserResult<FnDefAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
         let mut is_external = false;
@@ -413,7 +499,8 @@ impl<'a> Parser<'a> {
         let fn_name = fn_id_tk.value;
         *offset += 4; // Consume id :: fn
 
-        let mut header = self.parse_fn_header(fn_name.clone(), parent_struct, offset)?;
+        let parent_ty = self.asttype_stack.last().cloned();
+        let mut header = self.parse_fn_header(fn_name.clone(), parent_ty, offset)?;
         header.is_external = is_external;
 
         header.prefix_args.iter().for_each(|prefix_arg| {
@@ -437,9 +524,7 @@ impl<'a> Parser<'a> {
         });
 
         // Register the fn early for recursion
-        let fn_ty_id = self
-            .ctx
-            .define_fn(header.name.clone(), &header, parent_struct);
+        let fn_ty_id = self.ctx.define_fn(header.name.clone(), &header, parent_ty);
 
         let mut body: Option<Box<BodyExprAst>> = None;
         if !is_external {
@@ -852,6 +937,11 @@ impl<'a> Parser<'a> {
                 return Ok(Some(AstExpression::Struct(struct_expr)));
             }
 
+            // Module expr
+            if let Some(module_expr) = self.parse_module_access(offset)? {
+                return Ok(Some(AstExpression::ModuleAccess(Box::new(module_expr))));
+            }
+
             // Variable
             if !self.ctx.defined_vars.contains_key(&identifier) {
                 return Err(CompilerError::from_token(
@@ -953,6 +1043,40 @@ impl<'a> Parser<'a> {
         }
 
         Ok(None) // No matching expression production found
+    }
+
+    pub fn parse_module_access(
+        &mut self,
+        offset: &mut usize,
+    ) -> OptionalParserResult<ModuleAccessExprAst> {
+        if !self.check_tokens(&[TokenKind::Id, TokenKind::Dot], *offset) {
+            return Ok(None);
+        }
+
+        let module_name = self.get_tk(*offset).value.clone();
+        *offset += 2;
+
+        let module_id = self.ctx.type_db.get_id_by_name(&module_name);
+        if module_id.is_none() {
+            return Ok(None);
+        }
+
+        {
+            let module_ty = self.ctx.type_db.get_type(module_id.unwrap());
+            if module_ty.is_none_or(|x| !x.is_module()) {
+                return Ok(None);
+            }
+        }
+
+        let expr = self.parse_expr(offset)?;
+        if expr.is_none() {
+            panic!("expression expected in a module");
+        }
+
+        Ok(Some(ModuleAccessExprAst {
+            ty: module_id.unwrap(),
+            expr: expr.unwrap(),
+        }))
     }
 
     // parse_enum_expr

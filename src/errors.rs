@@ -1,4 +1,5 @@
 use core::fmt;
+use std::str::FromStr;
 
 use colored::Colorize;
 use thiserror::Error;
@@ -64,11 +65,11 @@ pub enum ParserErrorKind {
     UndefinedCall { name: String },
 
     #[error(
-        "no overload found for function '{fn_name}' with the given arguments\navailable overloads:\n{overloads:?}"
+        "no overload found for function '{fn_name}' with the given arguments\navailable overloads:\n\t{overloads:?}"
     )]
     NoOverloadCallMatched {
         fn_name: String,
-        overloads: Vec<AstTypeId>,
+        overloads: Vec<String>,
     },
 
     #[error("'{name}' is not a valid struct")]
@@ -244,7 +245,29 @@ impl CompilerError {
             pos: tk.position,
             kind: ParserErrorKind::NoOverloadCallMatched {
                 fn_name: first_fn_ty.get_name().to_string(),
-                overloads: fns,
+                overloads: fns
+                    .iter()
+                    .map(|x| {
+                        let ty = type_db.get_type(*x).unwrap();
+                        let mut s = String::from_str(ty.get_name()).unwrap();
+                        s += " :: (";
+                        for (i, arg) in ty.get_pre_args().iter().enumerate() {
+                            s += type_db.get_type(arg.id).unwrap().get_name();
+                            if i != ty.get_pre_args().len() - 1 {
+                                s += ", ";
+                            }
+                        }
+                        s += " | "; 
+                        for (i, arg) in ty.get_su_args().iter().enumerate() {
+                            s += type_db.get_type(arg.id).unwrap().get_name();
+                            if i != ty.get_su_args().len() - 1 {
+                                s += ", ";
+                            }
+                        }
+                        s += ")";
+                        s
+                    })
+                    .collect(),
             },
         }
     }

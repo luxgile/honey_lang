@@ -1,0 +1,12 @@
+
+module math {
+  add :: fn (lhs: i32 | rhs: i32) i32 {
+    @i+ lhs rhs
+  }
+}
+
+main :: fn(|) i32 {
+  x := 10 math.add 5
+  printf "10 + 5 = %d" x
+  0
+}

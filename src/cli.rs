@@ -2,40 +2,64 @@
 
 use std::path::Path;
 
-use clap::{Parser, Subcommand, command};
+use clap::{Args, Parser, Subcommand, command};
 use hunc_lib::{CompConfig, Compiler};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]
-struct Args {
+struct CompilerArgs {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(Args, Clone)]
+struct BuildArgs {
+    pub file_path: String,
+
+    #[arg(long)]
+    pub print_c: bool,
+
+    #[arg(long)]
+    pub pretty_print: bool,
 }
 
 #[derive(Subcommand, Clone)]
 enum Commands {
     Build {
-        filename: String,
+        #[command(flatten)]
+        args: BuildArgs,
     },
     Run {
-        file_path: String,
-        
-        #[arg(long)]
-        print_c: bool,
-
-        #[arg(long)]
-        pretty_print: bool,
+        #[command(flatten)]
+        args: BuildArgs,
     },
 }
 
 fn main() {
-    let args = Args::parse();
+    let args = CompilerArgs::parse();
     match args.command {
-        Commands::Build { filename: _ } => {
-            todo!();
+        Commands::Build { args } => {
+            Compiler::build_file(
+                Path::new(&args.file_path),
+                CompConfig {
+                    print_c: args.print_c,
+                    pretty_print: args.pretty_print,
+                    build_path: None,
+                },
+            )
+            .expect("issue building file");
         }
-        Commands::Run { file_path, print_c, pretty_print } => {
-            Compiler::run_file(Path::new(&file_path), CompConfig { print_c, pretty_print, build_path: None }).unwrap();
+        Commands::Run { args } => {
+            let build = Compiler::build_file(
+                Path::new(&args.file_path),
+                CompConfig {
+                    print_c: args.print_c,
+                    pretty_print: args.pretty_print,
+                    build_path: None,
+                },
+            )
+            .unwrap();
+            Compiler::run_build(&build);
         }
     }
 }

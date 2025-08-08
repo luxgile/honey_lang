@@ -8,9 +8,6 @@ pub struct VarDefCtx {
 }
 
 pub struct ProgramCtx {
-    // enums: HashMap<String, Box<EnumDefAst>>,
-    // structs: HashMap<String, Box<StructDefAst>>,
-    // primitives: HashMap<String, AstTypeId>,
     defined_meta: HashMap<String, Box<MetaFn>>,
     pub type_db: AstTypeDb,
     pub defined_vars: HashMap<String, VarDefCtx>,
@@ -19,13 +16,8 @@ pub struct ProgramCtx {
 impl ProgramCtx {
     pub fn new() -> Self {
         Self {
-            // llvm_types: HashMap::new(),
-            // enums: HashMap::new(),
-            // structs: HashMap::new(),
-            // primitives: HashMap::new(),
             defined_meta: HashMap::new(),
             type_db: AstTypeDb::new(),
-            // ptr_llvm_ty: std::ptr::null_mut(), // Initialize as null
             defined_vars: HashMap::new(),
         }
     }

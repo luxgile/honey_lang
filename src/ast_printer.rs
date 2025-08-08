@@ -32,6 +32,31 @@ impl AstPrint for AstStatement {
             AstStatement::EnumDef(enum_def_ast) => enum_def_ast.print_ast(ctx, indent),
             AstStatement::File(file) => file.print_ast(ctx, indent),
             AstStatement::Defer(defer) => defer.print_ast(ctx, indent),
+            AstStatement::Module(module) => module.print_ast(ctx, indent),
+        }
+    }
+}
+
+impl AstPrint for ModuleStmtAst {
+    fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
+        print_indent_spaces(indent);
+        print!("module ");
+        self.id.print_ast(ctx, indent);
+        println!(" {{");
+        for stmt in &self.stmts {
+            stmt.print_ast(ctx, indent + 1);
+        }
+        print_indent_spaces(indent);
+        println!("}}");
+    }
+}
+
+impl AstPrint for ModuleId {
+    fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
+        print!("{}", self.name);
+        if let Some(child) = &self.child {
+            print!(".");
+            child.print_ast(ctx, indent);
         }
     }
 }
@@ -83,8 +108,17 @@ impl AstPrint for AstExpression {
             AstExpression::SingleMatch(single_match_expr_ast) => {
                 single_match_expr_ast.print_ast(ctx, indent)
             }
+            AstExpression::ModuleAccess(module) => module.print_ast(ctx, indent),
             AstExpression::NoOp(_) => {}
         }
+    }
+}
+
+impl AstPrint for ModuleAccessExprAst {
+    fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
+        let ty = ctx.type_db.get_type(self.ty).unwrap();
+        print!("{}.", ty.get_name());
+        self.expr.print_ast(ctx, indent);
     }
 }
 
@@ -147,6 +181,7 @@ impl AstPrint for CallExprAst {
 
 impl AstPrint for FnHeaderAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
+        print_indent_spaces(indent);
         print!("{} :: fn (", self.name);
 
         for arg in &self.prefix_args {

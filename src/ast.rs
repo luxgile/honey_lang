@@ -1,5 +1,6 @@
 use crate::{
     ast_typer::AstTyped,
+    meta_fn::MetaFnKind,
     program_ctx::ProgramCtx,
     types::{AstNamedType, AstTypeId, BOOL_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
@@ -26,6 +27,7 @@ pub enum AstExpression {
     MemberAccessor(Box<MemberAccesorExprAst>),
     Enum(Box<EnumExprAst>),
     SingleMatch(Box<SingleMatchExprAst>),
+    ModuleAccess(Box<ModuleAccessExprAst>),
     NoOp(Box<NoOpAst>),
 }
 
@@ -83,6 +85,7 @@ impl AstExpression {
             AstExpression::SingleMatch(single_match_expr_ast) => {
                 single_match_expr_ast.then_expr.get_type_id(ctx)
             }
+            AstExpression::ModuleAccess(module) => module.expr.get_type_id(ctx),
             AstExpression::NoOp(_) => VOID_TYPE.get_id(),
         }
     }
@@ -101,6 +104,7 @@ pub enum AstStatement {
     EnumDef(Box<EnumDefAst>),
     File(Box<FileStmtAst>),
     Defer(Box<DeferStmtAst>),
+    Module(Box<ModuleStmtAst>),
 }
 
 #[derive(Debug, Clone)]
@@ -142,9 +146,26 @@ pub struct MemberAccesorExprAst {
 
 #[derive(Debug, Clone)]
 pub struct FileStmtAst {
-    // TODO: imports
     pub filename: String,
     pub statements: Vec<AstStatement>,
+}
+impl FileStmtAst {
+    pub fn get_imports(&self, ctx: &ProgramCtx) -> Vec<String> {
+        let mut imports = Vec::new();
+        for stmt in &self.statements {
+            if let AstStatement::StatementExpr(stmt_expr) = stmt
+                && let AstExpression::MetaDef(meta_expr) = &stmt_expr.expr
+            {
+                let meta_fn = ctx.get_meta(&meta_expr.name).unwrap();
+                if let MetaFnKind::Import = meta_fn.kind {
+                    if let AstExpression::String(string) = &meta_expr.args[0] {
+                        imports.push(string.value.clone());
+                    }
+                }
+            }
+        }
+        imports
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -357,4 +378,23 @@ pub struct FnDefAst {
 #[derive(Debug, Clone)]
 pub struct DeferStmtAst {
     pub stmt: AstStatement,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModuleId {
+    pub name: String,
+    pub child: Option<Box<ModuleId>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModuleStmtAst {
+    pub ty: AstTypeId,
+    pub id: ModuleId,
+    pub stmts: Vec<AstStatement>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ModuleAccessExprAst {
+    pub ty: AstTypeId,
+    pub expr: AstExpression,
 }

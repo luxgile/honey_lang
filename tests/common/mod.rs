@@ -1,4 +1,3 @@
-
 use std::{path::PathBuf, str::FromStr};
 
 use hunc_lib::{CompConfig, Compiler};
@@ -11,11 +10,6 @@ pub fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
         print_c: true,
         build_path: Some(PathBuf::from_str("tests/.hun_build").unwrap()),
     };
-    assert_eq!(
-        Compiler::run_src(src.into(), &name.into(), config)
-            .unwrap()
-            .code()
-            .unwrap(),
-        code
-    )
+    let build = Compiler::build_src(src.into(), &name.into(), config).unwrap();
+    assert_eq!(Compiler::run_build(&build).code().unwrap(), code)
 }

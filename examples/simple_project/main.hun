@@ -1,0 +1,5 @@
+@import math 
+
+main :: fn (|) i32 {
+  printf "10 + 5 = %d" math.add 10 5
+}

@@ -27,7 +27,7 @@ pub enum CmpOpKind {
 pub enum MetaFnKind {
     BinOp(BinOpKind),
     CmpOp(CmpOpKind),
-    Import(String),
+    Import,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,6 +54,10 @@ impl MetaFn {
     }
 
     pub fn get_arg_size(&self) -> i32 {
-        2
+        match self.kind {
+            MetaFnKind::BinOp(_) => 2,
+            MetaFnKind::CmpOp(_) => 2,
+            MetaFnKind::Import => 1,
+        }
     }
 }
