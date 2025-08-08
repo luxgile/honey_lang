@@ -43,7 +43,7 @@ fn main() {
                 Path::new(&args.file_path),
                 CompConfig {
                     print_c: args.print_c,
-                    pretty_print: args.pretty_print,
+                    pretty_print_ast: args.pretty_print,
                     build_path: None,
                 },
             )
@@ -54,7 +54,7 @@ fn main() {
                 Path::new(&args.file_path),
                 CompConfig {
                     print_c: args.print_c,
-                    pretty_print: args.pretty_print,
+                    pretty_print_ast: args.pretty_print,
                     build_path: None,
                 },
             )

@@ -1053,8 +1053,9 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        let module_name = self.get_tk(*offset).value.clone();
-        *offset += 2;
+        let mut tmp_offset = *offset;
+        let module_name = self.get_tk(tmp_offset).value.clone();
+        tmp_offset += 2;
 
         let module_id = self.ctx.type_db.get_id_by_name(&module_name);
         if module_id.is_none() {
@@ -1068,10 +1069,12 @@ impl<'a> Parser<'a> {
             }
         }
 
-        let expr = self.parse_expr(offset)?;
+        let expr = self.parse_expr(&mut tmp_offset)?;
         if expr.is_none() {
             panic!("expression expected in a module");
         }
+
+        *offset = tmp_offset;
 
         Ok(Some(ModuleAccessExprAst {
             ty: module_id.unwrap(),

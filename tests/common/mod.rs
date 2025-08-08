@@ -6,7 +6,7 @@ use hunc_lib::{CompConfig, Compiler};
 // time. Some most likely are overlapping.
 pub fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
     let config = CompConfig {
-        pretty_print: false,
+        pretty_print_ast: true,
         print_c: true,
         build_path: Some(PathBuf::from_str("tests/.hun_build").unwrap()),
     };

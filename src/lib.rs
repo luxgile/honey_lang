@@ -30,7 +30,7 @@ mod types;
 
 #[derive(Default, Clone, Debug)]
 pub struct CompConfig {
-    pub pretty_print: bool,
+    pub pretty_print_ast: bool,
     pub print_c: bool,
     pub build_path: Option<PathBuf>,
 }
@@ -84,7 +84,7 @@ impl Compiler {
             )
         };
 
-        if config.pretty_print {
+        if config.pretty_print_ast {
             println!();
             file.print_ast(&program_ctx, 0);
         }
