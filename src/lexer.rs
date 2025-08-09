@@ -43,6 +43,7 @@ pub enum TokenKind {
     Match,
     NewLine,
     Module,
+    Import,
     Meta,
     Undefined, // Consider removing or making this an error type
 }
@@ -76,6 +77,7 @@ impl Display for TokenKind {
             TokenKind::Return => "return",
             TokenKind::Defer => "defer",
             TokenKind::Module => "module",
+            TokenKind::Import => "import",
             _ => panic!("unimplemented display for token kind"),
         };
 
@@ -318,6 +320,7 @@ impl Lexer {
                 "match" => return self.create_token(TokenKind::Match, pos, false),
                 "extern" => return self.create_token(TokenKind::Extern, pos, false),
                 "module" => return self.create_token(TokenKind::Module, pos, false),
+                "import" => return self.create_token(TokenKind::Import, pos, false),
                 "struct" => return self.create_token(TokenKind::Struct, pos, false),
                 "enum" => return self.create_token(TokenKind::Enum, pos, false),
                 "fn" => return self.create_token(TokenKind::Fn, pos, false),

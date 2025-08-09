@@ -105,6 +105,7 @@ pub enum AstStatement {
     File(Box<FileStmtAst>),
     Defer(Box<DeferStmtAst>),
     Module(Box<ModuleStmtAst>),
+    Import(Box<ImportStmtAst>),
 }
 
 #[derive(Debug, Clone)]
@@ -148,24 +149,6 @@ pub struct MemberAccesorExprAst {
 pub struct FileStmtAst {
     pub filename: String,
     pub statements: Vec<AstStatement>,
-}
-impl FileStmtAst {
-    pub fn get_imports(&self, ctx: &ProgramCtx) -> Vec<String> {
-        let mut imports = Vec::new();
-        for stmt in &self.statements {
-            if let AstStatement::StatementExpr(stmt_expr) = stmt
-                && let AstExpression::MetaDef(meta_expr) = &stmt_expr.expr
-            {
-                let meta_fn = ctx.get_meta(&meta_expr.name).unwrap();
-                if let MetaFnKind::Import = meta_fn.kind {
-                    if let AstExpression::String(string) = &meta_expr.args[0] {
-                        imports.push(string.value.clone());
-                    }
-                }
-            }
-        }
-        imports
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -397,4 +380,11 @@ pub struct ModuleStmtAst {
 pub struct ModuleAccessExprAst {
     pub ty: AstTypeId,
     pub expr: AstExpression,
+}
+
+#[derive(Debug, Clone)]
+pub struct ImportStmtAst {
+    pub id: String,
+    pub path: String,
+    pub ast: FileStmtAst,
 }

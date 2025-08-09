@@ -1,4 +1,4 @@
-use std::{any::Any, fs, path::PathBuf};
+use std::fs;
 
 use crate::{
     ast::*,
@@ -67,21 +67,6 @@ impl<'a> Parser<'a> {
 
     fn get_tk(&self, offset: usize) -> &Token {
         if offset >= self.tk_queue.len() {
-            // Return an error at a dummy/initial position if no tokens were read,
-            // or the last token's position otherwise.
-            // let error_token = if self.tk_queue.is_empty() {
-            //     Token {
-            //         kind: TokenKind::EoF,
-            //         value: "".to_string(),
-            //         position: FilePos {
-            //             line: 0,
-            //             start: 0,
-            //             end: 0,
-            //         },
-            //     }
-            // } else {
-            //     self.tk_queue.last().unwrap().clone()
-            // };
             panic!("end of file found unexpectedly");
         }
         &self.tk_queue[offset]
@@ -143,9 +128,6 @@ impl<'a> Parser<'a> {
         }
 
         let mut offset = 0;
-        self.asttype_stack.clear();
-        self.errors.clear(); // Clear errors before new parse
-
         let statements = self.parse_file_statements(
             &[TokenKind::EoF],
             &[TokenKind::NewLine, TokenKind::EoF],
@@ -189,7 +171,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_file_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
-        self.skip_all(&[TokenKind::NewLine], offset); // Added this as often seen in parse methods
+        self.skip_all(&[TokenKind::NewLine], offset);
 
         if let Some(_struct) = self.parse_struct_def(offset)? {
             return Ok(AstStatement::StructDef(Box::new(_struct)));
@@ -202,6 +184,10 @@ impl<'a> Parser<'a> {
         if let Some(fn_def) = self.parse_fn_def(offset)? {
             // None for parent_struct
             return Ok(AstStatement::FnDef(Box::new(fn_def)));
+        }
+
+        if let Some(import) = self.parse_import(offset)? {
+            return Ok(AstStatement::Import(Box::new(import)));
         }
 
         if let Some(mod_def) = self.parse_module(offset)? {
@@ -219,6 +205,57 @@ impl<'a> Parser<'a> {
         Err(CompilerError::undefined_statement(self.get_tk(*offset)))
     }
 
+    pub fn parse_import(&mut self, offset: &mut usize) -> OptionalParserResult<ImportStmtAst> {
+        self.skip_all(&[TokenKind::NewLine], offset);
+
+        if !self.check_tokens(
+            &[
+                TokenKind::Id,
+                TokenKind::Colon,
+                TokenKind::Colon,
+                TokenKind::Import,
+            ],
+            *offset,
+        ) {
+            return Ok(None);
+        }
+
+        let import_id = self.get_tk(*offset).value.clone();
+        *offset += 4;
+
+        if !self.check_tokens(&[TokenKind::String], *offset) {
+            panic!("expected string for import declaration");
+        }
+
+        let import_path = self.get_tk(*offset).value.clone();
+        *offset += 1;
+
+        let module_ty = self.ctx.type_db.new_module(
+            &ModuleId {
+                name: import_id.clone(),
+                child: None,
+            },
+            None,
+        );
+
+        // Parse new imported file before keep going
+        let mut parser = Parser::new(self.ctx);
+        parser.asttype_stack.push(module_ty);
+        let file = parser.parse_source(&import_id, &fs::read_to_string(&import_path).unwrap(), false);
+        parser.asttype_stack.pop();
+
+        if parser.has_parsing_errors() {
+            self.errors.extend_from_slice(&parser.get_errors());
+            return Err(CompilerError::import_failed(self.get_tk(*offset), import_path));
+        }
+
+        Ok(Some(ImportStmtAst {
+            id: import_id,
+            path: import_path,
+            ast: file,
+        }))
+    }
+
     pub fn parse_module(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleStmtAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
@@ -230,7 +267,10 @@ impl<'a> Parser<'a> {
             return Ok(None);
         };
 
-        if !self.check_tokens(&[TokenKind::Colon, TokenKind::Colon, TokenKind::Module], tmp_offset) {
+        if !self.check_tokens(
+            &[TokenKind::Colon, TokenKind::Colon, TokenKind::Module],
+            tmp_offset,
+        ) {
             return Ok(None);
         }
         tmp_offset += 3; // Consume ' :: module'
@@ -361,12 +401,9 @@ impl<'a> Parser<'a> {
             // Try parse field
             if let Some(field_def) = self.parse_arg_def(offset)? {
                 if !self.check_any_tokens(&[TokenKind::Comma, TokenKind::RBrace], *offset) {
-                    self.errors.push(CompilerError::from_token(
+                    self.errors.push(CompilerError::unexpected_token(
                         self.get_tk(*offset),
-                        ParserErrorKind::UnexpectedTokenKind {
-                            found_kind: self.get_tk(*offset).kind,
-                            expected_kind: vec![TokenKind::Comma],
-                        },
+                        &[TokenKind::Comma],
                     ));
                     self.skip_until_single(TokenKind::RBrace, offset);
                     break;

@@ -162,10 +162,22 @@ impl CTranspilerPass {
             AstStatement::ReturnStmt(ret) => self.transpile_return(ctx, ret, true),
             AstStatement::Defer(defer) => self.curr_frame().queued_defers.push(*defer.clone()),
             AstStatement::Module(module) => self.transpile_module(ctx, module),
+            AstStatement::Import(import) => self.transpile_import(ctx, import),
             _ => {
                 todo!("{:?} not implemented", stmt);
             }
         };
+    }
+
+    fn transpile_import(&mut self, ctx: &ProgramCtx, import: &ImportStmtAst) {
+        let transpiler = CTranspilerPass::default();
+        let (header, src) = transpiler.run(ctx, &import.ast);
+
+        println!("src: {src}\n");
+        println!("header: {header}");
+        todo!(
+            "need to create a new file based on this; the transpiler might need to create the files directly based on a folder"
+        );
     }
 
     fn transpile_module(&mut self, ctx: &ProgramCtx, module: &ModuleStmtAst) {
@@ -819,9 +831,6 @@ impl CTranspilerPass {
         let meta = ctx.get_meta(&meta_expr.name).unwrap();
         let (tmp_ty, tmp_val) = self.gen_temp_expr(ctx, &meta.get_type_id(ctx));
         let meta_str = match &meta.kind {
-            MetaFnKind::Import => {
-                todo!();
-            }
             MetaFnKind::BinOp(op) => {
                 self.transpile_expr(ctx, &meta_expr.args[0])
                     + match op {

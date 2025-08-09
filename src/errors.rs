@@ -94,6 +94,9 @@ pub enum ParserErrorKind {
 
     #[error("no member '{member}' found for type '{type_name}'")]
     MemberNotFound { member: String, type_name: String },
+
+    #[error("not possible to import '{path}' as the file contains compilation errors")]
+    ImportFailed { path: String },
 }
 
 #[derive(Debug, Clone)]
@@ -257,7 +260,7 @@ impl CompilerError {
                                 s += ", ";
                             }
                         }
-                        s += " | "; 
+                        s += " | ";
                         for (i, arg) in ty.get_su_args().iter().enumerate() {
                             s += type_db.get_type(arg.id).unwrap().get_name();
                             if i != ty.get_su_args().len() - 1 {
@@ -286,6 +289,13 @@ impl CompilerError {
         Self {
             pos: tk.position,
             kind: ParserErrorKind::UndefinedStatement,
+        }
+    }
+
+    pub fn import_failed(tk: &Token, path: String) -> CompilerError {
+        Self {
+            pos: tk.position,
+            kind: ParserErrorKind::ImportFailed { path },
         }
     }
 }

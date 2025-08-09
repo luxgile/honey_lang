@@ -33,7 +33,15 @@ impl AstPrint for AstStatement {
             AstStatement::File(file) => file.print_ast(ctx, indent),
             AstStatement::Defer(defer) => defer.print_ast(ctx, indent),
             AstStatement::Module(module) => module.print_ast(ctx, indent),
+            AstStatement::Import(import) => import.print_ast(ctx, indent),
         }
+    }
+}
+
+impl AstPrint for ImportStmtAst {
+    fn print_ast(&self, _ctx: &ProgramCtx, indent: u32) {
+        print_indent_spaces(indent);
+        println!("{} :: import \"{}\"", self.id, self.path);
     }
 }
 

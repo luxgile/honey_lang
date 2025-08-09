@@ -173,13 +173,6 @@ impl Compiler {
             c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::CmpOp(op), ret))
         };
 
-        // 'Define' meta
-        c.define_meta(MetaFn::new(
-            "import",
-            MetaFnKind::Import,
-            MetaReturnType::Type(VOID_TYPE.get_id()),
-        ));
-
         let int = MetaReturnType::Int;
         let float = MetaReturnType::Float;
         let bool = MetaReturnType::Type(BOOL_TYPE.get_id());
