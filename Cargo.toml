@@ -1,14 +1,14 @@
 [package]
-name = "hunc"
+name = "honeyc"
 version = "0.1.0"
 edition = "2024"
 
 [lib]
-name = "hunc_lib"
+name = "honeyc_lib"
 path = "src/lib.rs"
 
 [[bin]]
-name = "hunc"
+name = "honeyc"
 path = "src/cli.rs"
 
 [dependencies]

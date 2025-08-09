@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use clap::{Args, Parser, Subcommand, command};
-use hunc_lib::{CompConfig, Compiler};
+use honeyc_lib::{CompConfig, Compiler};
 
 #[derive(Parser)]
 #[command(version, about, long_about = None)]

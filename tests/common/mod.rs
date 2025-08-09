@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use hunc_lib::{CompConfig, Compiler};
+use honeyc_lib::{CompConfig, Compiler};
 
 // FIXME: The first time tests are run, fail because the files are being created all at the same
 // time. Some most likely are overlapping.
