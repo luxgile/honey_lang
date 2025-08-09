@@ -222,36 +222,41 @@ impl<'a> Parser<'a> {
     pub fn parse_module(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleStmtAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
-        if !self.check_tokens(&[TokenKind::Module], *offset) {
+        let mut tmp_offset = *offset;
+
+        let id = if let Some(id) = self.parse_module_id(&mut tmp_offset)? {
+            id
+        } else {
+            return Ok(None);
+        };
+
+        if !self.check_tokens(&[TokenKind::Colon, TokenKind::Colon, TokenKind::Module], tmp_offset) {
             return Ok(None);
         }
-        *offset += 1; // Consume 'module'
+        tmp_offset += 3; // Consume ' :: module'
 
-        let id = self
-            .parse_module_id(offset)?
-            .expect("no module id found for module");
-
-        if !self.check_tokens(&[TokenKind::LBrace], *offset) {
+        if !self.check_tokens(&[TokenKind::LBrace], tmp_offset) {
             return Err(CompilerError::unexpected_token(
                 self.get_tk(*offset),
                 &[TokenKind::LBrace],
             ));
         }
-        *offset += 1;
+        tmp_offset += 1;
 
         let ty = self.ctx.type_db.new_module(&id, self.asttype_stack.last());
         self.asttype_stack.push(ty);
 
         let statements =
-            self.parse_file_statements(&[TokenKind::RBrace], &[TokenKind::RBrace], offset);
+            self.parse_file_statements(&[TokenKind::RBrace], &[TokenKind::RBrace], &mut tmp_offset);
 
-        if !self.check_tokens(&[TokenKind::RBrace], *offset) {
+        if !self.check_tokens(&[TokenKind::RBrace], tmp_offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(tmp_offset),
                 &[TokenKind::RBrace],
             ));
         }
-        *offset += 1;
+        tmp_offset += 1;
+        *offset = tmp_offset;
 
         self.asttype_stack.pop();
 
@@ -460,6 +465,7 @@ impl<'a> Parser<'a> {
                 self.skip_until_single(TokenKind::NewLine, offset);
                 return Err(err);
             }
+
             // If parse_expr returns Ok(None), it means no expression was found, which might be an error here.
             args.push(
                 expr.unwrap()

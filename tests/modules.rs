@@ -6,7 +6,7 @@ fn module_def() {
     assert_src(
         "module def",
         "
-module math {
+math :: module {
   add :: fn (lhs: i32 | rhs: i32) i32 {
     @i+ lhs rhs
   }
@@ -25,7 +25,7 @@ fn module_access() {
     assert_src(
         "module access",
         "
-module math {
+math :: module {
   add :: fn (lhs: i32 | rhs: i32) i32 {
     @i+ lhs rhs
   }

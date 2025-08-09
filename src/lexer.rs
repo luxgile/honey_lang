@@ -5,8 +5,11 @@ use lazy_static::lazy_static;
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
     EoF,
+    /// .
     Dot,
+    /// ,
     Comma,
+    /// :
     Colon,
     /// {
     LBrace,
