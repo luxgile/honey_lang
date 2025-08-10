@@ -471,7 +471,7 @@ fn casting_ints_02() {
         }
 
         main :: fn(|) i32 {
-            power_of_two @cast u32 10
+            @cast i32 power_of_two @cast u32 10
         }
         ", 100);
 }

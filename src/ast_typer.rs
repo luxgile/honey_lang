@@ -67,8 +67,11 @@ impl AstTyped for MetaExprAst {
 
         // Here we are assuming the meta def already validated the arguments for the given type.
         match meta.kind {
-            MetaFnKind::BinOp(_) | MetaFnKind::CmpOp(_)  => {
+            MetaFnKind::BinOp(_)  => {
                 self.args[0].get_type_id(ctx)
+            }
+            MetaFnKind::CmpOp(_) => {
+                BOOL_TYPE.get_id()
             }
             MetaFnKind::Cast => {
                 if let AstExpression::Type(ty) = &self.args[0] {

@@ -97,6 +97,12 @@ pub enum ParserErrorKind {
 
     #[error("not possible to import '{path}' as the file contains compilation errors")]
     ImportFailed { path: String },
+
+    #[error("returning '{return_ty}' but '{expected_ty}' was expected")]
+    IncorrectReturnType {
+        return_ty: String,
+        expected_ty: String,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -296,6 +302,20 @@ impl CompilerError {
         Self {
             pos: tk.position,
             kind: ParserErrorKind::ImportFailed { path },
+        }
+    }
+
+    pub fn incorrect_return_type(
+        tk: &Token,
+        return_ty: &AstType,
+        expected_ty: &AstType,
+    ) -> CompilerError {
+        Self {
+            pos: tk.position,
+            kind: ParserErrorKind::IncorrectReturnType {
+                return_ty: return_ty.get_name().to_string(),
+                expected_ty: expected_ty.get_name().to_string(),
+            },
         }
     }
 }

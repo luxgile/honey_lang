@@ -568,14 +568,28 @@ impl<'a> Parser<'a> {
 
         let mut body: Option<Box<BodyExprAst>> = None;
         if !is_external {
+            self.expected_type = Some(header.ret_type);
             let body_r = self.parse_body(offset)?;
-            if body_r.is_none() {
-                // This indicates parse_fn_body couldn't find a body, but it's required for non-external
-                return Err(CompilerError::from_token(
-                    self.get_tk(*offset),
-                    ParserErrorKind::FnMissingBody,
-                ));
+            match &body_r {
+                Some(body) => {
+                    let body_ty = body.get_type(self.ctx);
+                    if body_ty.get_id() != header.ret_type {
+                        return Err(CompilerError::incorrect_return_type(
+                            self.get_tk(*offset),
+                            body_ty,
+                            self.ctx.type_db.get_type(header.ret_type).unwrap(),
+                        ));
+                    }
+                }
+                None => {
+                    return Err(CompilerError::from_token(
+                        self.get_tk(*offset),
+                        ParserErrorKind::FnMissingBody,
+                    ));
+                }
             }
+            self.expected_type = None;
+
             body = body_r;
         }
         self.ctx.pop_local();
