@@ -8,7 +8,7 @@ void println(char* str){
 }
 
 int32_t main(){
-  int32_t __2 = math_add(5);
-  printf("10 + 5 = %d", 10, __2);
+  int32_t __2 = math_add(10, 5);
+  printf("10 + 5 = %d", __2);
 }
 

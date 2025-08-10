@@ -1,9 +1,7 @@
 // auto generated file from honey - don't modify manually
-// file: main.hun
+// file: math.hun
 
 #include <stdio.h>
 #include <stdint.h>
 
-void println(char* str);
-#include "math.h"
-int32_t main();
+int32_t math_add(int32_t lhs, int32_t rhs);

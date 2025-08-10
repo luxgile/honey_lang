@@ -42,7 +42,6 @@ fn main() {
             Compiler::build_file(
                 Path::new(&args.file_path),
                 CompConfig {
-                    print_c: args.print_c,
                     pretty_print_ast: args.pretty_print,
                     build_path: None,
                 },
@@ -53,7 +52,6 @@ fn main() {
             let build = Compiler::build_file(
                 Path::new(&args.file_path),
                 CompConfig {
-                    print_c: args.print_c,
                     pretty_print_ast: args.pretty_print,
                     build_path: None,
                 },

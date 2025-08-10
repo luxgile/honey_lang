@@ -10,7 +10,7 @@ use std::{
 };
 
 use ast_printer::AstPrint;
-use compiler_pass::{CTranspilerPass, CompilerPass};
+use compiler_pass::{CTranspilerPass, CompilerPass, TranspilerResult};
 use meta_fn::*;
 use parser::Parser;
 use program_ctx::*;
@@ -31,7 +31,6 @@ mod types;
 #[derive(Default, Clone, Debug)]
 pub struct CompConfig {
     pub pretty_print_ast: bool,
-    pub print_c: bool,
     pub build_path: Option<PathBuf>,
 }
 
@@ -98,12 +97,7 @@ impl Compiler {
 
         // Transpile to C
         let transpiler = CTranspilerPass::default();
-        let (c_header, c_src) = transpiler.run(&program_ctx, &file);
-
-        if config.print_c {
-            println!("{c_header}\n\n");
-            println!("{c_src}\n");
-        }
+        let result = transpiler.run(&program_ctx, &file);
 
         // Ensuring build folder exists
         let build_path = config
@@ -116,21 +110,20 @@ impl Compiler {
         }
 
         // Create C files
-        let src_path = build_path.as_path().join(format!("{exe_name}.c"));
-        let header_path = build_path.as_path().join(format!("{exe_name}.h"));
-        fs::write(src_path.clone(), c_src).expect("error creating source file");
-        fs::write(header_path.clone(), c_header).expect("error creating header file");
+        let src_paths = Compiler::create_c_files(&result, &build_path)
+            .iter()
+            .map(|x| x.to_string_lossy().into())
+            .collect::<Vec<String>>();
 
         // Build C source using gcc
         let exe_path = build_path.as_path().join(exe_name);
+        let mut args = vec!["-x", "c"];
+        src_paths.iter().for_each(|x| args.push(x));
+        args.push("-o");
+        args.push(exe_path.to_str().unwrap());
+
         let gcc = Command::new("gcc")
-            .args([
-                "-x",
-                "c",
-                src_path.to_str().unwrap(),
-                "-o",
-                exe_path.to_str().unwrap(),
-            ])
+            .args(&args)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -162,6 +155,30 @@ impl Compiler {
         let run_str = String::from_utf8_lossy(&run.stdout);
         println!("{}", &run_str);
         run.status
+    }
+
+    pub fn create_c_files(
+        transpile_result: &TranspilerResult,
+        build_path: &PathBuf,
+    ) -> Vec<PathBuf> {
+        let mut src_paths = Vec::new();
+        let src_path = build_path
+            .as_path()
+            .join(format!("{}.c", transpile_result.name));
+        let header_path = build_path
+            .as_path()
+            .join(format!("{}.h", transpile_result.name));
+        fs::write(src_path.clone(), &transpile_result.source).expect("error creating source file");
+        fs::write(header_path.clone(), &transpile_result.header)
+            .expect("error creating header file");
+
+        src_paths.push(src_path);
+
+        transpile_result
+            .imports
+            .iter()
+            .for_each(|x| src_paths.extend_from_slice(&Compiler::create_c_files(x, build_path)));
+        src_paths
     }
 
     fn add_meta_definitions(c: &mut ProgramCtx) {

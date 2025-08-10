@@ -124,8 +124,8 @@ impl AstPrint for AstExpression {
 
 impl AstPrint for ModuleAccessExprAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
-        let ty = ctx.type_db.get_type(self.ty).unwrap();
-        print!("{}.", ty.get_name());
+        // let ty = ctx.type_db.get_type(self.ty).unwrap();
+        // print!("{}.", ty.get_name());
         self.expr.print_ast(ctx, indent);
     }
 }
