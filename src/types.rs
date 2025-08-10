@@ -448,6 +448,7 @@ lazy_static! {
     pub static ref U64_TYPE: AstType = AstType::new_primitive("u64".to_string());
     pub static ref F32_TYPE: AstType = AstType::new_primitive("f32".to_string());
     pub static ref F64_TYPE: AstType = AstType::new_primitive("f64".to_string());
-    pub static ref RAW_STRING_TYPE: AstType = AstType::new_primitive("cstring".to_string());
+    pub static ref CSTRING_TYPE: AstType = AstType::new_primitive("cstring".to_string());
+    pub static ref RAW_PTR_TYPE: AstType = AstType::new_primitive("rawptr".to_string());
     pub static ref TYPE_TYPE: AstType = AstType::new_type();
 }

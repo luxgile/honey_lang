@@ -103,6 +103,7 @@ impl CTranspilerPass {
             "f64" => "double",
             "bool" => "bool",
             "cstring" => "char*",
+            "rawptr" => "void*",
             _ => return ty.get_fullname(&ctx.type_db).to_string(),
         }
         .to_string()
@@ -141,6 +142,7 @@ impl CTranspilerPass {
         self.add_header(format!("// file: {}.hun\n\n", file.filename).as_str());
         self.add_header("#pragma once\n");
         self.add_header("#include <stdio.h>\n");
+        self.add_header("#include <stdlib.h>\n");
         self.add_header("#include <stdint.h>\n");
         self.add_header("#include <stdbool.h>\n");
         self.add_header("\n");

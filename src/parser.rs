@@ -958,31 +958,39 @@ impl<'a> Parser<'a> {
                     return Ok(Some(AstExpression::Enum(Box::new(enum_expr))));
                 }
             }
+        }
 
-            // Call expr
+        // Call expr
+        if self.check_tokens(&[TokenKind::Id], *offset) {
+            let identifier_tk = self.get_tk(*offset).clone();
+            let identifier = identifier_tk.value;
             if !self.ctx.type_db.get_fns_by_name(&identifier).is_empty() {
                 if let Some(call) = self.parse_call_expr(offset, None)? {
                     // None for parent
                     return Ok(Some(AstExpression::Call(Box::new(call))));
                 }
             }
+        }
 
-            // Struct expr (instantiation)
-            if let Some(struct_expr) = self.parse_struct_expr(offset)? {
-                return Ok(Some(AstExpression::Struct(struct_expr)));
-            }
+        // Struct expr (instantiation)
+        if let Some(struct_expr) = self.parse_struct_expr(offset)? {
+            return Ok(Some(AstExpression::Struct(struct_expr)));
+        }
 
-            // Module expr
-            if let Some(module_expr) = self.parse_module_access(offset)? {
-                return Ok(Some(AstExpression::ModuleAccess(Box::new(module_expr))));
-            }
+        // Module expr
+        if let Some(module_expr) = self.parse_module_access(offset)? {
+            return Ok(Some(AstExpression::ModuleAccess(Box::new(module_expr))));
+        }
 
-            // Type expr
-            if let Some(ty) = self.parse_type_expr(offset)? {
-                return Ok(Some(AstExpression::Type(Box::new(ty))));
-            }
+        // Type expr
+        if let Some(ty) = self.parse_type_expr(offset)? {
+            return Ok(Some(AstExpression::Type(Box::new(ty))));
+        }
 
-            // Variable
+        // Variable
+        if self.check_tokens(&[TokenKind::Id], *offset) {
+            let identifier_tk = self.get_tk(*offset).clone();
+            let identifier = identifier_tk.value.clone();
             if self.ctx.get_var(&identifier).is_none() {
                 return Err(CompilerError::from_token(
                     &identifier_tk,

@@ -2,10 +2,6 @@ extern printf :: fn (|format: cstring, args: ...)
 extern scanf :: fn (|format: cstring, input: ^i32)
 extern snprintf :: fn (|buffer: cstring, n: i32, format: cstring, args: ...)
 
-
-rawptr :: struct {
-  ptr: u64,
-}
 extern malloc :: fn(|size: u32) rawptr
 extern free :: fn(|ptr: rawptr)
 

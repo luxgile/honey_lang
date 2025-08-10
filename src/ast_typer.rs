@@ -2,7 +2,7 @@ use crate::{
     ast::*,
     meta_fn::{BinOpKind, MetaFn, MetaFnKind, MetaReturnType},
     program_ctx::ProgramCtx,
-    types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, TYPE_TYPE, VOID_TYPE},
+    types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, CSTRING_TYPE, TYPE_TYPE, VOID_TYPE},
 };
 
 pub trait AstTyped {
@@ -74,7 +74,7 @@ impl AstTyped for MetaExprAst {
                 if let AstExpression::Type(ty) = &self.args[0] {
                     ty.id
                 } else {
-                    unreachable!()
+                    unreachable!("casting with expression {:?}", self.args[0])
                 }
             }
         }
@@ -101,7 +101,7 @@ impl AstTyped for BoolExprAst {
 
 impl AstTyped for StringExprAst {
     fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
-        RAW_STRING_TYPE.get_id()
+        CSTRING_TYPE.get_id()
     }
 }
 
