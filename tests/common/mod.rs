@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{fs, path::PathBuf, str::FromStr};
 
 use honeyc_lib::{CompConfig, Compiler};
 
@@ -11,4 +11,17 @@ pub fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
     };
     let build = Compiler::build_src(src.into(), &name.into(), config).unwrap();
     assert_eq!(Compiler::run_build(&build).code().unwrap(), code)
+}
+
+pub fn assert_file(file: &str, code: i32) {
+    assert_src(
+        PathBuf::from_str(file)
+            .unwrap()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned(),
+        fs::read_to_string(file).unwrap(),
+        code,
+    );
 }

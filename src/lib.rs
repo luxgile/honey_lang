@@ -69,7 +69,7 @@ impl Compiler {
         config: CompConfig,
     ) -> Result<FileBuildInfo, BuildError> {
         // Read std file and append it to source
-        let std_src = String::from_utf8_lossy(include_bytes!("std.hun")).into_owned();
+        let std_src = String::from_utf8_lossy(include_bytes!("core.hun")).into_owned();
         let hun_src = std_src + &src;
 
         // Parse source

@@ -1,67 +1,18 @@
-extern printf :: fn (|format: RawString, args: ...)
-extern scanf :: fn (|format: RawString, input: ^Int)
-extern snprintf :: fn (|buffer: RawString, n: Int, format: RawString, args: ...)
-
-# Some boilerplate functions to ease readability
-+ :: fn (lhs: Int | rhs: Int) Int {
-  @i+ lhs rhs
-} 
-
-* :: fn (lhs: Int | rhs: Int) Int {
-  @i* lhs rhs
-} 
-
-+ :: fn (lhs: Float | rhs: Float) Float {
-  @f+ lhs rhs
-}
-
-/ :: fn (lhs: Float | rhs: Float) Float {
-  @f/ lhs rhs
-}
-
-== :: fn (lhs: Int | rhs: Int) Bool { 
-  @i== lhs rhs
-} 
-
-!= :: fn (lhs: Int | rhs: Int) Bool {
-  @i!= lhs rhs
-}
-
-< :: fn (lhs: Int | rhs: Int) Bool {
-  @i< lhs rhs
-}
-
-<= :: fn (lhs: Int | rhs: Int) Bool {
-  @i<= lhs rhs
-}
-
-! :: fn (| rhs: Bool) Bool {
-  @b== rhs false
-}
-
-? :: fn (check: Bool| if_true: Int, if_false: Int) Int {
-  if check {
-    if_true
-  } else {
-    if_false
-  }
-}
-
 Person :: struct {
-  name: RawString,
-  gender: Bool,
+  name: cstring,
+  gender: bool,
 }
 
 AnimalKind :: enum {
   Dog,
-  Cat :: struct { color: RawString, },
+  Cat :: struct { color: cstring, },
   Spider,
 }
 
 Animal :: struct {
   kind: AnimalKind,
-  name: RawString,
-  age: Int,
+  name: cstring,
+  age: i32,
   owner: Person,
 
   age_up :: fn(|self) {
@@ -95,7 +46,8 @@ print_cat :: fn(|) {
 #+ Here's how multiline commands work
    You can use as many lines as needed
    It will work until the escape sequence: +#
-main :: fn (|) {
+main :: fn (|) i32 {
   print_member_access
   print_cat
+  0
 }

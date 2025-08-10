@@ -1,0 +1,5 @@
+math :: import "examples/simple_project/math.hun"
+
+main :: fn (|) i32 {
+  10 math.add 5
+}

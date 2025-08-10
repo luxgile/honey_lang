@@ -135,6 +135,7 @@ impl CTranspilerPass {
     fn transpile_file(&mut self, ctx: &ProgramCtx, file: &FileStmtAst) {
         self.add_header("// auto generated file from honey - don't modify manually\n");
         self.add_header(format!("// file: {}.hun\n\n", file.filename).as_str());
+        self.add_header("#pragma once\n");
         self.add_header("#include <stdio.h>\n");
         self.add_header("#include <stdint.h>\n");
         self.add_header("\n");
