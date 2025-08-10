@@ -1,9 +1,4 @@
-use crate::{
-    ast_typer::AstTyped,
-    meta_fn::MetaFnKind,
-    program_ctx::ProgramCtx,
-    types::{AstNamedType, AstTypeId, BOOL_TYPE, RAW_STRING_TYPE, VOID_TYPE},
-};
+use crate::types::{AstNamedType, AstTypeId};
 
 #[derive(Debug, Clone)]
 pub enum AstExpression {
@@ -18,7 +13,7 @@ pub enum AstExpression {
     Call(Box<CallExprAst>),
     Body(Box<BodyExprAst>),
     Var(Box<VarExprAst>),
-    MetaDef(Box<MetaDefExprAst>),
+    MetaDef(Box<MetaExprAst>),
     Statement(Box<StatementExprAst>),
     Group(Box<GroupExprAst>),
     If(Box<IfExprAst>),
@@ -29,66 +24,6 @@ pub enum AstExpression {
     SingleMatch(Box<SingleMatchExprAst>),
     ModuleAccess(Box<ModuleAccessExprAst>),
     NoOp(Box<NoOpAst>),
-}
-
-impl AstExpression {
-    pub fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
-        match self {
-            AstExpression::Array(array_expr_ast) => array_expr_ast.type_id,
-            AstExpression::Index(index_expr_ast) => ctx
-                .type_db
-                .get_type(index_expr_ast.base.get_type_id(ctx))
-                .unwrap()
-                .get_subtype(),
-            AstExpression::Int(i) => i.id,
-            AstExpression::Float(f) => f.id,
-            AstExpression::String(_) => RAW_STRING_TYPE.get_id(),
-            AstExpression::Bool(_) => BOOL_TYPE.get_id(),
-            AstExpression::Ref(ref_expr_ast) => {
-                ctx.type_db.get_ref(ref_expr_ast.expr.get_type_id(ctx))
-            }
-            AstExpression::Deref(deref_expr_ast) => deref_expr_ast.expr.get_type(ctx).get_subtype(),
-            AstExpression::Call(call_expr_ast) => ctx
-                .type_db
-                .get_type(call_expr_ast.fn_id)
-                .unwrap()
-                .get_return_type_id(),
-            AstExpression::Body(body_expr_ast) => match body_expr_ast.statements.last().unwrap() {
-                AstStatement::StatementExpr(expr) => expr.expr.get_type_id(ctx),
-                _ => VOID_TYPE.get_id(),
-            },
-            AstExpression::Var(var_expr_ast) => ctx.defined_vars[&var_expr_ast.name].ty,
-            AstExpression::MetaDef(meta) => {
-                ctx.get_meta(meta.name.as_str()).unwrap().get_type_id(ctx)
-            }
-            AstExpression::Statement(stmt) => stmt.expr.get_type_id(ctx),
-            AstExpression::Group(group) => group.expr.get_type_id(ctx),
-            AstExpression::If(if_expr_ast) => if_expr_ast.then_expr.get_type_id(ctx),
-            AstExpression::For(for_expr_ast) => for_expr_ast.for_body.get_type_id(ctx),
-            AstExpression::Struct(struct_expr_ast) => struct_expr_ast.type_id,
-            AstExpression::MemberAccessor(ma) => {
-                let mut base_ty = ctx.type_db.get_type(ma.base.get_type_id(ctx)).unwrap();
-                if base_ty.is_ref() {
-                    base_ty = ctx.type_db.get_type(base_ty.get_subtype()).unwrap();
-                }
-                if let Some(field) = &ma.field {
-                    base_ty.get_field_by_name(field.name.as_str()).unwrap().id
-                } else if let Some(method) = &ma.method {
-                    base_ty
-                        .get_method_by_name(method.fn_name.as_str(), &ctx.type_db)
-                        .unwrap()
-                } else {
-                    unreachable!()
-                }
-            }
-            AstExpression::Enum(enum_expr_ast) => enum_expr_ast.enum_type,
-            AstExpression::SingleMatch(single_match_expr_ast) => {
-                single_match_expr_ast.then_expr.get_type_id(ctx)
-            }
-            AstExpression::ModuleAccess(module) => module.expr.get_type_id(ctx),
-            AstExpression::NoOp(_) => VOID_TYPE.get_id(),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -109,7 +44,7 @@ pub enum AstStatement {
 }
 
 #[derive(Debug, Clone)]
-pub struct MetaDefExprAst {
+pub struct MetaExprAst {
     pub name: String,
     pub args: Vec<AstExpression>,
 }

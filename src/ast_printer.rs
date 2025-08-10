@@ -241,7 +241,7 @@ impl AstPrint for FnDefAst {
     }
 }
 
-impl AstPrint for MetaDefExprAst {
+impl AstPrint for MetaExprAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
         print!("@{} ", self.name);
         for expr in &self.args {

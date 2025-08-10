@@ -1,6 +1,6 @@
 use crate::{
     ast::*,
-    meta_fn::{MetaFn, MetaReturnType},
+    meta_fn::{BinOpKind, MetaFn, MetaFnKind, MetaReturnType},
     program_ctx::ProgramCtx,
     types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, VOID_TYPE},
 };
@@ -54,21 +54,14 @@ impl AstTyped for ModuleAccessExprAst {
     }
 }
 
-impl AstTyped for MetaFn {
-    fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
-        match self.ret_type {
-            MetaReturnType::Int => I32_TYPE.get_id(),
-            MetaReturnType::Float => F32_TYPE.get_id(),
-            MetaReturnType::Type(id) => id,
-        }
-    }
-}
-
-impl AstTyped for MetaDefExprAst {
+impl AstTyped for MetaExprAst {
     fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
-        ctx.get_meta(&self.name)
-            .unwrap_or_else(|| panic!("Meta definition '{}' not found", self.name))
-            .get_type_id(ctx)
+        let meta = ctx.get_meta(&self.name).unwrap();
+
+        // Here we are assuming the meta def already validated the arguments for the given type.
+        match meta.kind {
+            MetaFnKind::BinOp(_) | MetaFnKind::CmpOp(_) => self.args[0].get_type_id(ctx),
+        }
     }
 }
 
@@ -200,11 +193,9 @@ impl AstTyped for MemberAccesorExprAst {
 
 impl AstTyped for VarExprAst {
     fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
-        let def_var = ctx
-            .defined_vars
-            .get(&self.name)
-            .unwrap_or_else(|| panic!("Defined variable '{}' not found", self.name));
-        def_var.ty
+        ctx
+            .get_var(&self.name)
+            .unwrap_or_else(|| panic!("Defined variable '{}' not found", self.name))
     }
 }
 

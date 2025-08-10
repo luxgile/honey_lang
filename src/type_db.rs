@@ -1,6 +1,11 @@
 use std::collections::HashMap;
 
-use crate::{ast::{self, ModuleId}, types::*};
+use colored::Colorize;
+
+use crate::{
+    ast::{self, ModuleId},
+    types::*,
+};
 
 pub struct AstTypeDb {
     types: HashMap<AstTypeId, AstType>,
@@ -13,23 +18,41 @@ impl AstTypeDb {
             types: HashMap::new(),
             next_synthetic_id: 1,
         };
-        db.add_type(VOID_TYPE.clone());
-        db.add_type(BOOL_TYPE.clone());
-        db.add_type(I8_TYPE.clone());
-        db.add_type(I16_TYPE.clone());
-        db.add_type(I32_TYPE.clone());
-        db.add_type(I64_TYPE.clone());
-        db.add_type(F32_TYPE.clone());
-        db.add_type(F64_TYPE.clone());
-        db.add_type(RAW_STRING_TYPE.clone());
+
+        let mut def_primitive = |ty: &AstType| {
+            let t = AstType::new_primitive(ty.get_name().into());
+            db.insert_type(t, true);
+        };
+
+        def_primitive(&VOID_TYPE);
+        def_primitive(&BOOL_TYPE);
+        def_primitive(&I8_TYPE);
+        def_primitive(&I16_TYPE);
+        def_primitive(&I32_TYPE);
+        def_primitive(&I64_TYPE);
+        def_primitive(&U8_TYPE);
+        def_primitive(&U16_TYPE);
+        def_primitive(&U32_TYPE);
+        def_primitive(&U64_TYPE);
+        def_primitive(&F32_TYPE);
+        def_primitive(&F64_TYPE);
+        def_primitive(&RAW_STRING_TYPE);
         db
     }
 
-    fn add_type(&mut self, ty: AstType) {
-        let t = AstType::new_primitive(ty.get_name().into());
-        let t_id = t.get_id();
-        self.types.insert(t_id, t);
-        self.new_ref(t_id);
+    fn insert_type(&mut self, ty: AstType, create_ref: bool) -> AstTypeId {
+        let id = ty.get_id();
+
+        if self.types.contains_key(&id) {
+            return id;
+        }
+
+        self.types.insert(id, ty);
+
+        if create_ref {
+            self.new_ref(id);
+        }
+        id
     }
 
     fn get_next_synthetic_id(&mut self) -> AstTypeId {
@@ -45,10 +68,7 @@ impl AstTypeDb {
         parent_id: Option<AstTypeId>,
     ) -> AstTypeId {
         let ty = AstType::new_struct(name, fields, parent_id, self);
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        self.new_ref(id);
-        id
+        self.insert_type(ty, true)
     }
 
     pub fn new_enum(
@@ -58,17 +78,12 @@ impl AstTypeDb {
         parent_id: Option<AstTypeId>,
     ) -> AstTypeId {
         let ty = AstType::new_enum(name, fields, parent_id, self);
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        self.new_ref(id);
-        id
+        self.insert_type(ty, true)
     }
 
     pub fn new_ref(&mut self, subtype_id: AstTypeId) -> AstTypeId {
         let ty = AstType::new_reference(subtype_id, self);
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        id
+        self.insert_type(ty, false)
     }
 
     pub fn get_ref(&self, subtype_id: AstTypeId) -> AstTypeId {
@@ -92,10 +107,7 @@ impl AstTypeDb {
 
     pub fn new_array(&mut self, subtype_id: AstTypeId, size: usize) -> AstTypeId {
         let ty = AstType::new_array(subtype_id, size, self);
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        self.new_ref(id);
-        id
+        self.insert_type(ty, true)
     }
 
     pub fn new_fn(
@@ -116,10 +128,7 @@ impl AstTypeDb {
             parent_struct,
             self,
         );
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        self.new_ref(id);
-        id
+        self.insert_type(ty, true)
     }
 
     pub fn new_module(&mut self, id: &ModuleId, parent: Option<&AstTypeId>) -> AstTypeId {
@@ -127,9 +136,7 @@ impl AstTypeDb {
         if let Some(child) = &id.child {
             self.new_module(child, Some(&ty.get_id()));
         }
-        let id = ty.get_id();
-        self.types.insert(id, ty);
-        id
+        self.insert_type(ty, false)
     }
 
     pub fn get_id_by_name(&self, name: &str) -> Option<AstTypeId> {

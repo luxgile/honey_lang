@@ -2,15 +2,36 @@ use std::collections::HashMap;
 
 use crate::{ast::*, meta_fn::MetaFn, type_db::AstTypeDb, types::*};
 
-pub struct VarDefCtx {
+#[derive(Default)]
+struct VarDefCtx {
     pub name: String,
     pub ty: AstTypeId,
+}
+
+#[derive(Default)]
+pub struct LocalContext {
+    variables: Vec<VarDefCtx>,
+}
+
+impl LocalContext {
+    pub fn get_var(&self, name: &str) -> Option<AstTypeId> {
+        for var in &self.variables {
+            if var.name == name {
+                return Some(var.ty);
+            }
+        }
+        None
+    }
+
+    pub fn def_var(&mut self, name: String, ty: AstTypeId) {
+        self.variables.push(VarDefCtx { name, ty });
+    }
 }
 
 pub struct ProgramCtx {
     defined_meta: HashMap<String, Box<MetaFn>>,
     pub type_db: AstTypeDb,
-    pub defined_vars: HashMap<String, VarDefCtx>,
+    locals: Vec<LocalContext>,
 }
 
 impl ProgramCtx {
@@ -18,14 +39,34 @@ impl ProgramCtx {
         Self {
             defined_meta: HashMap::new(),
             type_db: AstTypeDb::new(),
-            defined_vars: HashMap::new(),
+            locals: vec![LocalContext::default()],
         }
     }
 
-    // pub fn define_primitive(&mut self, name: String, id: AstTypeId) {
-    //     self.primitives.insert(name, id);
-    // }
-    //
+    pub fn push_local(&mut self) -> &LocalContext {
+        let local = LocalContext::default();
+        self.locals.push(local);
+        self.locals.last().unwrap()
+    }
+
+    pub fn pop_local(&mut self) {
+        self.locals.pop();
+    }
+
+    pub fn get_var(&self, name: &str) -> Option<AstTypeId> {
+        for local in self.locals.iter().rev() {
+            let var = local.get_var(name);
+            if var.is_some() {
+                return var;
+            }
+        }
+        None
+    }
+
+    pub fn def_var(&mut self, name: String, ty: AstTypeId) {
+        self.locals.last_mut().unwrap().def_var(name, ty);
+    }
+
     /// Helper to register a fn into the type db.
     pub fn define_fn(
         &mut self,
@@ -74,33 +115,11 @@ impl ProgramCtx {
         )
     }
 
-    // pub fn define_enum(&mut self, name: String, value: Box<EnumDefAst>) {
-    //     self.enums.insert(name, value);
-    // }
-    //
-    // pub fn get_enum(&self, name: &str) -> Option<&EnumDefAst> {
-    //     self.enums.get(name).map(|b| b.as_ref())
-    // }
-    //
-    // pub fn define_struct(&mut self, name: String, value: Box<StructDefAst>) {
-    //     self.structs.insert(name, value);
-    // }
-    //
-    // pub fn get_struct(&self, name: &str) -> Option<&StructDefAst> {
-    //     self.structs.get(name).map(|b| b.as_ref())
-    // }
-
     pub fn define_meta(&mut self, meta: MetaFn) {
         self.defined_meta.insert(meta.id.clone(), Box::new(meta));
     }
 
     pub fn get_meta(&self, name: &str) -> Option<&MetaFn> {
         self.defined_meta.get(name).map(|b| b.as_ref())
-    }
-
-    // You might also need a `define_var` method if `defined_vars` is populated
-    // by this context rather than just observed.
-    pub fn define_var(&mut self, name: String, var: VarDefCtx) {
-        self.defined_vars.insert(name, var);
     }
 }

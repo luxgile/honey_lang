@@ -40,15 +40,13 @@ pub enum MetaReturnType {
 pub struct MetaFn {
     pub id: String,
     pub kind: MetaFnKind,
-    pub ret_type: MetaReturnType,
 }
 
 impl MetaFn {
-    pub fn new(id: impl Into<String>, kind: MetaFnKind, ret_type: MetaReturnType) -> Self {
+    pub fn new(id: impl Into<String>, kind: MetaFnKind) -> Self {
         Self {
             id: id.into(),
             kind,
-            ret_type,
         }
     }
 

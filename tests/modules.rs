@@ -8,7 +8,7 @@ fn module_def() {
         "
 math :: module {
   add :: fn (lhs: i32 | rhs: i32) i32 {
-    @i+ lhs rhs
+    @+ lhs rhs
   }
 }
 
@@ -27,7 +27,7 @@ fn module_access() {
         "
 math :: module {
   add :: fn (lhs: i32 | rhs: i32) i32 {
-    @i+ lhs rhs
+    @+ lhs rhs
   }
 }
 

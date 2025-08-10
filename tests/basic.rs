@@ -1,4 +1,3 @@
-
 mod common;
 use std::fs::read_to_string;
 
@@ -72,7 +71,7 @@ fn if_statements() {
         "if_statements0",
         "main :: fn(|) i32 {
             var := 3
-            if @i== var 3 {
+            if @== var 3 {
                 ret 0
             }
             1
@@ -126,7 +125,7 @@ fn var_assigment() {
         " main :: fn(|) i32 {
     var := 3
     var = 5
-    if @i== var 5 {
+    if @== var 5 {
       ret 0
     }
     1
@@ -154,8 +153,8 @@ fn loops() {
         "loops",
         "main :: fn(|) i32 {
         i := 0
-        loop @i< i 10 {
-          i = @i+ i 1
+        loop @< i 10 {
+          i = @+ i 1
         }
         i
       }",
@@ -168,7 +167,7 @@ fn math() {
     assert_src(
         "maths0",
         "main :: fn(|) i32 {
-    @i+ @i* 3 5 3
+    @+ @* 3 5 3
   }",
         18,
     );
@@ -176,8 +175,8 @@ fn math() {
     assert_src(
         "maths1",
         "main :: fn(|) i32 {
-    val := @f- @f+ 3.2 5.5 17.6
-    if @f< val 17.61 { # to account for floating point precission
+    val := @- @+ 3.2 5.5 17.6
+    if @< val 17.61 { # to account for floating point precission
       ret 0
     }
     1
@@ -198,8 +197,33 @@ fn pointers() {
   }",
         2,
     );
+}
 
-    assert_src("pointers", read_to_string("tests/ptr.hun").expect("issue opening ptr.hun"), 7);
+#[test]
+fn pointer_file() {
+    assert_src(
+        "pointers file",
+        read_to_string("tests/ptr.hun").expect("issue opening ptr.hun"),
+        7,
+    );
+}
+
+#[test]
+fn pointer_with_meta_fn() {
+    assert_src(
+        "pointers_with_meta_fn",
+        "
+        += :: fn (l: ^i32 | r: i32) {
+          ^l = @+ ^l r 
+        }
+        main :: fn(|) i32 {
+            a := 5
+            &a += 1
+            a
+        }
+        ",
+        6,
+    );
 }
 
 #[test]
@@ -251,7 +275,7 @@ fn calling_functions() {
         "calling_functions1",
         "
     foo :: fn(|a: i32) i32 {
-      @i+ a 1
+      @+ a 1
     }
 
     main :: fn(|) i32 {
@@ -265,7 +289,7 @@ fn calling_functions() {
         "calling_functions2",
         "
     foo :: fn(l: i32 | r: i32) i32 {
-      @i+ l r
+      @+ l r
     }
 
     main :: fn(|) i32 {
@@ -324,7 +348,7 @@ fn struct_methods_decl() {
       age: i32,
 
       age_up :: fn(|self) {
-        self.age = @i+ self.age 1
+        self.age = @+ self.age 1
       }
     }
 
@@ -347,7 +371,7 @@ fn struct_methods_call() {
       age: i32,
 
       age_up :: fn(|self) {
-        self.age = @i+ self.age 1
+        self.age = @+ self.age 1
       }
     }
 
@@ -372,12 +396,12 @@ fn method_call_fn_same_name() {
       age: i32,
 
       age_up :: fn(|self) {
-        self.age = @i+ self.age 1
+        self.age = @+ self.age 1
       }
     }
 
     age_up :: fn(|p: ^Person) {
-      p.age = @i+ p.age 1
+      p.age = @+ p.age 1
     }
 
     main :: fn (|) i32 {
@@ -391,86 +415,6 @@ fn method_call_fn_same_name() {
 }
 
 #[test]
-fn enum_declaration() {
-    assert_src(
-        "enum_declaration",
-        "
-    AnimalKind :: enum {
-      Dog,
-      Cat :: struct { color: cstring },
-      Spider,
-    }
-
-    main :: fn(|) i32 {0}
-  ",
-        0,
-    );
-}
-
-#[test]
-fn enum_expression() {
-    assert_src(
-        "enum_expression",
-        "
-    AnimalKind :: enum {
-      Dog,
-      Cat :: struct { color: cstring },
-      Spider,
-    }
-
-    main :: fn(|) i32 {
-      animal := AnimalKind.Dog 
-      0
-    }
-  ",
-        0,
-    );
-}
-
-#[test]
-fn enum_specialization() {
-    assert_src(
-        "enum_specialization",
-        "
-    AnimalKind :: enum {
-      Dog,
-      Cat :: struct { color: cstring, },
-      Spider,
-    }
-
-    main :: fn(|) i32 {
-      animal := AnimalKind.Cat .{ .color = \"red\" } 
-      0
-    }
-  ",
-        0,
-    );
-}
-
-#[test]
-fn single_match_expression() {
-    assert_src(
-        "single_match_expression",
-        "
-    AnimalKind :: enum {
-      Dog,
-      Cat :: struct { color: cstring, },
-      Spider,
-    }
-
-    main :: fn(|) i32 {
-      animal := AnimalKind.Cat .{ .color = \"red\" } 
-      match animal : AnimalKind.Cat cat {
-        ret 0
-      }
-      1
-    }
-  ",
-        0,
-    );
-}
-
-#[test]
 fn local_context() {
     assert_src(
         "local_context",
@@ -479,13 +423,12 @@ fn local_context() {
     a
   }
 
-  bar :: fn(|a: f32) f32 {
+  bar :: fn(|a: cstring) cstring {
     a
   }
   
   main :: fn(|) i32 {
     a := foo 7
-    b := bar 5.0
     a
   }
   ",

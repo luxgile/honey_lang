@@ -2,44 +2,51 @@ extern printf :: fn (|format: cstring, args: ...)
 extern scanf :: fn (|format: cstring, input: ^i32)
 extern snprintf :: fn (|buffer: cstring, n: i32, format: cstring, args: ...)
 
+
+rawptr :: struct {
+  ptr: u64,
+}
+extern malloc :: fn(|size: u32) rawptr
+extern free :: fn(|ptr: rawptr)
+
 println :: fn(|str: cstring) {
   printf "%s\n" str
 }
 
 + :: fn (lhs: i32 | rhs: i32) i32 {
-  @i+ lhs rhs
+  @+ lhs rhs
 } 
 
 * :: fn (lhs: i32 | rhs: i32) i32 {
-  @i* lhs rhs
+  @* lhs rhs
 } 
 
 + :: fn (lhs: f32 | rhs: f32) f32 {
-  @f+ lhs rhs
+  @+ lhs rhs
 }
 
 / :: fn (lhs: f32 | rhs: f32) f32 {
-  @f/ lhs rhs
+  @/ lhs rhs
 }
 
 == :: fn (lhs: i32 | rhs: i32) bool { 
-  @i== lhs rhs
+  @== lhs rhs
 } 
 
 != :: fn (lhs: i32 | rhs: i32) bool {
-  @i!= lhs rhs
+  @!= lhs rhs
 }
 
 < :: fn (lhs: i32 | rhs: i32) bool {
-  @i< lhs rhs
+  @< lhs rhs
 }
 
 <= :: fn (lhs: i32 | rhs: i32) bool {
-  @i<= lhs rhs
+  @<= lhs rhs
 }
 
 ! :: fn (| rhs: bool) bool {
-  @b== rhs false
+  @== rhs false
 }
 
 ? :: fn (check: bool | if_true: i32, if_false: i32) i32 {

@@ -5,7 +5,7 @@ use crate::{
     ast_typer::AstTyped,
     errors::{CompilerError, ParserErrorKind},
     lexer::*,
-    program_ctx::{ProgramCtx, VarDefCtx},
+    program_ctx::ProgramCtx,
     types::{AstNamedType, AstTypeId, F32_TYPE, I32_TYPE, VOID_TYPE},
 };
 
@@ -24,7 +24,7 @@ pub struct Parser<'a> {
     line_expressions: Vec<AstExpression>,
 
     /// Meta tags fn defined and not used
-    line_meta_def: Vec<MetaDefExprAst>, // Changed to Box<MetaDefExprAst>
+    line_meta_def: Vec<MetaExprAst>, // Changed to Box<MetaDefExprAst>
 
     /// Stack of types for types declared inside other types.
     asttype_stack: Vec<AstTypeId>,
@@ -35,14 +35,12 @@ pub struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn new(ctx: &'a mut ProgramCtx) -> Self {
-        // let type_visitor = AstExprTypeVisitor::new(ctx);
         Self {
             errors: Vec::new(),
             debug_scan: false,
             debug_checks: false,
             ctx,
             lexer: Lexer::new(),
-            // type_visitor, // Initialize type_visitor here
             tk_queue: Vec::new(),
             line_expressions: Vec::new(),
             line_meta_def: Vec::new(),
@@ -83,7 +81,8 @@ impl<'a> Parser<'a> {
     fn check_tokens(&self, kinds: &[TokenKind], offset: usize) -> bool {
         if kinds.is_empty() {
             return true;
-        } // An empty list always matches
+        }
+
         if offset + kinds.len() > self.tk_queue.len() {
             return false;
         }
@@ -241,12 +240,19 @@ impl<'a> Parser<'a> {
         // Parse new imported file before keep going
         let mut parser = Parser::new(self.ctx);
         parser.asttype_stack.push(module_ty);
-        let file = parser.parse_source(&import_id, &fs::read_to_string(&import_path).unwrap(), false);
+        let file = parser.parse_source(
+            &import_id,
+            &fs::read_to_string(&import_path).unwrap(),
+            false,
+        );
         parser.asttype_stack.pop();
 
         if parser.has_parsing_errors() {
             self.errors.extend_from_slice(&parser.get_errors());
-            return Err(CompilerError::import_failed(self.get_tk(*offset), import_path));
+            return Err(CompilerError::import_failed(
+                self.get_tk(*offset),
+                import_path,
+            ));
         }
 
         Ok(Some(ImportStmtAst {
@@ -475,7 +481,7 @@ impl<'a> Parser<'a> {
     pub fn parse_meta_expr(
         &mut self,
         offset: &mut usize,
-    ) -> OptionalParserResult<Box<MetaDefExprAst>> {
+    ) -> OptionalParserResult<Box<MetaExprAst>> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
         if !self.check_tokens(&[TokenKind::Meta], *offset) {
@@ -510,7 +516,7 @@ impl<'a> Parser<'a> {
             );
         }
 
-        Ok(Some(Box::new(MetaDefExprAst {
+        Ok(Some(Box::new(MetaExprAst {
             name: meta_tk.value,
             args,
         })))
@@ -546,24 +552,13 @@ impl<'a> Parser<'a> {
         let mut header = self.parse_fn_header(fn_name.clone(), parent_ty, offset)?;
         header.is_external = is_external;
 
+        self.ctx.push_local();
         header.prefix_args.iter().for_each(|prefix_arg| {
-            self.ctx.defined_vars.insert(
-                prefix_arg.name.clone(),
-                VarDefCtx {
-                    name: prefix_arg.name.clone(),
-                    ty: prefix_arg.type_id,
-                },
-            );
+            self.ctx.def_var(prefix_arg.name.clone(), prefix_arg.type_id);
         });
 
         header.suffix_args.iter().for_each(|suffix_arg| {
-            self.ctx.defined_vars.insert(
-                suffix_arg.name.clone(),
-                VarDefCtx {
-                    name: suffix_arg.name.clone(),
-                    ty: suffix_arg.type_id,
-                },
-            );
+            self.ctx.def_var(suffix_arg.name.clone(), suffix_arg.type_id);
         });
 
         // Register the fn early for recursion
@@ -581,15 +576,15 @@ impl<'a> Parser<'a> {
             }
             body = body_r;
         }
+        self.ctx.pop_local();
 
         Ok(Some(FnDefAst {
             id: fn_ty_id,
             fn_header: Box::new(header),
-            body: body.map(AstExpression::Body), // Convert BodyExprAst to AstExpression variant
+            body: body.map(AstExpression::Body), 
         }))
     }
 
-    // parse_type
     pub fn parse_type(&mut self, offset: &mut usize) -> ParserResult<AstTypeId> {
         let mut is_ref = false;
         if self.check_tokens(&[TokenKind::Pointy], *offset) {
@@ -851,13 +846,7 @@ impl<'a> Parser<'a> {
             type_id: ty_id,
             assignment: Some(expr),
         };
-        self.ctx.defined_vars.insert(
-            id,
-            VarDefCtx {
-                name: def_var.name.clone(),
-                ty: def_var.type_id,
-            },
-        );
+        self.ctx.def_var(def_var.name.clone(), def_var.type_id);
         Ok(Some(def_var))
     }
 
@@ -986,7 +975,7 @@ impl<'a> Parser<'a> {
             }
 
             // Variable
-            if !self.ctx.defined_vars.contains_key(&identifier) {
+            if self.ctx.get_var(&identifier).is_none() {
                 return Err(CompilerError::from_token(
                     &identifier_tk,
                     ParserErrorKind::UndefinedIdentifier { id: identifier },
@@ -1296,13 +1285,7 @@ impl<'a> Parser<'a> {
             assignment: None,
         });
 
-        self.ctx.defined_vars.insert(
-            casted_var_name.clone(),
-            VarDefCtx {
-                name: casted_var_name,
-                ty: casted_var.type_id,
-            },
-        );
+        self.ctx.def_var(casted_var_name.clone(), casted_var.type_id);
 
         let then_expr_res = self.parse_expr(&mut tmp_offset)?;
         let then_expr = then_expr_res
