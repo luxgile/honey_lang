@@ -27,6 +27,7 @@ pub enum CmpOpKind {
 pub enum MetaFnKind {
     BinOp(BinOpKind),
     CmpOp(CmpOpKind),
+    Cast,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -54,6 +55,7 @@ impl MetaFn {
         match self.kind {
             MetaFnKind::BinOp(_) => 2,
             MetaFnKind::CmpOp(_) => 2,
+            MetaFnKind::Cast => 2,
         }
     }
 }

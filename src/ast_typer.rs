@@ -2,7 +2,7 @@ use crate::{
     ast::*,
     meta_fn::{BinOpKind, MetaFn, MetaFnKind, MetaReturnType},
     program_ctx::ProgramCtx,
-    types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, VOID_TYPE},
+    types::{AstType, AstTypeId, BOOL_TYPE, F32_TYPE, I32_TYPE, RAW_STRING_TYPE, TYPE_TYPE, VOID_TYPE},
 };
 
 pub trait AstTyped {
@@ -43,8 +43,15 @@ impl AstTyped for AstExpression {
                 single_match_expr_ast.get_type_id(ctx)
             }
             AstExpression::ModuleAccess(module) => module.get_type_id(ctx),
+            AstExpression::Type(ty) => ty.get_type_id(ctx),
             AstExpression::NoOp(no_op_ast) => no_op_ast.get_type_id(ctx),
         }
+    }
+}
+
+impl AstTyped for TypeExprAst {
+    fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
+        TYPE_TYPE.get_id()
     }
 }
 
@@ -60,7 +67,16 @@ impl AstTyped for MetaExprAst {
 
         // Here we are assuming the meta def already validated the arguments for the given type.
         match meta.kind {
-            MetaFnKind::BinOp(_) | MetaFnKind::CmpOp(_) => self.args[0].get_type_id(ctx),
+            MetaFnKind::BinOp(_) | MetaFnKind::CmpOp(_)  => {
+                self.args[0].get_type_id(ctx)
+            }
+            MetaFnKind::Cast => {
+                if let AstExpression::Type(ty) = &self.args[0] {
+                    ty.id
+                } else {
+                    unreachable!()
+                }
+            }
         }
     }
 }
@@ -193,8 +209,7 @@ impl AstTyped for MemberAccesorExprAst {
 
 impl AstTyped for VarExprAst {
     fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
-        ctx
-            .get_var(&self.name)
+        ctx.get_var(&self.name)
             .unwrap_or_else(|| panic!("Defined variable '{}' not found", self.name))
     }
 }

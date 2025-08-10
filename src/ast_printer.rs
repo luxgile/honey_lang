@@ -117,15 +117,21 @@ impl AstPrint for AstExpression {
                 single_match_expr_ast.print_ast(ctx, indent)
             }
             AstExpression::ModuleAccess(module) => module.print_ast(ctx, indent),
+            AstExpression::Type(ty) => ty.print_ast(ctx, indent),
             AstExpression::NoOp(_) => {}
         }
     }
 }
 
+impl AstPrint for TypeExprAst {
+    fn print_ast(&self, ctx: &ProgramCtx, _indent: u32) {
+        let ty = ctx.type_db.get_type(self.id).unwrap();
+        print!("{}", ty.get_name());
+    }
+}
+
 impl AstPrint for ModuleAccessExprAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
-        // let ty = ctx.type_db.get_type(self.ty).unwrap();
-        // print!("{}.", ty.get_name());
         self.expr.print_ast(ctx, indent);
     }
 }

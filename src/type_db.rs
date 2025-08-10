@@ -37,6 +37,7 @@ impl AstTypeDb {
         def_primitive(&F32_TYPE);
         def_primitive(&F64_TYPE);
         def_primitive(&RAW_STRING_TYPE);
+        db.insert_type(TYPE_TYPE.clone(), false);
         db
     }
 

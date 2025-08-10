@@ -190,6 +190,8 @@ impl Compiler {
             c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::CmpOp(op)))
         };
 
+        c.define_meta(MetaFn::new("cast", MetaFnKind::Cast));
+
         // All binary operations
         def_bin(c, "+", BinOpKind::Add);
         def_bin(c, "-", BinOpKind::Minus);

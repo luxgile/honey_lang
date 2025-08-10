@@ -421,8 +421,13 @@ impl CTranspilerPass {
                 self.transpile_single_match_expr(ctx, match_expr)
             }
             AstExpression::ModuleAccess(module) => self.transpile_module_access(ctx, module),
+            AstExpression::Type(ty) => self.transpile_type(ctx, ty),
             AstExpression::NoOp(_) => "".to_string(),
         }
+    }
+
+    fn transpile_type(&mut self, ctx: &mut ProgramCtx, ty: &TypeExprAst) -> String {
+        CTranspilerPass::hun_type_to_c(ctx, &ty.id)
     }
 
     fn transpile_module_access(
@@ -880,6 +885,11 @@ impl CTranspilerPass {
                         CmpOpKind::GreaterEq => " >= ",
                     }
                     + self.transpile_expr(ctx, &meta_expr.args[1]).as_str()
+            }
+            MetaFnKind::Cast => {
+                let cast_to_ty = self.transpile_expr(ctx, &meta_expr.args[0]);
+                let expr = self.transpile_expr(ctx, &meta_expr.args[1]);
+                format!("({cast_to_ty}){expr}")
             }
         };
 

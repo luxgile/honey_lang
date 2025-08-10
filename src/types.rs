@@ -2,7 +2,6 @@ use lazy_static::lazy_static;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-use crate::ast::{self, ModuleId};
 use crate::type_db::AstTypeDb;
 
 pub type AstTypeId = usize;
@@ -25,6 +24,7 @@ pub enum AstTypeKind {
     Function,
     Module,
     Enum,
+    Type,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -59,6 +59,12 @@ impl AstType {
             su_args: Vec::new(),
             parent: None,
         }
+    }
+
+    pub fn new_type() -> Self {
+        let mut type_ = Self::new_base(AstTypeKind::Type, String::new());
+        type_.id = calculate_hash(&type_.name);
+        type_
     }
 
     pub fn new_primitive(name: String) -> Self {
@@ -305,6 +311,9 @@ impl AstType {
     pub fn is_module(&self) -> bool {
         self.kind == AstTypeKind::Module
     }
+    pub fn is_type(&self) -> bool {
+        self.kind == AstTypeKind::Type
+    }
 
     // Field and method access
     pub fn get_field_type<'a>(
@@ -440,4 +449,5 @@ lazy_static! {
     pub static ref F32_TYPE: AstType = AstType::new_primitive("f32".to_string());
     pub static ref F64_TYPE: AstType = AstType::new_primitive("f64".to_string());
     pub static ref RAW_STRING_TYPE: AstType = AstType::new_primitive("cstring".to_string());
+    pub static ref TYPE_TYPE: AstType = AstType::new_type();
 }

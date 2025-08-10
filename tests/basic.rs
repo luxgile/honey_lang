@@ -301,6 +301,20 @@ fn calling_functions() {
 }
 
 #[test]
+fn calling_void() {
+    assert_src("calling_void", "
+        do_nothing :: fn(|) {
+
+        }
+
+        main :: fn(|) i32 {
+            do_nothing
+            0
+        }
+        ", 0);
+}
+
+#[test]
 fn struct_decl() {
     assert_src(
         "struct_decl",
@@ -434,4 +448,30 @@ fn local_context() {
   ",
         7,
     );
+}
+
+#[test]
+fn casting_ints() {
+    assert_src("casting_ints", "
+        get_u32 :: fn(|) u32 {
+            20
+        }
+
+        main :: fn(|) i32 {
+            @cast i32 get_u32
+        }
+        ", 20);
+}
+
+#[test]
+fn casting_ints_02() {
+    assert_src("casting_ints_02", "
+        power_of_two :: fn(|val: u32) u32 {
+            @* val val
+        }
+
+        main :: fn(|) i32 {
+            power_of_two @cast u32 10
+        }
+        ", 100);
 }

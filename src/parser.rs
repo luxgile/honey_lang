@@ -554,11 +554,13 @@ impl<'a> Parser<'a> {
 
         self.ctx.push_local();
         header.prefix_args.iter().for_each(|prefix_arg| {
-            self.ctx.def_var(prefix_arg.name.clone(), prefix_arg.type_id);
+            self.ctx
+                .def_var(prefix_arg.name.clone(), prefix_arg.type_id);
         });
 
         header.suffix_args.iter().for_each(|suffix_arg| {
-            self.ctx.def_var(suffix_arg.name.clone(), suffix_arg.type_id);
+            self.ctx
+                .def_var(suffix_arg.name.clone(), suffix_arg.type_id);
         });
 
         // Register the fn early for recursion
@@ -581,30 +583,31 @@ impl<'a> Parser<'a> {
         Ok(Some(FnDefAst {
             id: fn_ty_id,
             fn_header: Box::new(header),
-            body: body.map(AstExpression::Body), 
+            body: body.map(AstExpression::Body),
         }))
     }
 
     pub fn parse_type(&mut self, offset: &mut usize) -> ParserResult<AstTypeId> {
         let mut is_ref = false;
-        if self.check_tokens(&[TokenKind::Pointy], *offset) {
+        let mut tmp_offset = *offset;
+        if self.check_tokens(&[TokenKind::Pointy], tmp_offset) {
             is_ref = true;
-            *offset += 1;
+            tmp_offset += 1;
         }
 
-        if !self.check_tokens(&[TokenKind::Id], *offset) {
+        if !self.check_tokens(&[TokenKind::Id], tmp_offset) {
             return Err(CompilerError::from_token(
-                self.get_tk(*offset),
+                self.get_tk(tmp_offset),
                 ParserErrorKind::UnexpectedTokenKind {
-                    expected_kind: vec![self.get_tk(*offset).kind],
+                    expected_kind: vec![self.get_tk(tmp_offset).kind],
                     found_kind: TokenKind::Id,
                 },
             ));
         }
 
-        let id_tk = self.get_tk(*offset);
+        let id_tk = self.get_tk(tmp_offset);
         let id = id_tk.value.clone();
-        *offset += 1;
+        tmp_offset += 1;
 
         let type_info_opt = self.ctx.type_db.get_type_by_name(&id);
         let type_info = type_info_opt.ok_or_else(|| {
@@ -612,6 +615,7 @@ impl<'a> Parser<'a> {
                 type_name: id.clone(),
             })
         })?;
+        *offset = tmp_offset;
 
         // TODO: This will need to be redone to handle types defined inside types
         if is_ref {
@@ -621,7 +625,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // parse_enum_def (updated based on C++ logic)
     pub fn parse_enum_def(&mut self, offset: &mut usize) -> OptionalParserResult<EnumDefAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
@@ -974,6 +977,11 @@ impl<'a> Parser<'a> {
                 return Ok(Some(AstExpression::ModuleAccess(Box::new(module_expr))));
             }
 
+            // Type expr
+            if let Some(ty) = self.parse_type_expr(offset)? {
+                return Ok(Some(AstExpression::Type(Box::new(ty))));
+            }
+
             // Variable
             if self.ctx.get_var(&identifier).is_none() {
                 return Err(CompilerError::from_token(
@@ -1075,6 +1083,15 @@ impl<'a> Parser<'a> {
         }
 
         Ok(None) // No matching expression production found
+    }
+
+    pub fn parse_type_expr(&mut self, offset: &mut usize) -> OptionalParserResult<TypeExprAst> {
+        let ty = self.parse_type(offset);
+        if let Ok(ty) = ty {
+            Ok(Some(TypeExprAst { id: ty }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_module_access(
@@ -1285,7 +1302,8 @@ impl<'a> Parser<'a> {
             assignment: None,
         });
 
-        self.ctx.def_var(casted_var_name.clone(), casted_var.type_id);
+        self.ctx
+            .def_var(casted_var_name.clone(), casted_var.type_id);
 
         let then_expr_res = self.parse_expr(&mut tmp_offset)?;
         let then_expr = then_expr_res

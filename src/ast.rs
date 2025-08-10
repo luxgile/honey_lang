@@ -23,6 +23,7 @@ pub enum AstExpression {
     Enum(Box<EnumExprAst>),
     SingleMatch(Box<SingleMatchExprAst>),
     ModuleAccess(Box<ModuleAccessExprAst>),
+    Type(Box<TypeExprAst>),
     NoOp(Box<NoOpAst>),
 }
 
@@ -154,6 +155,11 @@ pub struct ArrayExprAst {
 pub struct IndexExprAst {
     pub base: AstExpression,
     pub index: AstExpression,
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeExprAst {
+    pub id: AstTypeId,
 }
 
 #[derive(Debug, Clone)]
