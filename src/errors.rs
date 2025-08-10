@@ -107,7 +107,7 @@ pub enum ParserErrorKind {
 
 #[derive(Debug, Clone)]
 pub struct CompilerError {
-    pub pos: FilePos,
+    pub pos: FileRange,
     pub kind: ParserErrorKind,
 }
 
@@ -125,20 +125,20 @@ impl std::error::Error for CompilerError {
 }
 
 impl CompilerError {
-    pub fn new(pos: FilePos, kind: ParserErrorKind) -> Self {
+    pub fn new(pos: FileRange, kind: ParserErrorKind) -> Self {
         CompilerError { pos, kind }
     }
 
     pub fn from_token(tk: &Token, kind: ParserErrorKind) -> Self {
         CompilerError {
-            pos: tk.position,
+            pos: tk.range,
             kind,
         }
     }
 
     pub fn from_kind(kind: ParserErrorKind) -> Self {
         CompilerError {
-            pos: FilePos::default(),
+            pos: FileRange::default(),
             kind,
         }
     }
@@ -147,7 +147,7 @@ impl CompilerError {
         let pos = &self.pos;
         let lines: Vec<&str> = source.lines().collect();
 
-        let line_idx = pos.line.saturating_sub(1);
+        let line_idx = pos.end.line.saturating_sub(1);
 
         // Get the specific line from the source
         let line_content = lines.get(line_idx).unwrap();
@@ -157,7 +157,7 @@ impl CompilerError {
         eprintln!("{}{}: {}", "error".bold().red(), "".clear(), self.kind);
         eprintln!(
             "{}",
-            format!("---[{} {}-{}]", pos.line, pos.start, pos.end).dimmed()
+            format!("---{}", pos).dimmed()
         );
 
         // Print the relevant line of code
@@ -169,8 +169,8 @@ impl CompilerError {
 
         // Iterate over characters (not bytes) for correct column calculation with Unicode
         for (i, c) in line_content_str.chars().enumerate() {
-            let start_col_0_based = pos.start.saturating_sub(1);
-            let end_col_0_based_inclusive = pos.end.saturating_sub(1);
+            let start_col_0_based = pos.start.column.saturating_sub(1);
+            let end_col_0_based_inclusive = pos.end.column.saturating_sub(1);
 
             if i == start_col_0_based {
                 on_bounds = true;
@@ -191,21 +191,21 @@ impl CompilerError {
 
     pub fn expression_expected(tk: &Token) -> Self {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::ExpressionExpected,
         }
     }
 
     pub fn type_not_found(tk: &Token, ty_name: String) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::TypeNotFound { type_name: ty_name },
         }
     }
 
     pub fn expected_type_enum(tk: &Token, ty: &AstType) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::ExpectedTypeEnum {
                 found_type_name: ty.get_name().to_string(),
             },
@@ -214,7 +214,7 @@ impl CompilerError {
 
     pub fn member_not_found(tk: &Token, ty: &AstType, member: String) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::MemberNotFound {
                 member,
                 type_name: ty.get_name().to_string(),
@@ -224,7 +224,7 @@ impl CompilerError {
 
     pub fn unexpected_token(tk: &Token, expected: &[TokenKind]) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::UnexpectedTokenKind {
                 expected_kind: expected.to_vec(),
                 found_kind: tk.kind,
@@ -234,14 +234,14 @@ impl CompilerError {
 
     pub fn undefined_enum_member(tk: &Token, enum_name: String, member: String) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::UndefinedEnumMember { enum_name, member },
         }
     }
 
     pub fn argument_expected(tk: &Token) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::ArgumentExpected {
                 found_kind: tk.kind.to_string(),
             },
@@ -251,7 +251,7 @@ impl CompilerError {
     pub fn no_overload_call_matched(tk: &Token, type_db: &AstTypeDb, fns: Vec<AstTypeId>) -> Self {
         let first_fn_ty = type_db.get_type(fns[0]).unwrap();
         CompilerError {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::NoOverloadCallMatched {
                 fn_name: first_fn_ty.get_name().to_string(),
                 overloads: fns
@@ -283,7 +283,7 @@ impl CompilerError {
 
     pub fn multityped_array(tk: &Token, array_type: &AstType, unexpected_type: &AstType) -> Self {
         CompilerError {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::MultitypedArray {
                 array_type_name: array_type.get_name().to_string(),
                 unexpected_type_name: unexpected_type.get_name().to_string(),
@@ -293,14 +293,14 @@ impl CompilerError {
 
     pub fn undefined_statement(tk: &Token) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::UndefinedStatement,
         }
     }
 
     pub fn import_failed(tk: &Token, path: String) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::ImportFailed { path },
         }
     }
@@ -311,7 +311,7 @@ impl CompilerError {
         expected_ty: &AstType,
     ) -> CompilerError {
         Self {
-            pos: tk.position,
+            pos: tk.range,
             kind: ParserErrorKind::IncorrectReturnType {
                 return_ty: return_ty.get_name().to_string(),
                 expected_ty: expected_ty.get_name().to_string(),

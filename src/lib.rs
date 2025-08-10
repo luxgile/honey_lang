@@ -27,6 +27,7 @@ mod parser;
 mod program_ctx;
 mod type_db;
 mod types;
+mod ast_pos;
 
 #[derive(Default, Clone, Debug)]
 pub struct CompConfig {

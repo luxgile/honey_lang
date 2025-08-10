@@ -85,19 +85,67 @@ impl Display for TokenKind {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Clone, Copy)]
+#[derive(Debug, Default, PartialEq, Clone, Copy, Eq)]
 pub struct FilePos {
     pub line: usize,
-    pub start: usize,
-    pub end: usize,
+    pub column: usize,
 }
+
 impl FilePos {
-    pub fn merge(&mut self, fp: FilePos) {
-        if self.line != fp.line {
-            panic!("unsupported merging of FilePos from different lines");
+    pub fn new(line: usize, column: usize) -> Self {
+        Self { line, column }
+    }
+}
+impl PartialOrd for FilePos {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self.line.partial_cmp(&other.line) {
+            Some(core::cmp::Ordering::Equal) => {}
+            ord => return ord,
         }
-        self.start = std::cmp::min(self.start, fp.start);
-        self.end = std::cmp::min(self.end, fp.end);
+        self.column.partial_cmp(&other.column)
+    }
+}
+impl Ord for FilePos {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
+#[derive(Debug, Default, PartialEq, Clone, Copy, Eq, PartialOrd, Ord)]
+pub struct FileRange {
+    pub start: FilePos,
+    pub end: FilePos,
+}
+impl FileRange {
+    pub fn new() -> Self {
+        FileRange {
+            start: FilePos::new(1, 0),
+            end: FilePos::new(1, 0),
+        }
+    }
+
+    pub fn new_merging(lhs: &FileRange, rhs: &FileRange) -> Self {
+        let mut range = Self::default();
+        range.start = std::cmp::min(lhs.start, rhs.start);
+        range.end = std::cmp::max(lhs.end, rhs.end);
+        range
+    }
+}
+impl Display for FileRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.start.line == self.end.line {
+            write!(
+                f,
+                "[{}:{}-{}]",
+                self.start.line, self.start.column, self.end.column
+            )
+        } else {
+            write!(
+                f,
+                "[{}:{}-{}:{}]",
+                self.start.line, self.start.column, self.end.line, self.end.column
+            )
+        }
     }
 }
 
@@ -105,7 +153,7 @@ impl FilePos {
 pub struct Token {
     pub kind: TokenKind,
     pub value: String,
-    pub position: FilePos,
+    pub range: FileRange,
 }
 
 impl Token {
@@ -114,10 +162,7 @@ impl Token {
         if val == "\n" {
             val = "\\n".to_string();
         }
-        println!(
-            "[{}:{}-{}] {:?} {}",
-            self.position.line, self.position.start, self.position.end, self.kind, val
-        );
+        println!("{} {:?} {}", self.range, self.kind, val);
     }
 }
 lazy_static! {
@@ -138,7 +183,7 @@ pub struct Lexer {
     source: Vec<char>,
     src_index: usize,
     last_char: char,
-    current_pos: FilePos,
+    current_range: FileRange,
     capturing: bool,
     temp_id: String,
 }
@@ -149,10 +194,9 @@ impl Lexer {
             source: Vec::new(),
             src_index: 0,
             last_char: ' ',
-            current_pos: FilePos {
-                line: 1,
-                start: 0,
-                end: 0,
+            current_range: FileRange {
+                start: FilePos::new(1, 0),
+                end: FilePos::new(1, 0),
             }, // Lines are 1-indexed, cols 0-indexed in C++
             capturing: false,
             temp_id: String::new(),
@@ -163,11 +207,7 @@ impl Lexer {
         self.source = source_code.chars().collect();
         self.src_index = 0;
         self.last_char = ' ';
-        self.current_pos = FilePos {
-            line: 1,
-            start: 0,
-            end: 0,
-        };
+        self.current_range = FileRange::new();
         self.capturing = false;
         self.temp_id.clear();
 
@@ -186,40 +226,25 @@ impl Lexer {
         self.src_index += 1;
 
         if self.capturing {
-            self.current_pos.end += 1;
+            self.current_range.end.column += 1;
         } else {
-            self.current_pos.start += 1;
-            self.current_pos.end = self.current_pos.start;
+            self.current_range.start.column += 1;
+            self.current_range.end.column = self.current_range.start.column;
         }
 
         if self.last_char == '\n' {
-            self.current_pos.line += 1;
-            self.current_pos.end = 0;
+            self.current_range.end.line += 1;
+            self.current_range.end.column = 0;
             if !self.capturing {
-                self.current_pos.start = 0;
+                self.current_range.start.line = 1;
+                self.current_range.start.column = 0;
             }
         }
         self.last_char = c;
         Some(c)
     }
 
-    fn go_back(&mut self, steps: usize) -> Option<char> {
-        if self.src_index >= steps {
-            self.src_index -= steps;
-            if self.capturing {
-                self.current_pos.end -= steps;
-            } else {
-                self.current_pos.start -= steps;
-                self.current_pos.end = self.current_pos.start;
-            }
-            self.last_char = self.source[self.src_index];
-            Some(self.last_char)
-        } else {
-            None // Cannot go back that many steps
-        }
-    }
-
-    fn create_token(&mut self, kind: TokenKind, pos: FilePos, consume: bool) -> Token {
+    fn create_token(&mut self, kind: TokenKind, pos: FileRange, consume: bool) -> Token {
         let value = if self.temp_id.is_empty() {
             self.last_char.to_string()
         } else {
@@ -229,7 +254,7 @@ impl Lexer {
         let token = Token {
             kind,
             value,
-            position: pos,
+            range: pos,
         };
         self.temp_id.clear(); // Reset temp_id
 
@@ -240,17 +265,17 @@ impl Lexer {
     }
 
     fn start_capturing(&mut self) {
-        self.current_pos.end = self.current_pos.start;
+        self.current_range.end = self.current_range.start;
         self.capturing = true;
     }
 
-    fn stop_capturing(&mut self) -> FilePos {
+    fn stop_capturing(&mut self) -> FileRange {
         self.capturing = false;
-        let mut pos = self.current_pos;
-        if pos.end != 0 {
-            pos.end -= 1;
+        let mut pos = self.current_range;
+        if pos.end.column != 0 {
+            pos.end.column -= 1;
         }
-        self.current_pos.start = self.current_pos.end;
+        self.current_range.start = self.current_range.end;
         pos
     }
 
@@ -289,12 +314,12 @@ impl Lexer {
 
         // Don't skip new lines.
         if self.last_char == '\n' {
-            let pos = self.current_pos;
+            let pos = self.current_range;
             return self.create_token(TokenKind::NewLine, pos, true);
         }
 
         if self.src_index >= self.source.len() && self.last_char == '\0' {
-            return self.create_token(TokenKind::EoF, self.current_pos, false);
+            return self.create_token(TokenKind::EoF, self.current_range, false);
         }
 
         // Identifier/Keywords
@@ -436,7 +461,7 @@ impl Lexer {
 
         // For single-character tokens, consume the character.
         // `create_token` with `consume=true` handles the `next_char()` call.
-        self.create_token(token_kind, self.current_pos, true)
+        self.create_token(token_kind, self.current_range, true)
     }
 }
 

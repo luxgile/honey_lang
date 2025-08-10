@@ -59,7 +59,7 @@ impl AstPrint for ModuleStmtAst {
     }
 }
 
-impl AstPrint for ModuleId {
+impl AstPrint for ModuleIdAst {
     fn print_ast(&self, ctx: &ProgramCtx, indent: u32) {
         print!("{}", self.name);
         if let Some(child) = &self.child {

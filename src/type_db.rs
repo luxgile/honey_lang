@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use colored::Colorize;
 
 use crate::{
-    ast::{self, ModuleId},
+    ast::{self, ModuleIdAst},
     types::*,
 };
 
@@ -133,7 +133,7 @@ impl AstTypeDb {
         self.insert_type(ty, true)
     }
 
-    pub fn new_module(&mut self, id: &ModuleId, parent: Option<&AstTypeId>) -> AstTypeId {
+    pub fn new_module(&mut self, id: &ModuleIdAst, parent: Option<&AstTypeId>) -> AstTypeId {
         let ty = AstType::new_module(id.name.clone(), parent, self);
         if let Some(child) = &id.child {
             self.new_module(child, Some(&ty.get_id()));

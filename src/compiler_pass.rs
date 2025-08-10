@@ -3,7 +3,7 @@ use std::str::{self, FromStr};
 use crate::{
     ast::*,
     ast_typer::AstTyped,
-    lexer::ALLOWED_ID_CHARS,
+    lexer::{FileRange, ALLOWED_ID_CHARS},
     meta_fn::{self, BinOpKind, CmpOpKind, MetaFnKind},
     program_ctx::ProgramCtx,
     types::{AstTypeId, VOID_TYPE},
@@ -293,11 +293,13 @@ impl CTranspilerPass {
         for variant in e_ty.get_fields() {
             let v_ty = ctx.type_db.get_type(variant.id).unwrap();
             let struct_def = StructDefAst {
+                pos: FileRange::new(),
                 type_id: variant.id,
                 fields: v_ty
                     .get_fields()
                     .iter()
                     .map(|x| ArgDefAst {
+                        pos: FileRange::new(),
                         name: x.name.clone(),
                         type_id: x.id,
                         is_varadic: x.is_varadic,
@@ -799,14 +801,15 @@ impl CTranspilerPass {
 
         self.transpile_current_defers(ctx);
         if last_expr.is_none() {
-            self.transpile_return(ctx, &ReturnStmtAst { expr: None }, false);
+            self.transpile_return(ctx, &ReturnStmtAst { pos: FileRange::new(), expr: None }, false);
         } else if !is_void {
             self.add_src(&self.indent_space());
             self.add_src(&format!("{} = {};\n", val, last_expr.unwrap()));
             self.transpile_return(
                 ctx,
                 &ReturnStmtAst {
-                    expr: Some(AstExpression::Var(Box::new(VarExprAst { name: val }))),
+                    pos: FileRange::new(),
+                    expr: Some(AstExpression::Var(Box::new(VarExprAst { pos: FileRange::new(), name: val }))),
                 },
                 false,
             );

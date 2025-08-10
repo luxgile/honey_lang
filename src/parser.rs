@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, File};
 
 use crate::{
     ast::*,
@@ -134,6 +134,7 @@ impl<'a> Parser<'a> {
         );
 
         FileStmtAst {
+            pos: FileRange::new(),
             filename: name.to_string(),
             statements,
         }
@@ -219,19 +220,20 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        let import_id = self.get_tk(*offset).value.clone();
+        let import_tk = self.get_tk(*offset).clone();
         *offset += 4;
 
         if !self.check_tokens(&[TokenKind::String], *offset) {
             panic!("expected string for import declaration");
         }
 
-        let import_path = self.get_tk(*offset).value.clone();
+        let path_tk = self.get_tk(*offset).clone();
         *offset += 1;
 
         let module_ty = self.ctx.type_db.new_module(
-            &ModuleId {
-                name: import_id.clone(),
+            &ModuleIdAst {
+                pos: import_tk.range,
+                name: import_tk.value.clone(),
                 child: None,
             },
             None,
@@ -241,8 +243,8 @@ impl<'a> Parser<'a> {
         let mut parser = Parser::new(self.ctx);
         parser.asttype_stack.push(module_ty);
         let file = parser.parse_source(
-            &import_id,
-            &fs::read_to_string(&import_path).unwrap(),
+            &import_tk.value,
+            &fs::read_to_string(&path_tk.value).unwrap(),
             false,
         );
         parser.asttype_stack.pop();
@@ -251,13 +253,13 @@ impl<'a> Parser<'a> {
             self.errors.extend_from_slice(&parser.get_errors());
             return Err(CompilerError::import_failed(
                 self.get_tk(*offset),
-                import_path,
+                path_tk.value,
             ));
         }
 
         Ok(Some(ImportStmtAst {
-            id: import_id,
-            path: import_path,
+            id: import_tk.value,
+            path: path_tk.value,
             ast: file,
         }))
     }
@@ -313,17 +315,18 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    pub fn parse_module_id(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleId> {
+    pub fn parse_module_id(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleIdAst> {
         if !self.check_tokens(&[TokenKind::Id], *offset) {
             return Ok(None);
         }
 
-        let id = self.get_tk(*offset).value.clone();
+        let tk_id = self.get_tk(*offset).clone();
         *offset += 1;
 
         if !self.check_tokens(&[TokenKind::Dot], *offset) {
-            return Ok(Some(ModuleId {
-                name: id,
+            return Ok(Some(ModuleIdAst {
+                pos: tk_id.range,
+                name: tk_id.value,
                 child: None,
             }));
         }
@@ -333,9 +336,11 @@ impl<'a> Parser<'a> {
             panic!("expected module id");
         }
 
-        Ok(Some(ModuleId {
-            name: id,
-            child: Some(Box::new(child.unwrap())),
+        let child = child.unwrap();
+        Ok(Some(ModuleIdAst {
+            pos: FileRange::new_merging(&tk_id.range, &child.get_range()),
+            name: tk_id.value,
+            child: Some(Box::new(child)),
         }))
     }
 
@@ -354,7 +359,7 @@ impl<'a> Parser<'a> {
         ) {
             return Ok(None);
         }
-        let struct_name_tk = self.get_tk(*offset);
+        let struct_name_tk = self.get_tk(*offset).clone();
         let struct_name = struct_name_tk.value.clone();
         *offset += 5;
 
@@ -457,6 +462,7 @@ impl<'a> Parser<'a> {
                 },
             ));
         }
+        let rbrace_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume RBrace
 
         self.asttype_stack.pop(); // Pop current struct from stack
@@ -470,6 +476,7 @@ impl<'a> Parser<'a> {
             s_type_mut.set_parent_id(parent_id);
         }
         let s = StructDefAst {
+            pos: FileRange::new_merging(&struct_name_tk.range, &rbrace_tk.range),
             type_id: s_id,
             fields,
             methods,
@@ -517,6 +524,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Some(Box::new(MetaExprAst {
+            pos: FileRange::new_merging(&meta_tk.range, &args.last().unwrap().get_range()),
             name: meta_tk.value,
             args,
         })))
@@ -595,8 +603,13 @@ impl<'a> Parser<'a> {
         self.ctx.pop_local();
 
         Ok(Some(FnDefAst {
+            pos: if let Some(body) = &body {
+                FileRange::new_merging(&header.pos, &body.pos)
+            } else {
+                header.pos
+            },
             id: fn_ty_id,
-            fn_header: Box::new(header),
+            fn_header: header,
             body: body.map(AstExpression::Body),
         }))
     }
@@ -655,7 +668,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        let enum_name_tk = self.get_tk(*offset);
+        let enum_name_tk = self.get_tk(*offset).clone();
         let enum_name = enum_name_tk.value.clone();
         *offset += 5;
 
@@ -692,6 +705,7 @@ impl<'a> Parser<'a> {
 
                 // Create a dummy unit struct Ast
                 let s = Box::new(StructDefAst {
+                    pos: FileRange::new(),
                     type_id: s_type_id,
                     fields: Vec::new(),
                     methods: Vec::new(),
@@ -754,6 +768,7 @@ impl<'a> Parser<'a> {
                 },
             ));
         }
+        let rbrace_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume RBrace
 
         self.asttype_stack.pop();
@@ -765,6 +780,7 @@ impl<'a> Parser<'a> {
         }
 
         let e = EnumDefAst {
+            pos: FileRange::new_merging(&enum_name_tk.range, &rbrace_tk.range),
             type_id: enum_id,
             values: field_stmts,
         };
@@ -836,7 +852,11 @@ impl<'a> Parser<'a> {
         };
 
         *offset = tmp_offset; // Update outer offset
-        Ok(Some(Box::new(VarAssignStmtAst { lvalue, rvalue })))
+        Ok(Some(Box::new(VarAssignStmtAst {
+            pos: FileRange::new_merging(&lvalue.get_range(), &rvalue.get_range()),
+            lvalue,
+            rvalue,
+        })))
     }
 
     // parse_var_decl
@@ -846,7 +866,7 @@ impl<'a> Parser<'a> {
         {
             return Ok(None); // Not a var decl
         }
-        let id_tk = self.get_tk(*offset);
+        let id_tk = self.get_tk(*offset).clone();
         let id = id_tk.value.clone();
         *offset += 3; // Consume `id :=`
 
@@ -859,6 +879,7 @@ impl<'a> Parser<'a> {
         let ty_id = expr.get_type_id(self.ctx);
 
         let def_var = VarDefStmtAst {
+            pos: FileRange::new_merging(&id_tk.range, &expr.get_range()),
             name: id.clone(),
             type_id: ty_id,
             assignment: Some(expr),
@@ -871,27 +892,38 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::Return], *offset) {
             return Ok(None);
         }
+        let return_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume 'return'
 
         if self.check_tokens(&[TokenKind::NewLine], *offset) {
             *offset += 1; // Consume NewLine
-            return Ok(Some(Box::new(ReturnStmtAst { expr: None })));
+            return Ok(Some(Box::new(ReturnStmtAst {
+                pos: return_tk.range,
+                expr: None,
+            })));
         }
 
         let expr = self.consume_expressions(offset, &[TokenKind::NewLine], true)?;
 
-        Ok(Some(Box::new(ReturnStmtAst { expr })))
+        Ok(Some(Box::new(ReturnStmtAst {
+            pos: FileRange::new_merging(&return_tk.range, &expr.as_ref().unwrap().get_range()),
+            expr,
+        })))
     }
 
     pub fn parse_defer(&mut self, offset: &mut usize) -> OptionalParserResult<Box<DeferStmtAst>> {
         if !self.check_tokens(&[TokenKind::Defer], *offset) {
             return Ok(None);
         }
+        let defer_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume 'defer'
 
         let stmt = self.parse_statement(offset)?;
 
-        Ok(Some(Box::new(DeferStmtAst { stmt })))
+        Ok(Some(Box::new(DeferStmtAst {
+            pos: FileRange::new_merging(&defer_tk.range, &stmt.get_range()),
+            stmt,
+        })))
     }
 
     // parse_statement
@@ -1013,6 +1045,7 @@ impl<'a> Parser<'a> {
             }
             *offset += 1; // Consume Id
             return Ok(Some(AstExpression::Var(Box::new(VarExprAst {
+                pos: identifier_tk.range,
                 name: identifier,
             }))));
         }
@@ -1022,11 +1055,16 @@ impl<'a> Parser<'a> {
         }
 
         if self.check_tokens(&[TokenKind::LPar], *offset) {
+            let lpar_tk = self.get_tk(*offset).clone();
             *offset += 1;
             let expr_res = self.consume_expressions(offset, &[TokenKind::RPar], true)?;
             let expr =
                 expr_res.ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
-            return Ok(Some(AstExpression::Group(Box::new(GroupExprAst { expr }))));
+            let rpar_tk = self.get_tk(*offset - 1).clone();
+            return Ok(Some(AstExpression::Group(Box::new(GroupExprAst {
+                pos: FileRange::new_merging(&lpar_tk.range, &rpar_tk.range),
+                expr,
+            }))));
         }
 
         // Array expression
@@ -1058,59 +1096,76 @@ impl<'a> Parser<'a> {
 
         // Literals
         if self.check_tokens(&[TokenKind::String], *offset) {
-            let str_val = self.get_tk(*offset).value.clone();
+            let str_tk = self.get_tk(*offset).clone();
             *offset += 1;
             return Ok(Some(AstExpression::String(Box::new(StringExprAst {
-                value: str_val,
+                pos: str_tk.range,
+                value: str_tk.value,
             }))));
         }
         if self.check_tokens(&[TokenKind::Bool], *offset) {
-            let bool_str = self.get_tk(*offset).value.clone();
+            let bool_tk = self.get_tk(*offset).clone();
             *offset += 1;
             return Ok(Some(AstExpression::Bool(Box::new(BoolExprAst {
-                value: bool_str == "true",
+                pos: bool_tk.range,
+                value: bool_tk.value == "true",
             }))));
         }
         if self.check_tokens(&[TokenKind::Int], *offset) {
-            let int_str = self.get_tk(*offset).value.clone();
+            let int_tk = self.get_tk(*offset).clone();
             *offset += 1;
             return Ok(Some(AstExpression::Int(Box::new(IntExprAst {
-                value: int_str.parse().unwrap_or_default(),
+                pos: int_tk.range,
+                value: int_tk.value.parse().unwrap_or_default(),
                 id: self.expected_type.unwrap_or(I32_TYPE.get_id()),
             }))));
         }
         if self.check_tokens(&[TokenKind::Float], *offset) {
-            let float_str = self.get_tk(*offset).value.clone();
+            let float_tk = self.get_tk(*offset).clone();
             *offset += 1;
             return Ok(Some(AstExpression::Float(Box::new(FloatExprAst {
-                value: float_str.parse().unwrap_or_default(),
+                pos: float_tk.range,
+                value: float_tk.value.parse().unwrap_or_default(),
                 id: self.expected_type.unwrap_or(F32_TYPE.get_id()),
             }))));
         }
 
         // Reference (&) and Dereference (^)
         if self.check_tokens(&[TokenKind::Amper], *offset) {
+            let amper_tk = self.get_tk(*offset).clone();
             *offset += 1;
             let expr_res = self.parse_expr(offset)?;
             let expr =
                 expr_res.ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
-            return Ok(Some(AstExpression::Ref(Box::new(RefExprAst { expr }))));
+            return Ok(Some(AstExpression::Ref(Box::new(RefExprAst {
+                pos: FileRange::new_merging(&amper_tk.range, &expr.get_range()),
+                expr,
+            }))));
         }
         if self.check_tokens(&[TokenKind::Pointy], *offset) {
+            let pointy_tk = self.get_tk(*offset).clone();
             *offset += 1;
             let expr_res = self.parse_expr(offset)?;
             let expr =
                 expr_res.ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
-            return Ok(Some(AstExpression::Deref(Box::new(DerefExprAst { expr }))));
+            return Ok(Some(AstExpression::Deref(Box::new(DerefExprAst {
+                pos: FileRange::new_merging(&pointy_tk.range, &expr.get_range()),
+                expr,
+            }))));
         }
 
         Ok(None) // No matching expression production found
     }
 
     pub fn parse_type_expr(&mut self, offset: &mut usize) -> OptionalParserResult<TypeExprAst> {
+        let s_tk = self.get_tk(*offset).clone();
         let ty = self.parse_type(offset);
+        let e_tk = self.get_tk(*offset).clone();
         if let Ok(ty) = ty {
-            Ok(Some(TypeExprAst { id: ty }))
+            Ok(Some(TypeExprAst {
+                pos: FileRange::new_merging(&s_tk.range, &e_tk.range),
+                id: ty,
+            }))
         } else {
             Ok(None)
         }
@@ -1125,10 +1180,10 @@ impl<'a> Parser<'a> {
         }
 
         let mut tmp_offset = *offset;
-        let module_name = self.get_tk(tmp_offset).value.clone();
+        let module_tk = self.get_tk(tmp_offset).clone();
         tmp_offset += 2;
 
-        let module_id = self.ctx.type_db.get_id_by_name(&module_name);
+        let module_id = self.ctx.type_db.get_id_by_name(&module_tk.value);
         if module_id.is_none() {
             return Ok(None);
         }
@@ -1148,6 +1203,7 @@ impl<'a> Parser<'a> {
         *offset = tmp_offset;
 
         Ok(Some(ModuleAccessExprAst {
+            pos: FileRange::new_merging(&module_tk.range, &expr.as_ref().unwrap().get_range()),
             ty: module_id.unwrap(),
             expr: expr.unwrap(),
         }))
@@ -1158,7 +1214,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::Id, TokenKind::Dot, TokenKind::Id], *offset) {
             return Ok(None);
         }
-        let enum_name_tk = self.get_tk(*offset);
+        let enum_name_tk = self.get_tk(*offset).clone();
         let enum_name = enum_name_tk.value.clone();
         let enum_member_name_tk = self.get_tk(*offset + 2);
         let enum_member_name = enum_member_name_tk.value.clone();
@@ -1167,10 +1223,10 @@ impl<'a> Parser<'a> {
             .ctx
             .type_db
             .get_id_by_name(&enum_name)
-            .ok_or_else(|| CompilerError::type_not_found(enum_name_tk, enum_name.clone()))?;
+            .ok_or_else(|| CompilerError::type_not_found(&enum_name_tk, enum_name.clone()))?;
         let enum_type = self.ctx.type_db.get_type(enum_type_id).unwrap().clone();
         if !enum_type.is_enum() {
-            return Err(CompilerError::expected_type_enum(enum_name_tk, &enum_type));
+            return Err(CompilerError::expected_type_enum(&enum_name_tk, &enum_type));
         }
 
         let enum_member_named_type = enum_type
@@ -1187,12 +1243,15 @@ impl<'a> Parser<'a> {
                 .ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
             vars = _vars;
         }
+        let e_tk = self.get_tk(*offset).clone();
 
         let struct_expr = Box::new(StructExprAst {
+            pos: FileRange::new(),
             type_id: enum_member_named_type.id, // ID of the struct representing the variant
             fields: vars,
         });
         Ok(Some(EnumExprAst {
+            pos: FileRange::new_merging(&enum_name_tk.range, &e_tk.range),
             enum_type: enum_type_id,
             struct_expr,
         }))
@@ -1224,10 +1283,17 @@ impl<'a> Parser<'a> {
 
         if base_ty_ref.get_field_by_name(&id).is_some() {
             // Member is a field
-            let field_expr = Box::new(VarExprAst { name: id });
+            let field_expr = Box::new(VarExprAst {
+                pos: id_tk.range,
+                name: id,
+            });
             *offset += 2; // Consume . and Id
             (
                 AstExpression::MemberAccessor(Box::new(MemberAccesorExprAst {
+                    pos: FileRange::new_merging(
+                        &base_expr.get_range(),
+                        &self.get_tk(*offset).range,
+                    ),
                     base: base_expr,
                     field: Some(field_expr),
                     method: None,
@@ -1248,6 +1314,10 @@ impl<'a> Parser<'a> {
                 .unwrap();
             (
                 AstExpression::MemberAccessor(Box::new(MemberAccesorExprAst {
+                    pos: FileRange::new_merging(
+                        &base_expr.get_range(),
+                        &self.get_tk(*offset).range,
+                    ),
                     base: base_expr,
                     field: None,
                     method: Some(Box::new(call)),
@@ -1271,6 +1341,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::Match], tmp_offset) {
             return Ok(None);
         }
+        let match_tk = self.get_tk(*offset).clone();
         tmp_offset += 1;
 
         let match_expr_res = self.parse_expr(&mut tmp_offset)?;
@@ -1319,6 +1390,7 @@ impl<'a> Parser<'a> {
                 })?;
 
         let casted_var = Box::new(VarDefStmtAst {
+            pos: FileRange::new(),
             name: casted_var_name.clone(),
             type_id: enum_member_named_type.id,
             assignment: None,
@@ -1334,6 +1406,7 @@ impl<'a> Parser<'a> {
         *offset = tmp_offset; // Update outer offset
 
         let match_ast = SingleMatchExprAst {
+            pos: FileRange::new_merging(&match_tk.range, &self.get_tk(*offset).range),
             enum_expr: match_expr,
             casted_enum_var: casted_var,
             then_expr,
@@ -1346,6 +1419,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::If], *offset) {
             return Ok(None);
         }
+        let if_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume 'if'
 
         let condition_res =
@@ -1367,6 +1441,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Some(IfExprAst {
+            pos: FileRange::new_merging(&if_tk.range, &self.get_tk(*offset).range),
             condition,
             then_expr,
             else_expr,
@@ -1378,7 +1453,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::Loop], *offset) {
             return Ok(None);
         }
-
+        let loop_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume 'loop'
 
         let for_cond_expr_res =
@@ -1391,6 +1466,7 @@ impl<'a> Parser<'a> {
             for_body_res.ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
 
         Ok(Some(ForExprAst {
+            pos: FileRange::new_merging(&loop_tk.range, &self.get_tk(*offset).range),
             condition: for_cond_expr,
             for_body,
         }))
@@ -1401,8 +1477,8 @@ impl<'a> Parser<'a> {
         offset: &mut usize,
         parent: Option<AstTypeId>,
     ) -> OptionalParserResult<CallExprAst> {
-        let identifier = self.get_tk(*offset).value.clone();
-        let fns = self.ctx.type_db.get_fns_by_name(&identifier);
+        let identifier_tk = self.get_tk(*offset).clone();
+        let fns = self.ctx.type_db.get_fns_by_name(&identifier_tk.value);
 
         for fn_id in &fns {
             let fn_ty = self.ctx.type_db.get_type(*fn_id).unwrap().clone();
@@ -1438,7 +1514,10 @@ impl<'a> Parser<'a> {
                 continue;
             }
 
-            let prefix_args = self.line_expressions.drain(0..pre_args.len()).collect();
+            let prefix_args = self
+                .line_expressions
+                .drain(0..pre_args.len())
+                .collect::<Vec<_>>();
 
             // self.line_expressions.clear();
 
@@ -1507,7 +1586,13 @@ impl<'a> Parser<'a> {
 
             *offset = tmp_offset; // Update the outer offset
 
+            let mut s_range = identifier_tk.range;
+            if !prefix_args.is_empty() {
+                s_range = prefix_args.last().unwrap().get_range();
+            }
+
             return Ok(Some(CallExprAst {
+                pos: FileRange::new_merging(&s_range, &self.get_tk(*offset).range),
                 fn_name: fn_ty.get_name().to_string(),
                 fn_id: *fn_id,
                 prefix_args,
@@ -1539,7 +1624,7 @@ impl<'a> Parser<'a> {
             return Ok(None);
         }
 
-        let struct_name_tk = self.get_tk(tmp_offset);
+        let struct_name_tk = self.get_tk(tmp_offset).clone();
         let struct_name = struct_name_tk.value.clone();
         tmp_offset += 1; // Consume only the id
 
@@ -1547,7 +1632,7 @@ impl<'a> Parser<'a> {
             .ctx
             .type_db
             .get_id_by_name(&struct_name)
-            .ok_or_else(|| CompilerError::type_not_found(struct_name_tk, struct_name.clone()))?;
+            .ok_or_else(|| CompilerError::type_not_found(&struct_name_tk, struct_name.clone()))?;
 
         let fields_res = self.parse_struct_assignments(&mut tmp_offset)?;
         let fields = fields_res.unwrap_or_else(Vec::new); // If parsing fails, treat as empty for now.
@@ -1563,6 +1648,7 @@ impl<'a> Parser<'a> {
         *offset = tmp_offset;
 
         Ok(Some(Box::new(StructExprAst {
+            pos: FileRange::new_merging(&struct_name_tk.range, &self.get_tk(*offset).range),
             type_id: struct_type_id,
             fields,
         })))
@@ -1598,6 +1684,7 @@ impl<'a> Parser<'a> {
 
         (
             AstExpression::Index(Box::new(IndexExprAst {
+                pos: FileRange::new_merging(&base.get_range(), &self.get_tk(*offset - 1).range),
                 base,
                 index: index_expr.unwrap(),
             })),
@@ -1610,6 +1697,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::LBracks], *offset) {
             return Ok(None);
         }
+        let lbracks_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume the '[' token
 
         let mut el_type: Option<AstTypeId> = None; // Stores the inferred element type of the array
@@ -1664,6 +1752,7 @@ impl<'a> Parser<'a> {
 
         // Return the parsed ArrayExprAst wrapped in a Box and ParserResult::Ok
         Ok(Some(ArrayExprAst {
+            pos: FileRange::new_merging(&lbracks_tk.range, &self.get_tk(*offset - 1).range),
             type_id: array_type,
             elements,
         }))
@@ -1707,6 +1796,7 @@ impl<'a> Parser<'a> {
                 .ok_or_else(|| CompilerError::expression_expected(self.get_tk(*offset)))?;
 
             assignments.push(StructFieldAssign {
+                pos: FileRange::new(),
                 name: field_name,
                 rvalue: value,
             });
@@ -1730,6 +1820,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::LBrace], *offset) {
             return Ok(None);
         }
+        let lbrace_tk = self.get_tk(*offset).clone();
         *offset += 1; // Consume {
 
         let mut statements: Vec<AstStatement> = Vec::new();
@@ -1741,7 +1832,10 @@ impl<'a> Parser<'a> {
         }
         *offset += 1; // Consume }
 
-        Ok(Some(Box::new(BodyExprAst { statements })))
+        Ok(Some(Box::new(BodyExprAst {
+            pos: FileRange::new_merging(&lbrace_tk.range, &self.get_tk(*offset).range),
+            statements,
+        })))
     }
 
     pub fn parse_fn_header(
@@ -1756,6 +1850,7 @@ impl<'a> Parser<'a> {
                 &[TokenKind::LPar],
             ));
         }
+        let lpar = self.get_tk(*offset).clone();
         *offset += 1; // Consume (
 
         let prefix_args_res = self.parse_fn_args(parent_struct, offset)?;
@@ -1782,6 +1877,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(FnHeaderAst {
+            pos: FileRange::new_merging(&lpar.range, &self.get_tk(*offset - 1).range),
             name: header_id,
             ret_type,
             is_external: false, // Set by parse_fn_def
@@ -1812,6 +1908,7 @@ impl<'a> Parser<'a> {
                 {
                     let self_type_id = self.ctx.type_db.new_ref(*p_struct_id);
                     arg_res = Ok(Some(ArgDefAst {
+                        pos: self.get_tk(*offset).range,
                         name: "self".to_string(),
                         type_id: self_type_id,
                         is_varadic: false,
@@ -1862,6 +1959,10 @@ impl<'a> Parser<'a> {
             *offset,
         ) {
             let field = ArgDefAst {
+                pos: FileRange::new_merging(
+                    &self.get_tk(*offset).range,
+                    &self.get_tk(*offset + 4).range,
+                ),
                 name: self.get_tk(*offset).value.clone(),
                 type_id: VOID_TYPE.get_id(), // Using the lazy_static VOID_TYPE
                 is_varadic: true,
@@ -1872,13 +1973,14 @@ impl<'a> Parser<'a> {
 
         // Standard argument: Id : Type
         if self.check_tokens(&[TokenKind::Id, TokenKind::Colon], *offset) {
-            let arg_name = self.get_tk(*offset).value.clone();
+            let name_tk = self.get_tk(*offset).clone();
             *offset += 2; // Consume Id and Colon
 
             let type_id = self.parse_type(offset)?;
 
             return Ok(Some(ArgDefAst {
-                name: arg_name,
+                pos: FileRange::new_merging(&name_tk.range, &self.get_tk(*offset - 1).range),
+                name: name_tk.value,
                 type_id,
                 is_varadic: false,
             }));
