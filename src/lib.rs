@@ -79,7 +79,7 @@ impl Compiler {
         // Parse core files
         // TODO: Find a way to precompile these and add them as a dependency to reduce compile time
         // (not a priority atm)
-        let core_file_paths = &[("core", "honey/core.hun"), ("string", "honey/string.hun")];
+        let core_file_paths = &[("core", "honey/core.hun")];
         let core_files: Vec<_> = core_file_paths
             .iter()
             .map(|(name, path)| {
