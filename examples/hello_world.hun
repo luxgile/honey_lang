@@ -1,4 +1,5 @@
 main :: fn(|) i32 {
-  println "hello hun!"
+  str := new_string 
+  println @cast cstring str.ptr
   0
 }

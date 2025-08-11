@@ -4,9 +4,6 @@ add_one :: fn (| i: ^i32) {
   ^i = @+ ^i 1
 }
 
-+= :: fn (lhs: ^i32 | rhs: i32) {
-  ^lhs = @+ ^lhs rhs 
-}
 
 main :: fn (|) i32 {
   my_int := 5

@@ -1,0 +1,924 @@
+use std::str::FromStr;
+
+use crate::{
+    ast::*,
+    ast_typer::AstTyped,
+    compiler_pass::*,
+    lexer::{ALLOWED_ID_CHARS, FileRange},
+    meta_fn::{BinOpKind, CmpOpKind, MetaFnKind},
+    program_ctx::*,
+    types::*,
+};
+
+#[derive(Default)]
+pub struct TranspilerFrame {
+    queued_defers: Vec<DeferStmtAst>,
+}
+
+#[derive(Default)]
+pub struct TranspilerResult {
+    pub name: String,
+    pub source: String,
+    pub header: String,
+    pub imports: Vec<TranspilerResult>,
+}
+
+#[derive(Default)]
+pub struct CTranspilerPass {
+    result: TranspilerResult,
+
+    indent: usize,
+    frames: Vec<TranspilerFrame>,
+    expr_temp_idx: u32,
+    curr_return: Option<String>,
+    /// If false, all expressions will create a value and return it.
+    /// If true, all expressions will return the expression directly instead.
+    raw_mode: bool,
+}
+
+impl CompilerPass<TranspilerResult> for CTranspilerPass {
+    fn run(mut self, ctx: &mut ProgramCtx, file: &FileStmtAst) -> TranspilerResult {
+        self.transpile_file(ctx, file);
+        self.result.name = file.filename.clone();
+        self.result
+    }
+}
+
+impl CTranspilerPass {
+    fn add_src(&mut self, content: &str) {
+        self.result.source += content;
+    }
+
+    fn add_header(&mut self, content: &str) {
+        self.result.header += content;
+    }
+
+    fn push_frame(&mut self) -> &TranspilerFrame {
+        self.frames.push(TranspilerFrame::default());
+        self.frames.last().unwrap()
+    }
+
+    fn pop_frame(&mut self) {
+        self.frames.pop();
+    }
+
+    fn curr_frame(&mut self) -> &mut TranspilerFrame {
+        self.frames.last_mut().unwrap()
+    }
+
+    fn get_all_current_defers(&self) -> Vec<DeferStmtAst> {
+        let mut defers = Vec::new();
+        for frame in self.frames.iter().rev() {
+            frame
+                .queued_defers
+                .iter()
+                .for_each(|x| defers.push(x.clone()));
+        }
+        defers
+    }
+
+    fn hun_type_to_c(ctx: &mut ProgramCtx, id: &AstTypeId) -> String {
+        let ty = ctx.type_db.get_type(*id).unwrap();
+        if ty.is_array() {
+            return CTranspilerPass::hun_type_to_c(ctx, &ty.get_subtype());
+        }
+
+        if ty.is_ref() {
+            return CTranspilerPass::hun_type_to_c(ctx, &ty.get_subtype()) + "*";
+        }
+
+        match ty.get_name() {
+            "i8" => "int8_t",
+            "i16" => "int16_t",
+            "i32" => "int32_t",
+            "i64" => "int64_t",
+            "u8" => "uint8_t",
+            "u16" => "uint16_t",
+            "u32" => "uint32_t",
+            "u64" => "uint64_t",
+            "f32" => "float",
+            "f64" => "double",
+            "bool" => "bool",
+            "cstring" => "char*",
+            "rawptr" => "void*",
+            _ => return ty.get_fullname(&ctx.type_db).to_string(),
+        }
+        .to_string()
+    }
+
+    fn mangle_id(str: &str) -> String {
+        let mut mangled = String::new();
+        str.chars().for_each(|c| {
+            if c == '_' {
+                mangled.push(c);
+            } else if ALLOWED_ID_CHARS.contains(&c) {
+                mangled += format!("_{}", c as u32).as_str();
+            } else {
+                mangled.push(c);
+            }
+        });
+        mangled
+    }
+
+    fn indent_space(&self) -> String {
+        "  ".repeat(self.indent)
+    }
+
+    fn get_temp_expr_id(&self) -> String {
+        "__".to_string() + self.expr_temp_idx.to_string().as_str()
+    }
+
+    fn gen_temp_expr(&mut self, ctx: &mut ProgramCtx, ty_id: &AstTypeId) -> (String, String) {
+        let id = self.get_temp_expr_id();
+        self.expr_temp_idx += 1;
+        (CTranspilerPass::hun_type_to_c(ctx, ty_id), id)
+    }
+
+    fn transpile_file(&mut self, ctx: &mut ProgramCtx, file: &FileStmtAst) {
+        self.add_header("// auto generated file from honey - don't modify manually\n");
+        self.add_header(format!("// file: {}.hun\n\n", file.filename).as_str());
+        self.add_header("#pragma once\n");
+        self.add_header("#include <stdio.h>\n");
+        self.add_header("#include <stdlib.h>\n");
+        self.add_header("#include <stdint.h>\n");
+        self.add_header("#include <stdbool.h>\n");
+        self.add_header("\n");
+
+        self.add_src("// auto generated file from honey - don't modify manually\n");
+        self.add_src(format!("// file: {}.hun\n\n", file.filename).as_str());
+        // This depends on if we are actually creating the files or just compiling from memory
+        self.add_src(&format!("#include \"{}.h\"\n\n", file.filename));
+
+        for stmt in &file.statements {
+            self.transpile_statement(ctx, stmt);
+        }
+    }
+
+    fn transpile_statement(&mut self, ctx: &mut ProgramCtx, stmt: &AstStatement) {
+        match stmt {
+            AstStatement::StructDef(s) => self.transpile_struct(ctx, s),
+            AstStatement::EnumDef(e) => self.transpile_enum(ctx, e),
+            AstStatement::FnDef(f) => self.transpile_fn(ctx, f),
+            AstStatement::StatementExpr(e) => {
+                let expr_str = self.transpile_expr(ctx, &e.expr);
+                self.add_src(&expr_str);
+            }
+            AstStatement::VarDefStmt(def) => self.transpile_var_def(ctx, def),
+            AstStatement::VarAssignStmt(assign) => self.transpile_var_assign(ctx, assign),
+            AstStatement::ReturnStmt(ret) => self.transpile_return(ctx, ret, true),
+            AstStatement::Defer(defer) => self.curr_frame().queued_defers.push(*defer.clone()),
+            AstStatement::Module(module) => self.transpile_module(ctx, module),
+            AstStatement::Import(import) => self.transpile_import(ctx, import),
+            _ => {
+                todo!("{:?} not implemented", stmt);
+            }
+        };
+    }
+
+    fn transpile_import(&mut self, ctx: &mut ProgramCtx, import: &ImportStmtAst) {
+        let transpiler = CTranspilerPass::default();
+        let result = transpiler.run(ctx, &import.ast);
+
+        self.add_header(&format!("#include \"{}.h\"\n", result.name));
+
+        self.result.imports.push(result);
+    }
+
+    fn transpile_module(&mut self, ctx: &mut ProgramCtx, module: &ModuleStmtAst) {
+        for stmt in &module.stmts {
+            self.transpile_statement(ctx, stmt);
+        }
+    }
+
+    fn transpile_return(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        ret: &ReturnStmtAst,
+        include_defers: bool,
+    ) {
+        if include_defers {
+            self.transpile_current_defers(ctx);
+        }
+
+        self.add_src(&self.indent_space());
+        self.add_src("return ");
+        if let Some(expr) = &ret.expr {
+            let expr_str = self.transpile_expr(ctx, expr);
+            self.add_src(&expr_str);
+        }
+        self.add_src(";\n");
+    }
+
+    fn transpile_var_assign(&mut self, ctx: &mut ProgramCtx, assign: &VarAssignStmtAst) {
+        let rvalue = self.transpile_expr(ctx, &assign.rvalue);
+        let old_assign_mode = self.raw_mode;
+        self.add_src(&self.indent_space());
+        self.raw_mode = true;
+        self.transpile_expr(ctx, &assign.lvalue);
+        self.raw_mode = old_assign_mode;
+        self.add_src(&format!(" = {rvalue};\n"));
+        // self.add_src(&rvalue);
+    }
+
+    fn transpile_var_def(&mut self, ctx: &mut ProgramCtx, def: &VarDefStmtAst) {
+        let ty = ctx.type_db.get_type(def.type_id).unwrap().clone();
+
+        // let old_mode = self.raw_mode;
+        // self.raw_mode = true;
+        let expr_str = if let Some(expr) = &def.assignment {
+            self.transpile_expr(ctx, expr)
+        } else {
+            "".to_string()
+        };
+        // self.raw_mode = old_mode;
+
+        self.add_src(&self.indent_space());
+        self.add_src(CTranspilerPass::hun_type_to_c(ctx, &def.type_id).as_str());
+        self.add_src(" ");
+        self.add_src(def.name.as_str());
+        if ty.is_array() {
+            self.add_src("[]");
+        }
+        self.add_src(" = ");
+        self.add_src(&expr_str);
+        self.add_src(";\n");
+        ctx.def_var(def.name.clone(), def.type_id);
+    }
+
+    fn transpile_struct(&mut self, ctx: &mut ProgramCtx, s: &StructDefAst) {
+        let struct_ty = ctx.type_db.get_type(s.type_id).unwrap();
+        let struct_name = struct_ty.get_fullname(&ctx.type_db);
+        if struct_ty.is_unit() {
+            self.add_header(&self.indent_space());
+            self.add_header(&format!(
+                "typedef struct {struct_name} {{}} {struct_name};\n"
+            ));
+            return;
+        }
+
+        self.add_header(&self.indent_space());
+        self.add_header(format!("typedef struct {struct_name} {{\n").as_str());
+
+        self.indent += 1;
+        for field in &s.fields {
+            self.add_header(&self.indent_space());
+            self.add_header(
+                format!(
+                    "{} {};\n",
+                    CTranspilerPass::hun_type_to_c(ctx, &field.type_id),
+                    field.name
+                )
+                .as_str(),
+            );
+        }
+        self.indent -= 1;
+
+        self.add_header(&self.indent_space());
+        self.add_header("} ");
+        self.add_header(&struct_name);
+        self.add_header(";\n\n");
+
+        for method in &s.methods {
+            self.transpile_fn(ctx, method);
+            self.add_src("\n");
+            self.add_header("\n");
+        }
+    }
+
+    fn transpile_enum(&mut self, ctx: &mut ProgramCtx, e: &EnumDefAst) {
+        let e_ty = ctx.type_db.get_type(e.type_id).unwrap().clone();
+        let enum_name = e_ty.get_fullname(&ctx.type_db);
+
+        // Variant struct definitions before the actual enum
+        for variant in e_ty.get_fields() {
+            let v_ty = ctx.type_db.get_type(variant.id).unwrap();
+            let struct_def = StructDefAst {
+                pos: FileRange::new(),
+                type_id: variant.id,
+                fields: v_ty
+                    .get_fields()
+                    .iter()
+                    .map(|x| ArgDefAst {
+                        pos: FileRange::new(),
+                        name: x.name.clone(),
+                        type_id: x.id,
+                        is_varadic: x.is_varadic,
+                    })
+                    .collect(),
+                methods: Vec::new(),
+            };
+            self.transpile_struct(ctx, &struct_def);
+            self.add_header("\n");
+        }
+
+        // Enum union
+        self.add_header(&self.indent_space());
+        let union_name = &format!("__{enum_name}_union");
+        self.add_header(&format!("typedef union {union_name} {{\n"));
+        self.indent += 1;
+        for (i, variant) in e_ty.get_fields().iter().enumerate() {
+            let v_ty = ctx.type_db.get_type(variant.id).unwrap();
+            self.add_header(&self.indent_space());
+            self.add_header(
+                format!(
+                    "{} __variant_{};\n",
+                    CTranspilerPass::hun_type_to_c(ctx, &v_ty.get_id()),
+                    i
+                )
+                .as_str(),
+            );
+        }
+        self.indent -= 1;
+        self.add_header(&self.indent_space());
+        self.add_header(&format!("}} {union_name} ;\n\n"));
+
+        // Enum declaration as a tagged union
+        self.add_header(format!("typedef struct {enum_name} {{\n").as_str());
+        self.indent += 1;
+
+        // Index
+        self.add_header(&self.indent_space());
+        self.add_header("int __variant_index;\n");
+
+        // Union
+        self.add_header(&self.indent_space());
+        self.add_header(&format!("{union_name} __variant_value;\n"));
+
+        self.indent -= 1;
+        self.add_header(&self.indent_space());
+        self.add_header("} ");
+        self.add_header(enum_name.as_str());
+        self.add_header(";\n");
+    }
+
+    fn transpile_fn(&mut self, ctx: &mut ProgramCtx, func: &FnDefAst) {
+        let fn_ty = ctx.type_db.get_type(func.id).unwrap().clone();
+
+        if func.fn_header.is_external {
+            return;
+        }
+
+        let mut fn_header_str = String::new();
+
+        fn_header_str += CTranspilerPass::hun_type_to_c(ctx, &func.fn_header.ret_type).as_str(); // fn type
+        fn_header_str += format!(
+            " {}",
+            CTranspilerPass::mangle_id(&fn_ty.get_fullname(&ctx.type_db))
+        )
+        .as_str(); // fn name
+        fn_header_str += "(";
+
+        // Transpile arguments
+        ctx.push_local();
+        let args = [&fn_ty.get_pre_args()[..], &fn_ty.get_su_args()[..]].concat();
+        for (i, arg) in args.iter().enumerate() {
+            ctx.def_var(arg.name.clone(), arg.id);
+            if arg.is_varadic {
+                fn_header_str += "...";
+            } else {
+                fn_header_str += format!(
+                    "{} {}",
+                    CTranspilerPass::hun_type_to_c(ctx, &arg.id),
+                    arg.name
+                )
+                .as_str();
+                if i != args.len() - 1 {
+                    fn_header_str += ", ";
+                }
+            }
+        }
+
+        fn_header_str += ")";
+
+        self.add_header(&format!("{fn_header_str};\n"));
+        self.add_src(&fn_header_str);
+
+        self.expr_temp_idx = 0;
+        if let Some(AstExpression::Body(body)) = &func.body {
+            self.transpile_fn_body(ctx, body, func.fn_header.ret_type);
+        }
+        ctx.pop_local();
+    }
+
+    fn transpile_expr(&mut self, ctx: &mut ProgramCtx, expr: &AstExpression) -> String {
+        match expr {
+            AstExpression::Bool(b) => { if b.value { "true " } else { "false" } }.to_string(),
+            AstExpression::Int(i) => i.value.to_string(),
+            AstExpression::Float(f) => f.value.to_string(),
+            AstExpression::String(s) => format!("\"{}\"", s.value.escape_debug()),
+            AstExpression::Array(arr) => self.transpile_array(ctx, arr),
+            AstExpression::Index(idx) => self.transpile_index(ctx, idx),
+            AstExpression::Ref(r) => self.transpile_ref(ctx, r),
+            AstExpression::Deref(d) => self.transpile_deref(ctx, d),
+            AstExpression::Call(call) => self.transpile_call(ctx, call, None),
+            AstExpression::Body(body) => self.transpile_body(ctx, body),
+            AstExpression::Var(var) => self.transpile_var(ctx, var),
+            AstExpression::MetaDef(meta) => self.transpile_meta(ctx, meta),
+            AstExpression::Statement(stmt) => self.transpile_expr(ctx, &stmt.expr),
+            AstExpression::Group(group) => self.transpile_expr(ctx, &group.expr),
+            AstExpression::If(i) => self.transpile_if(ctx, i),
+            AstExpression::For(f) => self.transpile_loop(ctx, f),
+            AstExpression::Struct(s) => self.transpile_struct_expr(ctx, s),
+            AstExpression::MemberAccessor(member) => self.transpile_member_access(ctx, member),
+            AstExpression::Enum(enum_expr) => self.transpile_enum_expr(ctx, enum_expr),
+            AstExpression::SingleMatch(match_expr) => {
+                self.transpile_single_match_expr(ctx, match_expr)
+            }
+            AstExpression::ModuleAccess(module) => self.transpile_module_access(ctx, module),
+            AstExpression::Type(ty) => self.transpile_type(ctx, ty),
+            AstExpression::NoOp(_) => "".to_string(),
+        }
+    }
+
+    fn transpile_type(&mut self, ctx: &mut ProgramCtx, ty: &TypeExprAst) -> String {
+        CTranspilerPass::hun_type_to_c(ctx, &ty.id)
+    }
+
+    fn transpile_module_access(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        module: &ModuleAccessExprAst,
+    ) -> String {
+        self.transpile_expr(ctx, &module.expr)
+    }
+
+    fn transpile_single_match_expr(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        m: &SingleMatchExprAst,
+    ) -> String {
+        let s_type = ctx.type_db.get_type(m.casted_enum_var.type_id).unwrap();
+        let is_void = m.get_type_id(ctx) == VOID_TYPE.get_id();
+        let variant_idx = s_type
+            .get_parent(&ctx.type_db)
+            .get_field_index_by_id(s_type.get_id());
+
+        let (ty, val) = self.gen_temp_expr(
+            ctx,
+            &s_type
+                .get_parent(&ctx.type_db)
+                .clone()
+                .get_field_by_idx(variant_idx)
+                .id,
+        );
+
+        if !is_void {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{ty} {val};\n"));
+        }
+
+        self.add_src(&self.indent_space());
+        self.add_src("if (");
+        let expr_str = self.transpile_expr(ctx, &m.enum_expr);
+        self.add_src(&expr_str);
+        self.add_src(".__variant_index == ");
+        self.add_src(variant_idx.to_string().as_str());
+        self.add_src(") {\n");
+        self.indent += 1;
+
+        // Create casted value
+        self.add_src(&self.indent_space());
+        self.add_src(&format!(
+            "{} {} = {}.__variant_value.__variant_{};\n",
+            CTranspilerPass::hun_type_to_c(ctx, &m.casted_enum_var.type_id),
+            m.casted_enum_var.name,
+            expr_str,
+            variant_idx
+        ));
+
+        let old_tmp = self.curr_return.clone();
+        self.curr_return = Some(val.clone());
+        if let AstExpression::Body(body) = &m.then_expr {
+            self.transpile_statements(ctx, &body.statements, &val);
+            self.indent -= 1;
+            self.add_src(&self.indent_space());
+            self.add_src("}\n");
+        } else {
+            unreachable!();
+        }
+        // self.transpile_expr(ctx, &m.then_expr);
+        self.curr_return = old_tmp;
+        if is_void { "".to_string() } else { val }
+    }
+
+    fn transpile_enum_expr(&mut self, ctx: &mut ProgramCtx, e: &EnumExprAst) -> String {
+        let enum_ty = ctx.type_db.get_type(e.enum_type).unwrap();
+        let variant_idx = enum_ty.get_field_index_by_id(e.struct_expr.type_id);
+
+        let mut enum_str = String::new();
+        enum_str += " { ";
+        enum_str += variant_idx.to_string().as_str();
+        enum_str += ", ";
+        enum_str += &format!("{{ .__variant_{variant_idx} = ");
+        enum_str += &self.transpile_struct_expr(ctx, &e.struct_expr);
+        enum_str += " }}";
+        enum_str
+    }
+
+    fn transpile_member_access(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        member: &MemberAccesorExprAst,
+    ) -> String {
+        let member_ty = member.get_type_id(ctx);
+        let is_void = member_ty == VOID_TYPE.get_id();
+        let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
+
+        let old_assign_mode = self.raw_mode;
+        self.raw_mode = false;
+        let base = self.transpile_expr(ctx, &member.base);
+        let member_op = if member.base.get_type(ctx).is_ref() {
+            "->"
+        } else {
+            "."
+        };
+        let member = if let Some(field) = &member.field {
+            self.transpile_var(ctx, field)
+        } else if let Some(method) = &member.method {
+            self.transpile_call(ctx, method, Some(base.clone()))
+        } else {
+            unreachable!()
+        };
+        self.raw_mode = old_assign_mode;
+
+        if !is_void {
+            self.add_src(&self.indent_space());
+            if self.raw_mode {
+                self.add_src(&format!("{base}{member_op}{member}"));
+                return String::new();
+            } else {
+                self.add_src(&format!("{ty} {val} = {base}{member_op}{member};\n"));
+                return val;
+            }
+        }
+
+        String::new()
+    }
+
+    fn transpile_struct_expr(&mut self, ctx: &mut ProgramCtx, s: &StructExprAst) -> String {
+        let member_ty = s.get_type_id(ctx);
+        let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
+
+        self.add_src(&format!("{ty} {val};\n"));
+        for field in &s.fields {
+            let expr = &self.transpile_expr(ctx, &field.rvalue);
+            self.add_src(&format!("{val}.{} = {};\n", field.name, expr));
+        }
+        val
+    }
+
+    fn transpile_array(&mut self, ctx: &mut ProgramCtx, array: &ArrayExprAst) -> String {
+        let mut array_str = String::from_str("{").unwrap();
+        for (i, element) in array.elements.iter().enumerate() {
+            array_str += self.transpile_expr(ctx, element).as_str();
+            if i != array.elements.len() - 1 {
+                array_str += ", ";
+            }
+        }
+        array_str += "}";
+        array_str
+    }
+
+    fn transpile_index(&mut self, ctx: &mut ProgramCtx, idx: &IndexExprAst) -> String {
+        let base_type_id = idx.base.get_type_id(ctx);
+        let base_type = ctx
+            .type_db
+            .get_type(base_type_id)
+            .expect("Base type for index expression not found in TypeDB");
+
+        let idx_ty = base_type.get_subtype();
+        let (ty, val) = self.gen_temp_expr(ctx, &idx_ty);
+
+        let mut index_str = self.transpile_expr(ctx, &idx.base);
+        index_str += "[";
+        index_str += self.transpile_expr(ctx, &idx.index).as_str();
+        index_str += "]";
+        self.add_src(&self.indent_space());
+        self.add_src(&format!("{ty} {val} = {index_str};\n"));
+        val
+    }
+
+    fn transpile_var(&mut self, _ctx: &mut ProgramCtx, var: &VarExprAst) -> String {
+        if self.raw_mode {
+            self.add_src(&var.name);
+            String::new()
+        } else {
+            var.name.clone()
+        }
+    }
+
+    fn transpile_call(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        call: &CallExprAst,
+        parent: Option<String>,
+    ) -> String {
+        let fn_ty = ctx.type_db.get_type(call.fn_id).unwrap().clone();
+        let (ty, val) = self.gen_temp_expr(ctx, &fn_ty.get_return_type_id());
+
+        let mut call_str = String::new();
+        call_str += CTranspilerPass::mangle_id(fn_ty.get_fullname(&ctx.type_db).as_str()).as_str();
+        call_str += "(";
+        let args: Vec<_> = call
+            .prefix_args
+            .iter()
+            .chain(call.suffix_args.iter())
+            .collect();
+
+        // Check for self and add it as a first argument
+        if let Some(parent) = &parent
+            && !fn_ty.get_su_args().is_empty()
+            && fn_ty.get_su_args()[0].name == "self"
+        {
+            call_str += "&";
+            call_str += parent;
+            if !args.is_empty() {
+                call_str += ", ";
+            }
+        }
+
+        // Add the rest of the arguments
+        for (i, arg) in args.iter().enumerate() {
+            call_str += self.transpile_expr(ctx, arg).as_str();
+            if i != args.len() - 1 {
+                call_str += ", ";
+            }
+        }
+
+        call_str += ")";
+
+        if fn_ty.get_return_type_id() == VOID_TYPE.get_id() {
+            self.add_src(&self.indent_space());
+            self.add_src(&call_str);
+            self.add_src(";\n");
+            "".to_string()
+        } else {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{ty} {val} = {call_str};\n"));
+            val
+        }
+    }
+
+    fn transpile_loop(&mut self, ctx: &mut ProgramCtx, for_expr: &ForExprAst) -> String {
+        let condition = self.transpile_expr(ctx, &for_expr.condition);
+        self.add_src(&self.indent_space());
+        self.add_src("while (");
+        self.add_src(&condition);
+        self.add_src(") {\n");
+
+        self.indent += 1;
+        self.push_frame();
+        if let AstExpression::Body(body) = &for_expr.for_body {
+            self.transpile_statements(ctx, &body.statements, "");
+        } else {
+            unreachable!();
+        }
+
+        // The condition needs to be evaluated again at the end of the while loop
+        let condition_2 = self.transpile_expr(ctx, &for_expr.condition);
+        self.add_src(&self.indent_space());
+        self.add_src(&format!("{condition} = {condition_2};\n"));
+
+        self.pop_frame();
+        self.indent -= 1;
+        self.add_src(&self.indent_space());
+        self.add_src("}\n");
+        "".to_string() // FIXME: Placeholder as not sure yet how to return expressions from loops
+    }
+
+    fn transpile_if(&mut self, ctx: &mut ProgramCtx, if_expr: &IfExprAst) -> String {
+        let if_ty = if_expr.then_expr.get_type_id(ctx);
+        let is_void = if_ty == VOID_TYPE.get_id();
+        let (ty, val) = self.gen_temp_expr(ctx, &if_ty);
+
+        if !is_void {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{ty} {val};\n"));
+        }
+
+        // Condition
+        let condition = self.transpile_expr(ctx, &if_expr.condition).clone();
+
+        self.add_src(&self.indent_space());
+        self.add_src("if (");
+        self.add_src(&condition);
+        self.add_src(") {\n");
+
+        // Then
+        self.push_frame();
+        let old_tmp = self.curr_return.clone();
+        self.curr_return = Some(val.clone());
+        if let AstExpression::Body(body) = &if_expr.then_expr {
+            self.indent += 1;
+            let then_val = self.transpile_statements(ctx, &body.statements, &val);
+            if !is_void && then_val.is_some() {
+                self.add_src(&self.indent_space());
+                self.add_src(&format!(
+                    "{} = {};\n",
+                    self.curr_return.clone().unwrap(),
+                    then_val.unwrap()
+                ));
+            }
+            self.indent -= 1;
+        } else {
+            unreachable!();
+        }
+        self.curr_return = old_tmp;
+        self.add_src(&self.indent_space());
+        self.add_src("}\n");
+        self.pop_frame();
+
+        // Else
+        if let Some(else_expr) = &if_expr.else_expr {
+            self.push_frame();
+            self.add_src(&self.indent_space());
+            self.add_src("else {\n");
+
+            let old_tmp = self.curr_return.clone();
+            self.curr_return = Some(val.clone());
+            if let AstExpression::Body(body) = &else_expr {
+                self.indent += 1;
+                let else_val = self.transpile_statements(ctx, &body.statements, &val);
+                if !is_void && else_val.is_some() {
+                    self.add_src(&self.indent_space());
+                    self.add_src(&format!(
+                        "{} = {};\n",
+                        self.curr_return.clone().unwrap(),
+                        else_val.unwrap()
+                    ));
+                }
+                self.indent -= 1;
+            } else {
+                unreachable!();
+            }
+            self.curr_return = old_tmp;
+            self.add_src(&self.indent_space());
+            self.add_src("}\n");
+            self.pop_frame();
+        }
+
+        if is_void { "".to_string() } else { val }
+    }
+
+    fn transpile_ref(&mut self, ctx: &mut ProgramCtx, r: &RefExprAst) -> String {
+        if self.raw_mode {
+            self.add_src("&");
+            self.transpile_expr(ctx, &r.expr);
+            String::new()
+        } else {
+            "&".to_string() + self.transpile_expr(ctx, &r.expr).as_str()
+        }
+    }
+
+    fn transpile_deref(&mut self, ctx: &mut ProgramCtx, d: &DerefExprAst) -> String {
+        if self.raw_mode {
+            self.add_src("*");
+            self.transpile_expr(ctx, &d.expr);
+            String::new()
+        } else {
+            "*".to_string() + self.transpile_expr(ctx, &d.expr).as_str()
+        }
+    }
+
+    fn transpile_fn_body(&mut self, ctx: &mut ProgramCtx, body: &BodyExprAst, ret_ty: AstTypeId) {
+        let body_ty = ret_ty;
+        let is_void = body_ty == VOID_TYPE.get_id();
+        let (ty, val) = self.gen_temp_expr(ctx, &body_ty);
+
+        self.add_src("{\n");
+        self.indent += 1;
+        if !is_void {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{ty} {val};\n"));
+        }
+
+        self.push_frame();
+        let last_expr = self.transpile_statements(ctx, &body.statements, &val);
+
+        self.transpile_current_defers(ctx);
+        if last_expr.is_none() {
+            self.transpile_return(
+                ctx,
+                &ReturnStmtAst {
+                    pos: FileRange::new(),
+                    expr: None,
+                },
+                false,
+            );
+        } else if !is_void {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{} = {};\n", val, last_expr.unwrap()));
+            self.transpile_return(
+                ctx,
+                &ReturnStmtAst {
+                    pos: FileRange::new(),
+                    expr: Some(AstExpression::Var(Box::new(VarExprAst {
+                        pos: FileRange::new(),
+                        name: val,
+                    }))),
+                },
+                false,
+            );
+        }
+        self.pop_frame();
+
+        self.indent -= 1;
+        self.add_src(&self.indent_space());
+        self.add_src("}\n\n");
+    }
+
+    fn transpile_body(&mut self, ctx: &mut ProgramCtx, body: &BodyExprAst) -> String {
+        let (ty, val) = self.gen_temp_expr(ctx, &body.get_type_id(ctx));
+        self.add_src(&format!("{ty} {val};\n"));
+
+        self.add_src("{\n");
+        self.indent += 1;
+        self.transpile_statements(ctx, &body.statements, &val);
+        self.indent -= 1;
+        self.add_src(&self.indent_space());
+        self.add_src("}\n");
+        val
+    }
+
+    fn transpile_statements(
+        &mut self,
+        ctx: &mut ProgramCtx,
+        stmts: &[AstStatement],
+        val: &str,
+    ) -> Option<String> {
+        let mut last_expr = None;
+        for (i, stmt) in stmts.iter().enumerate() {
+            // self.add_indent();
+            let old_tmp = self.curr_return.clone();
+            self.curr_return = Some(val.to_string());
+            if i == stmts.len() - 1 {
+                if let AstStatement::StatementExpr(expr) = &stmt {
+                    last_expr = Some(self.transpile_expr(ctx, &expr.expr));
+                } else {
+                    self.transpile_statement(ctx, stmt);
+                }
+            } else {
+                self.transpile_statement(ctx, stmt);
+            }
+            self.curr_return = old_tmp;
+        }
+
+        last_expr
+    }
+
+    fn transpile_meta(&mut self, ctx: &mut ProgramCtx, meta_expr: &MetaExprAst) -> String {
+        let meta = ctx.get_meta(&meta_expr.name).unwrap().clone();
+        let (tmp_ty, tmp_val) = self.gen_temp_expr(ctx, &meta_expr.get_type_id(ctx));
+        let meta_str = match &meta.kind {
+            MetaFnKind::BinOp(op) => {
+                self.transpile_expr(ctx, &meta_expr.args[0])
+                    + match op {
+                        BinOpKind::Add => " + ",
+                        BinOpKind::Minus => " - ",
+                        BinOpKind::Mult => " * ",
+                        BinOpKind::Div => " / ",
+                        BinOpKind::Rem => " % ",
+                        BinOpKind::And => " && ",
+                        BinOpKind::Or => " || ",
+                        BinOpKind::LShr => " << ",
+                        BinOpKind::Shl => " >> ",
+                    }
+                    + self.transpile_expr(ctx, &meta_expr.args[1]).as_str()
+            }
+            MetaFnKind::CmpOp(op) => {
+                self.transpile_expr(ctx, &meta_expr.args[0])
+                    + match op {
+                        CmpOpKind::Eq => " == ",
+                        CmpOpKind::Ne => " != ",
+                        CmpOpKind::Less => " < ",
+                        CmpOpKind::LessEq => " <= ",
+                        CmpOpKind::Greater => " > ",
+                        CmpOpKind::GreaterEq => " >= ",
+                    }
+                    + self.transpile_expr(ctx, &meta_expr.args[1]).as_str()
+            }
+            MetaFnKind::Cast => {
+                let cast_to_ty = self.transpile_expr(ctx, &meta_expr.args[0]);
+                let expr = self.transpile_expr(ctx, &meta_expr.args[1]);
+                format!("({cast_to_ty}){expr}")
+            }
+        };
+
+        if !meta_expr.get_type(ctx).is_void() {
+            self.add_src(&self.indent_space());
+            self.add_src(&format!("{tmp_ty} {tmp_val} = {meta_str};\n"));
+            return tmp_val;
+        }
+        String::new()
+    }
+
+    fn transpile_current_defers(&mut self, ctx: &mut ProgramCtx) {
+        for defer in self.get_all_current_defers() {
+            self.transpile_defer(ctx, &defer);
+        }
+    }
+
+    fn transpile_defer(&mut self, ctx: &mut ProgramCtx, defer: &DeferStmtAst) {
+        self.transpile_statement(ctx, &defer.stmt);
+    }
+}

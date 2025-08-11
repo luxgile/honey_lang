@@ -213,9 +213,6 @@ fn pointer_with_meta_fn() {
     assert_src(
         "pointers_with_meta_fn",
         "
-        += :: fn (l: ^i32 | r: i32) {
-          ^l = @+ ^l r 
-        }
         main :: fn(|) i32 {
             a := 5
             &a += 1

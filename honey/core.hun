@@ -52,3 +52,7 @@ println :: fn(|str: cstring) {
     if_false
   }
 }
+
++= :: fn (lhs: ^i32 | rhs: i32) {
+  ^lhs = @+ ^lhs rhs 
+}

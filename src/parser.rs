@@ -209,6 +209,7 @@ impl<'a> Parser<'a> {
     pub fn parse_import(&mut self, offset: &mut usize) -> OptionalParserResult<ImportStmtAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
+        let s_range = self.get_tk(*offset).range;
         if !self.check_tokens(
             &[
                 TokenKind::Id,
@@ -217,12 +218,31 @@ impl<'a> Parser<'a> {
                 TokenKind::Import,
             ],
             *offset,
-        ) {
+        ) && !self.check_tokens(&[TokenKind::Import], *offset)
+        {
             return Ok(None);
         }
 
-        let import_tk = self.get_tk(*offset).clone();
-        *offset += 4;
+        let module_info = if self.check_tokens(&[TokenKind::Id], *offset) {
+            // Consume id :: import!
+            let import_name = self.get_tk(*offset).value.clone();
+            *offset += 4;
+            Some((
+                self.ctx.type_db.new_module(
+                    &ModuleIdAst {
+                        pos: s_range,
+                        name: import_name.clone(),
+                        child: None,
+                    },
+                    None,
+                ),
+                import_name,
+            ))
+        } else {
+            // Consume import
+            *offset += 1;
+            None
+        };
 
         if !self.check_tokens(&[TokenKind::String], *offset) {
             panic!("expected string for import declaration");
@@ -231,24 +251,21 @@ impl<'a> Parser<'a> {
         let path_tk = self.get_tk(*offset).clone();
         *offset += 1;
 
-        let module_ty = self.ctx.type_db.new_module(
-            &ModuleIdAst {
-                pos: import_tk.range,
-                name: import_tk.value.clone(),
-                child: None,
-            },
-            None,
-        );
-
         // Parse new imported file before keep going
         let mut parser = Parser::new(self.ctx);
-        parser.asttype_stack.push(module_ty);
+        if let Some((module_ty, _)) = module_info {
+            parser.asttype_stack.push(module_ty);
+        }
+
         let file = parser.parse_source(
-            &import_tk.value,
+            &module_info.clone().map(|x| x.1.clone()).unwrap_or(String::new()),
             &fs::read_to_string(&path_tk.value).unwrap(),
             false,
         );
-        parser.asttype_stack.pop();
+
+        if module_info.is_some() {
+            parser.asttype_stack.pop();
+        }
 
         if parser.has_parsing_errors() {
             self.errors.extend_from_slice(&parser.get_errors());
@@ -259,7 +276,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Some(ImportStmtAst {
-            id: import_tk.value,
+            id: module_info.map(|x| x.1),
             path: path_tk.value,
             ast: file,
         }))
@@ -502,12 +519,8 @@ impl<'a> Parser<'a> {
         *offset += 1;
 
         let meta_fn = self.ctx.get_meta(&meta_tk.value);
-        let meta_fn_ref = meta_fn.ok_or_else(|| {
-            CompilerError::undefined_meta(
-                meta_tk.range,
-                meta_tk.value.clone(),
-            )
-        })?;
+        let meta_fn_ref = meta_fn
+            .ok_or_else(|| CompilerError::undefined_meta(meta_tk.range, meta_tk.value.clone()))?;
 
         let mut args: Vec<AstExpression> = Vec::new();
         for _i in 0..meta_fn_ref.get_arg_size() {
@@ -1836,7 +1849,7 @@ impl<'a> Parser<'a> {
                 Err(err) => {
                     self.errors.push(err);
                     self.skip_until(&[TokenKind::NewLine], offset);
-                },
+                }
             }
         }
         *offset += 1; // Consume }

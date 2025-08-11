@@ -1,0 +1,26 @@
+
+String :: struct {
+  ptr: rawptr,
+  len: u32,
+}
+
+new_string :: fn (|) String {
+  String .{ .ptr = "", .len = 0 }
+}
+
+
+new_string :: fn (|cstr: cstring) String {
+  len := 0
+  i := 0
+  loop_cond := true
+  loop loop_cond {
+    if cstr[i] == "\0" {
+      loop_cond = false
+    }
+    &i += 1
+  }
+
+  str := String .{ .ptr = cstr, .len = i }
+  str
+}
+

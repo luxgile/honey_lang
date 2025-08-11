@@ -612,7 +612,7 @@ impl AstNode for ModuleAccessExprAst {
 
 #[derive(Debug, Clone)]
 pub struct ImportStmtAst {
-    pub id: String,
+    pub id: Option<String>,
     pub path: String,
     pub ast: FileStmtAst,
 }

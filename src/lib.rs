@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
+use ast::ImportStmtAst;
 use colored::Colorize;
+use ctranspiler::{CTranspilerPass, TranspilerResult};
 use std::{
     env,
     fs::{self},
@@ -10,16 +12,18 @@ use std::{
 };
 
 use ast_printer::AstPrint;
-use compiler_pass::{CTranspilerPass, CompilerPass, TranspilerResult};
+use compiler_pass::CompilerPass;
 use meta_fn::*;
 use parser::Parser;
 use program_ctx::*;
 use types::*;
 
 mod ast;
+mod ast_pos;
 mod ast_printer;
 mod ast_typer;
 mod compiler_pass;
+mod ctranspiler;
 mod errors;
 mod lexer;
 mod meta_fn;
@@ -27,7 +31,6 @@ mod parser;
 mod program_ctx;
 mod type_db;
 mod types;
-mod ast_pos;
 
 #[derive(Default, Clone, Debug)]
 pub struct CompConfig {
@@ -69,36 +72,62 @@ impl Compiler {
         exe_name: &str,
         config: CompConfig,
     ) -> Result<FileBuildInfo, BuildError> {
-        // Read std file and append it to source
-        let std_src = String::from_utf8_lossy(include_bytes!("core.hun")).into_owned();
-        let hun_src = std_src + &src;
-
-        // Parse source
         let mut program_ctx = ProgramCtx::new();
         Compiler::add_meta_definitions(&mut program_ctx);
-        let (file, errors) = {
+        let mut errors = Vec::new();
+
+        // Parse core files
+        // TODO: Find a way to precompile these and add them as a dependency to reduce compile time
+        // (not a priority atm)
+        let core_file_paths = &[("core", "honey/core.hun"), ("string", "honey/string.hun")];
+        let core_files: Vec<_> = core_file_paths
+            .iter()
+            .map(|(name, path)| {
+                let std_src = fs::read_to_string(path).expect("could not read core.hun");
+                let mut parser = Parser::new(&mut program_ctx);
+                let file_parsed = parser.parse_source(name, &std_src, false);
+                errors.extend_from_slice(&parser.get_errors());
+                (file_parsed, path)
+            })
+            .collect();
+
+        // Parse source
+        let (mut hun_file, hun_errors) = {
             let mut parser = Parser::new(&mut program_ctx);
             (
-                parser.parse_source(exe_name, &hun_src, false),
+                parser.parse_source(exe_name, &src, false),
                 parser.get_errors(),
             )
         };
+        errors.extend_from_slice(&hun_errors);
+
+        // HACK: Insert the core file as an import by default
+        for (file, path) in core_files {
+            hun_file.statements.insert(
+                0,
+                ast::AstStatement::Import(Box::new(ImportStmtAst {
+                    id: None,
+                    path: path.to_string(),
+                    ast: file,
+                })),
+            );
+        }
 
         if config.pretty_print_ast {
             println!();
-            file.print_ast(&program_ctx, 0);
+            hun_file.print_ast(&program_ctx, 0);
         }
 
         // Print errors if any found
         if !errors.is_empty() {
             println!();
-            errors.iter().for_each(|e| e.print_error(&hun_src));
+            errors.iter().for_each(|e| e.print_error(&src));
             return Err(BuildError::CompilationFailed);
         }
 
         // Transpile to C
         let transpiler = CTranspilerPass::default();
-        let result = transpiler.run(&mut program_ctx, &file);
+        let result = transpiler.run(&mut program_ctx, &hun_file);
 
         // Ensuring build folder exists
         let build_path = config

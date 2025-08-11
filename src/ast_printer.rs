@@ -41,7 +41,10 @@ impl AstPrint for AstStatement {
 impl AstPrint for ImportStmtAst {
     fn print_ast(&self, _ctx: &ProgramCtx, indent: u32) {
         print_indent_spaces(indent);
-        println!("{} :: import \"{}\"", self.id, self.path);
+        match &self.id {
+            Some(id) => println!("{} :: import \"{}\"", id, self.path),
+            None => println!("import \"{}\"", self.path),
+        }
     }
 }
 
