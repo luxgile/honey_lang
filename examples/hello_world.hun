@@ -1,6 +1,4 @@
-extern printf :: fn (|format: cstring, args: ...)
-
 main :: fn(|) i32 {
-  printf "hello hun!\n"
+  println "hello hun!"
   0
 }

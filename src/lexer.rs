@@ -125,10 +125,10 @@ impl FileRange {
     }
 
     pub fn new_merging(lhs: &FileRange, rhs: &FileRange) -> Self {
-        let mut range = Self::default();
-        range.start = std::cmp::min(lhs.start, rhs.start);
-        range.end = std::cmp::max(lhs.end, rhs.end);
-        range
+        Self {
+            start: std::cmp::min(lhs.start, rhs.start),
+            end: std::cmp::max(lhs.end, rhs.end),
+        }
     }
 }
 impl Display for FileRange {
@@ -230,13 +230,14 @@ impl Lexer {
         } else {
             self.current_range.start.column += 1;
             self.current_range.end.column = self.current_range.start.column;
+            self.current_range.end.line = self.current_range.start.line;
         }
 
         if self.last_char == '\n' {
             self.current_range.end.line += 1;
             self.current_range.end.column = 0;
             if !self.capturing {
-                self.current_range.start.line = 1;
+                self.current_range.start.line += 1;
                 self.current_range.start.column = 0;
             }
         }

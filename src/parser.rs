@@ -172,6 +172,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_file_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
         self.skip_all(&[TokenKind::NewLine], offset);
+        let s_range = self.get_tk(*offset).range;
 
         if let Some(_struct) = self.parse_struct_def(offset)? {
             return Ok(AstStatement::StructDef(Box::new(_struct)));
@@ -202,7 +203,7 @@ impl<'a> Parser<'a> {
         }
 
         self.skip_until(&[TokenKind::NewLine, TokenKind::EoF], offset);
-        Err(CompilerError::undefined_statement(self.get_tk(*offset)))
+        Err(CompilerError::undefined_statement(s_range))
     }
 
     pub fn parse_import(&mut self, offset: &mut usize) -> OptionalParserResult<ImportStmtAst> {
@@ -378,6 +379,7 @@ impl<'a> Parser<'a> {
 
         while !self.check_tokens(&[TokenKind::RBrace], *offset) {
             self.skip_all(&[TokenKind::NewLine], offset); // Skip new lines inside struct
+            let s_range = self.get_tk(*offset).range;
 
             // Try parse method
             // Need to check for `Id :: Fn` to distinguish method from field
@@ -446,9 +448,10 @@ impl<'a> Parser<'a> {
                 self.skip_until_single(TokenKind::RBrace, offset);
                 break;
             }
+
             // If neither method nor field parsed, and not RBrace, then it's an error
             self.errors
-                .push(CompilerError::undefined_statement(self.get_tk(*offset)));
+                .push(CompilerError::undefined_statement(s_range));
             self.skip_until_single(TokenKind::RBrace, offset);
             break;
         }
@@ -583,7 +586,7 @@ impl<'a> Parser<'a> {
                     let body_ty = body.get_type(self.ctx);
                     if body_ty.get_id() != header.ret_type {
                         return Err(CompilerError::incorrect_return_type(
-                            self.get_tk(*offset),
+                            body.statements.last().unwrap().get_range(),
                             body_ty,
                             self.ctx.type_db.get_type(header.ret_type).unwrap(),
                         ));
@@ -1038,10 +1041,7 @@ impl<'a> Parser<'a> {
             let identifier_tk = self.get_tk(*offset).clone();
             let identifier = identifier_tk.value.clone();
             if self.ctx.get_var(&identifier).is_none() {
-                return Err(CompilerError::from_token(
-                    &identifier_tk,
-                    ParserErrorKind::UndefinedIdentifier { id: identifier },
-                ));
+                return Err(CompilerError::undefined_id(identifier_tk.range, identifier));
             }
             *offset += 1; // Consume Id
             return Ok(Some(AstExpression::Var(Box::new(VarExprAst {
@@ -1826,9 +1826,17 @@ impl<'a> Parser<'a> {
         let mut statements: Vec<AstStatement> = Vec::new();
         while !self.check_tokens(&[TokenKind::RBrace], *offset) {
             self.skip_all(&[TokenKind::NewLine], offset);
-            let stmt_res = self.parse_statement(offset)?;
-            statements.push(stmt_res);
-            self.skip_all(&[TokenKind::NewLine], offset);
+            let stmt_res = self.parse_statement(offset);
+            match stmt_res {
+                Ok(stmt) => {
+                    statements.push(stmt);
+                    self.skip_all(&[TokenKind::NewLine], offset);
+                }
+                Err(err) => {
+                    self.errors.push(err);
+                    self.skip_until(&[TokenKind::NewLine], offset);
+                },
+            }
         }
         *offset += 1; // Consume }
 
