@@ -322,4 +322,11 @@ impl CompilerError {
             kind: ParserErrorKind::UndefinedIdentifier { id: identifier },
         }
     }
+
+    pub fn undefined_meta(range: FileRange, value: String) -> CompilerError {
+       Self {
+           range,
+           kind: ParserErrorKind::UndefinedMetaFn { name: value }
+       }
+    }
 }

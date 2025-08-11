@@ -1,45 +1,8 @@
-extern printf :: fn (|format: RawString, args: ...)
-
-related_to :: fn (lhs: RawString | rhs: RawString) {
-  printf "%s is related to %s \n" lhs rhs
-}
-
-+ :: fn (lhs: Int | rhs: Int) Int {
-  @i+ lhs rhs
-} 
-
-* :: fn (lhs: Int | rhs: Int) Int {
-  @i* lhs rhs
-} 
-
-+ :: fn (lhs: Float | rhs: Float) Float {
-  @f+ lhs rhs
-}
-
-== :: fn (lhs: Int | rhs: Int) Bool { 
-  @i== lhs rhs
-} 
-
-!= :: fn (lhs: Int | rhs: Int) Bool {
-  @i!= lhs rhs
-}
-
-< :: fn (lhs: Int | rhs: Int) Bool {
-  @i< lhs rhs
-}
-
-<= :: fn (lhs: Int | rhs: Int) Bool {
-  @i<= lhs rhs
-}
-
-! :: fn (| rhs: Bool) Bool {
-  @b== rhs false
-}
-
-main :: fn (|) {
+main :: fn (|) i32 {
   i := 0
   loop i < 10 {
     printf "loop %d\n" i
     i = i + 1
   }
+  0
 }

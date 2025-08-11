@@ -503,11 +503,9 @@ impl<'a> Parser<'a> {
 
         let meta_fn = self.ctx.get_meta(&meta_tk.value);
         let meta_fn_ref = meta_fn.ok_or_else(|| {
-            CompilerError::from_token(
-                self.get_tk(*offset),
-                ParserErrorKind::UndefinedMetaFn {
-                    name: meta_tk.value.clone(),
-                },
+            CompilerError::undefined_meta(
+                meta_tk.range,
+                meta_tk.value.clone(),
             )
         })?;
 
@@ -873,7 +871,10 @@ impl<'a> Parser<'a> {
         let id = id_tk.value.clone();
         *offset += 3; // Consume `id :=`
 
+        let prev_expected_ty = self.expected_type;
+        self.expected_type = None;
         let expr_res = self.consume_expressions(offset, &[TokenKind::NewLine], true)?;
+        self.expected_type = prev_expected_ty;
         let expr = match expr_res {
             Some(e) => e,
             None => return Ok(None),
