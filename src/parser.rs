@@ -958,6 +958,10 @@ impl<'a> Parser<'a> {
     pub fn parse_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
         self.skip_all(&[TokenKind::NewLine], offset); // Ensure leading newlines are skipped
 
+        if let Some(break_stmt) = self.parse_break(offset)? {
+            return Ok(AstStatement::Break(Box::new(break_stmt)));
+        }
+
         if let Some(defer) = self.parse_defer(offset)? {
             return Ok(AstStatement::Defer(defer));
         }
@@ -987,6 +991,18 @@ impl<'a> Parser<'a> {
         Ok(AstStatement::StatementExpr(Box::new(StatementExprAst {
             expr: last_expr,
         })))
+    }
+    
+    pub fn parse_break(&mut self, offset: &mut usize) -> OptionalParserResult<BreakStmtAst> {
+        if !self.check_tokens(&[TokenKind::Break], *offset) {
+            return Ok(None);
+        }
+        let break_tk = self.get_tk(*offset);
+        *offset += 1;
+
+        Ok(Some(BreakStmtAst{
+            pos: break_tk.range,
+        }))
     }
 
     pub fn parse_expr(&mut self, offset: &mut usize) -> OptionalParserResult<AstExpression> {

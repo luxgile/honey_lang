@@ -34,7 +34,15 @@ impl AstPrint for AstStatement {
             AstStatement::Defer(defer) => defer.print_ast(ctx, indent),
             AstStatement::Module(module) => module.print_ast(ctx, indent),
             AstStatement::Import(import) => import.print_ast(ctx, indent),
+            AstStatement::Break(b) => b.print_ast(ctx, indent),
         }
+    }
+}
+
+impl AstPrint for BreakStmtAst {
+    fn print_ast(&self, _ctx: &ProgramCtx, indent: u32) {
+        print_indent_spaces(indent);
+        println!("break");
     }
 }
 

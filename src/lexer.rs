@@ -44,8 +44,8 @@ pub enum TokenKind {
     NewLine,
     Module,
     Import,
+    Break,
     Meta,
-    Undefined, // Consider removing or making this an error type
 }
 impl Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -68,6 +68,8 @@ impl Display for TokenKind {
             TokenKind::Struct => "struct",
             TokenKind::LBrace => "{",
             TokenKind::RBrace => "}",
+            TokenKind::LBracks => "[",
+            TokenKind::RBracks => "]",
             TokenKind::Extern => "extern",
             TokenKind::Fn => "fn",
             TokenKind::Pointy => "^",
@@ -78,7 +80,10 @@ impl Display for TokenKind {
             TokenKind::Defer => "defer",
             TokenKind::Module => "module",
             TokenKind::Import => "import",
-            _ => panic!("unimplemented display for token kind"),
+            TokenKind::Enum => "enum",
+            TokenKind::If => "if",
+            TokenKind::Else => "else",
+            TokenKind::Break => "break",
         };
 
         write!(f, "{s}")
@@ -347,6 +352,7 @@ impl Lexer {
                 "extern" => return self.create_token(TokenKind::Extern, pos, false),
                 "module" => return self.create_token(TokenKind::Module, pos, false),
                 "import" => return self.create_token(TokenKind::Import, pos, false),
+                "break" => return self.create_token(TokenKind::Break, pos, false),
                 "struct" => return self.create_token(TokenKind::Struct, pos, false),
                 "enum" => return self.create_token(TokenKind::Enum, pos, false),
                 "fn" => return self.create_token(TokenKind::Fn, pos, false),

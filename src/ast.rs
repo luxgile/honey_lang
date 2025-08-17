@@ -1,7 +1,7 @@
 use std::string;
 
 use crate::{
-    lexer::FileRange,
+    lexer::{FilePos, FileRange},
     types::{AstNamedType, AstTypeId},
 };
 
@@ -80,6 +80,7 @@ pub enum AstStatement {
     Defer(Box<DeferStmtAst>),
     Module(Box<ModuleStmtAst>),
     Import(Box<ImportStmtAst>),
+    Break(Box<BreakStmtAst>),
 }
 impl AstNode for AstStatement {
     fn get_range(&self) -> FileRange {
@@ -97,6 +98,7 @@ impl AstNode for AstStatement {
             AstStatement::Defer(defer_stmt_ast) => defer_stmt_ast.get_range(),
             AstStatement::Module(module_stmt_ast) => module_stmt_ast.get_range(),
             AstStatement::Import(import_stmt_ast) => import_stmt_ast.get_range(),
+            AstStatement::Break(break_stmt_ast) => break_stmt_ast.get_range(),
         }
     }
 }
@@ -620,5 +622,15 @@ pub struct ImportStmtAst {
 impl AstNode for ImportStmtAst {
     fn get_range(&self) -> FileRange {
         self.ast.get_range()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct BreakStmtAst {
+    pub pos: FileRange,
+}
+impl AstNode for BreakStmtAst {
+    fn get_range(&self) -> FileRange {
+        self.pos
     }
 }

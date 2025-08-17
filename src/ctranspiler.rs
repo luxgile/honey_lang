@@ -169,10 +169,16 @@ impl CTranspilerPass {
             AstStatement::Defer(defer) => self.curr_frame().queued_defers.push(*defer.clone()),
             AstStatement::Module(module) => self.transpile_module(ctx, module),
             AstStatement::Import(import) => self.transpile_import(ctx, import),
+            AstStatement::Break(b) => self.transpile_break(ctx, b),
             _ => {
                 todo!("{:?} not implemented", stmt);
             }
         };
+    }
+
+    fn transpile_break(&mut self, _ctx: &mut ProgramCtx, break_stmt: &BreakStmtAst) {
+        self.add_src(&self.indent_space());
+        self.add_src("break;\n");
     }
 
     fn transpile_import(&mut self, ctx: &mut ProgramCtx, import: &ImportStmtAst) {
@@ -214,9 +220,9 @@ impl CTranspilerPass {
         let old_assign_mode = self.raw_mode;
         self.add_src(&self.indent_space());
         self.raw_mode = true;
-        self.transpile_expr(ctx, &assign.lvalue);
+        let lvalue = self.transpile_expr(ctx, &assign.lvalue);
         self.raw_mode = old_assign_mode;
-        self.add_src(&format!(" = {rvalue};\n"));
+        self.add_src(&format!("{lvalue} = {rvalue};\n"));
         // self.add_src(&rvalue);
     }
 
@@ -604,12 +610,7 @@ impl CTranspilerPass {
     }
 
     fn transpile_var(&mut self, _ctx: &mut ProgramCtx, var: &VarExprAst) -> String {
-        if self.raw_mode {
-            self.add_src(&var.name);
-            String::new()
-        } else {
-            var.name.clone()
-        }
+        var.name.clone()
     }
 
     fn transpile_call(
@@ -665,7 +666,10 @@ impl CTranspilerPass {
     }
 
     fn transpile_loop(&mut self, ctx: &mut ProgramCtx, for_expr: &ForExprAst) -> String {
+        let old_tmp = self.raw_mode;
+        self.raw_mode = true;
         let condition = self.transpile_expr(ctx, &for_expr.condition);
+        self.raw_mode = old_tmp;
         self.add_src(&self.indent_space());
         self.add_src("while (");
         self.add_src(&condition);
@@ -680,9 +684,9 @@ impl CTranspilerPass {
         }
 
         // The condition needs to be evaluated again at the end of the while loop
-        let condition_2 = self.transpile_expr(ctx, &for_expr.condition);
-        self.add_src(&self.indent_space());
-        self.add_src(&format!("{condition} = {condition_2};\n"));
+        // let condition_2 = self.transpile_expr(ctx, &for_expr.condition);
+        // self.add_src(&self.indent_space());
+        // self.add_src(&format!("{condition} = {condition_2};\n"));
 
         self.pop_frame();
         self.indent -= 1;
@@ -776,13 +780,7 @@ impl CTranspilerPass {
     }
 
     fn transpile_deref(&mut self, ctx: &mut ProgramCtx, d: &DerefExprAst) -> String {
-        if self.raw_mode {
-            self.add_src("*");
-            self.transpile_expr(ctx, &d.expr);
-            String::new()
-        } else {
-            "*".to_string() + self.transpile_expr(ctx, &d.expr).as_str()
-        }
+        "*".to_string() + self.transpile_expr(ctx, &d.expr).as_str()
     }
 
     fn transpile_fn_body(&mut self, ctx: &mut ProgramCtx, body: &BodyExprAst, ret_ty: AstTypeId) {
@@ -917,7 +915,9 @@ impl CTranspilerPass {
             }
         };
 
-        if !meta_expr.get_type(ctx).is_void() {
+        if self.raw_mode {
+            return meta_str;
+        } else if !meta_expr.get_type(ctx).is_void() {
             self.add_src(&self.indent_space());
             self.add_src(&format!("{tmp_ty} {tmp_val} = {meta_str};\n"));
             return tmp_val;
