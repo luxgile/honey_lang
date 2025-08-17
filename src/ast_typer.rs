@@ -70,6 +70,7 @@ impl AstTyped for MetaExprAst {
             MetaFnKind::BinOp(_)  => {
                 self.args[0].get_type_id(ctx)
             }
+            MetaFnKind::Include => VOID_TYPE.get_id(),
             MetaFnKind::CmpOp(_) => {
                 BOOL_TYPE.get_id()
             }

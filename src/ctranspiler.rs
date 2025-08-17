@@ -246,6 +246,10 @@ impl CTranspilerPass {
     }
 
     fn transpile_struct(&mut self, ctx: &mut ProgramCtx, s: &StructDefAst) {
+        if s.external {
+            return;
+        }
+
         let struct_ty = ctx.type_db.get_type(s.type_id).unwrap();
         let struct_name = struct_ty.get_fullname(&ctx.type_db);
         if struct_ty.is_unit() {
@@ -306,6 +310,7 @@ impl CTranspilerPass {
                     })
                     .collect(),
                 methods: Vec::new(),
+                external: false,
             };
             self.transpile_struct(ctx, &struct_def);
             self.add_header("\n");
@@ -901,6 +906,14 @@ impl CTranspilerPass {
                 let cast_to_ty = self.transpile_expr(ctx, &meta_expr.args[0]);
                 let expr = self.transpile_expr(ctx, &meta_expr.args[1]);
                 format!("({cast_to_ty}){expr}")
+            }
+            MetaFnKind::Include => {
+                let old_mode = self.raw_mode;
+                self.raw_mode = true;
+                let include_expr = self.transpile_expr(ctx, &meta_expr.args[0]);
+                self.raw_mode = old_mode;
+                self.add_header(&format!("#include {include_expr}\n"));
+                String::new()
             }
         };
 

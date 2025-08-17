@@ -1,0 +1,13 @@
+@include "std/hstring.h"
+
+extern String :: struct {
+  ptr: cstring,
+  len: u32,
+  capacity: u32,
+}
+
+extern string_new :: fn(|str: cstring) ^String
+extern string_delete :: fn(|str: ^String)
+extern string_grow :: fn(|str: ^String, new_capacity: u32)
+extern string_push :: fn(|s: ^String, str: cstring)
+extern string_clear :: fn(|s: ^String)

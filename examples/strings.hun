@@ -1,0 +1,7 @@
+import "honey/string.hun"
+
+main :: fn(|) i32 {
+  str := string_new "hello hun!" 
+  println @cast cstring str.ptr
+  0
+}

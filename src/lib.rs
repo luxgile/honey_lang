@@ -6,9 +6,10 @@ use ctranspiler::{CTranspilerPass, TranspilerResult};
 use std::{
     env,
     fs::{self},
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     process::{Command, ExitStatus, Stdio},
+    str::FromStr,
 };
 
 use ast_printer::AstPrint;
@@ -145,10 +146,14 @@ impl Compiler {
             .map(|x| x.to_string_lossy().into())
             .collect::<Vec<String>>();
 
+        Compiler::copy_std_headers_to_build_path(&build_path);
+
         // Build C source using gcc
         let exe_path = build_path.as_path().join(exe_name);
         let mut args = vec!["-x", "c"];
         src_paths.iter().for_each(|x| args.push(x));
+        args.extend_from_slice(&["-L", "std/build"]);
+        args.extend_from_slice(&["-l", "honey_std"]);
         args.push("-o");
         args.push(exe_path.to_str().unwrap());
 
@@ -211,6 +216,29 @@ impl Compiler {
         src_paths
     }
 
+    fn copy_std_headers_to_build_path(build_path: &Path) {
+        let mut headers = Vec::new();
+        for file in fs::read_dir("./std").unwrap() {
+            let file = file.unwrap();
+            if let Some(extension) = file.path().extension()
+                && extension == "h"
+            {
+                headers.push(file);
+            }
+        }
+
+        if !fs::exists(build_path.join("std/")).unwrap() {
+            fs::create_dir(build_path.join("std/"))
+                .expect("error creating std folder in build file");
+        }
+
+        for header in headers {
+            let header_path =
+                build_path.join(format!("std/{}", header.file_name().into_string().unwrap()));
+            fs::copy(header.path(), header_path).expect("error copying header");
+        }
+    }
+
     fn add_meta_definitions(c: &mut ProgramCtx) {
         let def_bin = |c: &mut ProgramCtx, id: &str, op: BinOpKind| {
             c.define_meta(MetaFn::new(id.to_string(), MetaFnKind::BinOp(op)))
@@ -221,6 +249,8 @@ impl Compiler {
         };
 
         c.define_meta(MetaFn::new("cast", MetaFnKind::Cast));
+
+        c.define_meta(MetaFn::new("include", MetaFnKind::Include));
 
         // All binary operations
         def_bin(c, "+", BinOpKind::Add);

@@ -28,6 +28,7 @@ pub enum MetaFnKind {
     BinOp(BinOpKind),
     CmpOp(CmpOpKind),
     Cast,
+    Include,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -56,6 +57,7 @@ impl MetaFn {
             MetaFnKind::BinOp(_) => 2,
             MetaFnKind::CmpOp(_) => 2,
             MetaFnKind::Cast => 2,
+            MetaFnKind::Include => 1,
         }
     }
 }

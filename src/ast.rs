@@ -214,6 +214,7 @@ pub struct StructDefAst {
     pub type_id: AstTypeId,
     pub fields: Vec<ArgDefAst>,
     pub methods: Vec<FnDefAst>,
+    pub external: bool,
 }
 impl AstNode for StructDefAst {
     fn get_range(&self) -> FileRange {

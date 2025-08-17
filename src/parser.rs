@@ -365,6 +365,14 @@ impl<'a> Parser<'a> {
     pub fn parse_struct_def(&mut self, offset: &mut usize) -> OptionalParserResult<StructDefAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
+        let mut tmp_offset = *offset;
+        let mut is_external = false;
+        if self.check_tokens(&[TokenKind::Extern], tmp_offset) {
+            is_external = true;
+            tmp_offset += 1;
+        }
+        self.skip_all(&[TokenKind::NewLine], &mut tmp_offset);
+
         if !self.check_tokens(
             &[
                 TokenKind::Id,
@@ -373,13 +381,14 @@ impl<'a> Parser<'a> {
                 TokenKind::Struct,
                 TokenKind::LBrace,
             ],
-            *offset,
+            tmp_offset,
         ) {
             return Ok(None);
         }
-        let struct_name_tk = self.get_tk(*offset).clone();
+        let struct_name_tk = self.get_tk(tmp_offset).clone();
         let struct_name = struct_name_tk.value.clone();
-        *offset += 5;
+        tmp_offset += 5;
+        *offset = tmp_offset;
 
         self.skip_all(&[TokenKind::NewLine], offset);
 
@@ -500,6 +509,7 @@ impl<'a> Parser<'a> {
             type_id: s_id,
             fields,
             methods,
+            external: is_external,
         };
         // self.ctx.define_struct(struct_name, s);
         Ok(Some(s))
@@ -723,6 +733,7 @@ impl<'a> Parser<'a> {
                     type_id: s_type_id,
                     fields: Vec::new(),
                     methods: Vec::new(),
+                    external: false,
                 });
                 // self.ctx.define_struct(field_name.clone(), s.as_ref()); // Define it for lookup
 
