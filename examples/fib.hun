@@ -1,19 +1,4 @@
-extern printf :: fn (|format: RawString, args: ...)
-extern scanf :: fn (|format: RawString, input: ^Int)
-
-+ :: fn (lhs: Int | rhs: Int) Int {
-  @i+ lhs rhs
-} 
-
-- :: fn (lhs: Int | rhs: Int) Int {
-  @i- lhs rhs
-} 
-
-<= :: fn (lhs: Int | rhs: Int) Bool {
-  @i<= lhs rhs
-}
-
-fib :: fn(|n: Int) Int {
+fib :: fn(|n: i32) i32 {
 	if n <= 1 {
 		ret 1
   }
@@ -22,7 +7,6 @@ fib :: fn(|n: Int) Int {
 
 main :: fn(|) {
   n := 10
-  #TODO: This is not being called
   scanf "%d" &n
   n = fib n
   printf "%d\n" n

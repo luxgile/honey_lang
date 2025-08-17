@@ -13,13 +13,33 @@ println :: fn(|str: cstring) {
   @+ lhs rhs
 } 
 
+- :: fn (lhs: i32 | rhs: i32) i32 {
+  @- lhs rhs
+} 
+
 * :: fn (lhs: i32 | rhs: i32) i32 {
   @* lhs rhs
+} 
+
+/ :: fn (lhs: i32 | rhs: i32) i32 {
+  @/ lhs rhs
+} 
+
+% :: fn (lhs: i32 | rhs: i32) i32 {
+  @% lhs rhs
 } 
 
 + :: fn (lhs: f32 | rhs: f32) f32 {
   @+ lhs rhs
 }
+
+- :: fn (lhs: f32 | rhs: f32) f32 {
+  @- lhs rhs
+}
+
+* :: fn (lhs: f32 | rhs: f32) f32 {
+  @* lhs rhs
+} 
 
 / :: fn (lhs: f32 | rhs: f32) f32 {
   @/ lhs rhs
@@ -39,6 +59,46 @@ println :: fn(|str: cstring) {
 
 <= :: fn (lhs: i32 | rhs: i32) bool {
   @<= lhs rhs
+}
+
+> :: fn (lhs: i32 | rhs: i32) bool {
+  @> lhs rhs
+}
+
+>= :: fn (lhs: i32 | rhs: i32) bool {
+  @>= lhs rhs
+}
+
+< :: fn (lhs: f32 | rhs: f32) bool {
+  @< lhs rhs
+}
+
+<= :: fn (lhs: f32 | rhs: f32) bool {
+  @<= lhs rhs
+}
+
+> :: fn (lhs: f32 | rhs: f32) bool {
+  @> lhs rhs
+}
+
+>= :: fn (lhs: f32 | rhs: f32) bool {
+  @>= lhs rhs
+}
+
+== :: fn (lhs: bool | rhs: bool) bool { 
+  @== lhs rhs
+} 
+
+!= :: fn (lhs: bool | rhs: bool) bool {
+  @!= lhs rhs
+}
+
+and :: fn (lhs: bool | rhs: bool) bool { 
+  @&& lhs rhs
+} 
+
+or :: fn (lhs: bool | rhs: bool) bool {
+  @|| lhs rhs
 }
 
 ! :: fn (| rhs: bool) bool {

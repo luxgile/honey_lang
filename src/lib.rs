@@ -87,7 +87,11 @@ impl Compiler {
                 let std_src = fs::read_to_string(path).expect("could not read core.hun");
                 let mut parser = Parser::new(&mut program_ctx);
                 let file_parsed = parser.parse_source(name, &std_src, false);
-                errors.extend_from_slice(&parser.get_errors());
+                let core_errors = parser.get_errors();
+                if !core_errors.is_empty() {
+                    core_errors.iter().for_each(|e| e.print_error(&std_src));
+                    panic!("found errors compiling core files");
+                }
                 (file_parsed, path)
             })
             .collect();
@@ -266,7 +270,7 @@ impl Compiler {
         def_cmp(c, ">=", CmpOpKind::GreaterEq);
 
         def_bin(c, "&&", BinOpKind::And);
-        def_bin(c, "||)", BinOpKind::Or);
+        def_bin(c, "||", BinOpKind::Or);
         def_cmp(c, "==", CmpOpKind::Eq);
         def_cmp(c, "!=", CmpOpKind::Ne);
 

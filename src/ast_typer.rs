@@ -50,7 +50,7 @@ impl AstTyped for AstExpression {
 }
 
 impl AstTyped for TypeExprAst {
-    fn get_type_id(&self, ctx: &ProgramCtx) -> AstTypeId {
+    fn get_type_id(&self, _ctx: &ProgramCtx) -> AstTypeId {
         TYPE_TYPE.get_id()
     }
 }
