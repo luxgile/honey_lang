@@ -101,7 +101,13 @@ impl CTranspilerPass {
             "bool" => "bool",
             "cstring" => "char*",
             "rawptr" => "void*",
-            _ => return ty.get_fullname(&ctx.type_db).to_string(),
+            _ => {
+                return if ty.is_external() {
+                    ty.get_name().to_string()
+                } else {
+                    ty.get_fullname(&ctx.type_db).to_string()
+                };
+            }
         }
         .to_string()
     }
@@ -371,12 +377,16 @@ impl CTranspilerPass {
 
         let mut fn_header_str = String::new();
 
+        // Return type
         fn_header_str += CTranspilerPass::hun_type_to_c(ctx, &func.fn_header.ret_type).as_str(); // fn type
-        fn_header_str += format!(
-            " {}",
-            CTranspilerPass::mangle_id(&fn_ty.get_fullname(&ctx.type_db))
-        )
-        .as_str(); // fn name
+
+        // Fn name
+        let fn_name = if func.fn_header.is_external {
+            fn_ty.get_name()
+        } else {
+            &CTranspilerPass::mangle_id(&fn_ty.get_fullname(&ctx.type_db))
+        };
+        fn_header_str += format!(" {fn_name}").as_str(); // fn name
         fn_header_str += "(";
 
         // Transpile arguments
@@ -622,8 +632,14 @@ impl CTranspilerPass {
         let fn_ty = ctx.type_db.get_type(call.fn_id).unwrap().clone();
         let (ty, val) = self.gen_temp_expr(ctx, &fn_ty.get_return_type_id());
 
+        let call_name = if fn_ty.is_external() {
+            fn_ty.get_name()
+        } else {
+            &CTranspilerPass::mangle_id(fn_ty.get_fullname(&ctx.type_db).as_str())
+        };
+
         let mut call_str = String::new();
-        call_str += CTranspilerPass::mangle_id(fn_ty.get_fullname(&ctx.type_db).as_str()).as_str();
+        call_str += call_name;
         call_str += "(";
         let args: Vec<_> = call
             .prefix_args
@@ -909,8 +925,9 @@ impl CTranspilerPass {
                 let old_mode = self.raw_mode;
                 self.raw_mode = true;
                 let include_expr = self.transpile_expr(ctx, &meta_expr.args[0]);
+                let include_path = String::from_str("\"../").unwrap() + &include_expr[1..];
                 self.raw_mode = old_mode;
-                self.add_header(&format!("#include {include_expr}\n"));
+                self.add_header(&format!("#include {include_path}\n"));
                 String::new()
             }
         };

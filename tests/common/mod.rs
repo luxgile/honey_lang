@@ -8,8 +8,9 @@ pub fn assert_src(name: impl Into<String>, src: impl Into<String>, code: i32) {
     let config = CompConfig {
         pretty_print_ast: true,
         build_path: Some(PathBuf::from_str("tests/.hun_build").unwrap()),
+        gcc_args: Vec::new(),
     };
-    let build = Compiler::build_src(src.into(), &name.into(), config).unwrap();
+    let build = Compiler::build_src(src.into(), &name.into(), None, config).unwrap();
     assert_eq!(Compiler::run_build(&build).code().unwrap(), code)
 }
 

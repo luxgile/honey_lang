@@ -41,6 +41,7 @@ pub struct AstType {
     pre_args: Vec<AstNamedType>,
     su_args: Vec<AstNamedType>,
     parent: Option<AstTypeId>,
+    external: bool,
 }
 
 impl AstType {
@@ -58,6 +59,7 @@ impl AstType {
             pre_args: Vec::new(),
             su_args: Vec::new(),
             parent: None,
+            external: false,
         }
     }
 
@@ -88,12 +90,14 @@ impl AstType {
         name: String,
         fields: Vec<AstNamedType>,
         parent_id: Option<AstTypeId>,
+        external: bool,
         db: &crate::type_db::AstTypeDb,
     ) -> Self {
         let mut type_ = Self::new_base(AstTypeKind::Struct, name);
         type_.fields = fields;
         type_.parent = parent_id;
         type_.id = calculate_hash(&type_.get_fullname(db));
+        type_.external = external;
         type_
     }
 
@@ -129,6 +133,7 @@ impl AstType {
         su_args: Vec<AstNamedType>,
         ret_type: AstTypeId,
         parent_struct: Option<AstTypeId>,
+        external: bool,
         db: &crate::type_db::AstTypeDb,
     ) -> Self {
         let mut type_ = Self::new_base(AstTypeKind::Function, name);
@@ -138,6 +143,7 @@ impl AstType {
         type_.pre_args = pre_args;
         type_.su_args = su_args;
         type_.id = calculate_hash(&type_.get_fullname(db));
+        type_.external = external;
         type_
     }
 
@@ -313,6 +319,10 @@ impl AstType {
     }
     pub fn is_type(&self) -> bool {
         self.kind == AstTypeKind::Type
+    }
+
+    pub fn is_external(&self) -> bool {
+        self.external
     }
 
     // Field and method access

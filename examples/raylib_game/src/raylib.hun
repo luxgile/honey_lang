@@ -1,0 +1,18 @@
+@include "../raylib/src/raylib.h"
+
+extern Color :: struct {
+  r: u8,
+  g: u8,
+  b: u8,
+  a: u8,
+}
+
+extern InitWindow :: fn(|width: i32, height: i32, title: cstring)
+extern CloseWindow :: fn(|)
+extern WindowShouldClose :: fn(|) bool
+
+extern BeginDrawing :: fn(|) void
+extern EndDrawing :: fn(|) void
+extern ClearBackground :: fn(|color: Color)
+extern DrawText :: fn(|text: cstring, pos_x: i32, pos_y: i32, font_size: i32, color: Color)
+
