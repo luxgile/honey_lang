@@ -111,6 +111,7 @@ impl ProgramCtx {
             pre_args,
             su_args,
             fn_header.ret_type,
+            fn_header.is_external,
             parent_struct,
         )
     }

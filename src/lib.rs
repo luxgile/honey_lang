@@ -37,6 +37,9 @@ mod types;
 pub struct CompConfig {
     pub pretty_print_ast: bool,
     pub build_path: Option<PathBuf>,
+    pub lib_paths: Vec<String>,
+    pub lib_names: Vec<String>,
+    pub includes: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -54,6 +57,7 @@ pub struct FileBuildInfo {
 pub struct Compiler;
 impl Compiler {
     pub fn build_file(file_path: &Path, config: CompConfig) -> Result<FileBuildInfo, BuildError> {
+        let file_path = &file_path.canonicalize().unwrap();
         let source_code = fs::read_to_string(file_path).unwrap();
 
         let mut _config = config;
@@ -64,6 +68,7 @@ impl Compiler {
         Compiler::build_src(
             source_code,
             file_path.file_stem().unwrap().to_str().unwrap(),
+            Some(file_path),
             _config,
         )
     }
@@ -71,6 +76,7 @@ impl Compiler {
     pub fn build_src(
         src: String,
         exe_name: &str,
+        file_path: Option<&Path>,
         config: CompConfig,
     ) -> Result<FileBuildInfo, BuildError> {
         let mut program_ctx = ProgramCtx::new();
@@ -84,12 +90,14 @@ impl Compiler {
         let core_files: Vec<_> = core_file_paths
             .iter()
             .map(|(name, path)| {
-                let std_src = fs::read_to_string(path).expect("could not read core.hun");
+                let full_path =
+                    Compiler::find_honey_file(path, Vec::new()).expect("error finding core file");
+                let std_source = fs::read_to_string(&full_path).expect("error reading core file");
                 let mut parser = Parser::new(&mut program_ctx);
-                let file_parsed = parser.parse_source(name, &std_src, false);
+                let file_parsed = parser.parse_source(name, &std_source, false, Some(&full_path));
                 let core_errors = parser.get_errors();
                 if !core_errors.is_empty() {
-                    core_errors.iter().for_each(|e| e.print_error(&std_src));
+                    core_errors.iter().for_each(|e| e.print_error(&std_source));
                     panic!("found errors compiling core files");
                 }
                 (file_parsed, path)
@@ -100,7 +108,7 @@ impl Compiler {
         let (mut hun_file, hun_errors) = {
             let mut parser = Parser::new(&mut program_ctx);
             (
-                parser.parse_source(exe_name, &src, false),
+                parser.parse_source(exe_name, &src, false, file_path),
                 parser.get_errors(),
             )
         };
@@ -155,12 +163,33 @@ impl Compiler {
         // Build C source using gcc
         let exe_path = build_path.as_path().join(exe_name);
         let mut args = vec!["-x", "c"];
+        config.includes.iter().for_each(|arg| {
+            args.push("-I");
+            args.push(arg);
+        });
+
+        // Link with std
+        let std_path = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("std/build");
+        args.extend_from_slice(&["-L", std_path.to_str().unwrap()]);
+        config.lib_paths.iter().for_each(|arg| {
+            args.push("-L");
+            args.push(arg);
+        });
+
+        // Pass generated c files
         src_paths.iter().for_each(|x| args.push(x));
-        args.extend_from_slice(&["-L", "std/build"]);
+
+        // Finally pass dependant libraries
         args.extend_from_slice(&["-l", "honey_std"]);
+        config.lib_names.iter().for_each(|arg| {
+            args.push("-l");
+            args.push(arg);
+        });
+
         args.push("-o");
         args.push(exe_path.to_str().unwrap());
 
+        // Run the gcc command
         let gcc = Command::new("gcc")
             .args(&args)
             .stdin(Stdio::piped())
@@ -184,7 +213,7 @@ impl Compiler {
 
     pub fn run_build(build: &FileBuildInfo) -> ExitStatus {
         println!("honey compilation - {}", "success".green().bold());
-        let run_cmd = Command::new(format!("./{}", build.exe_path.to_str().unwrap()))
+        let run_cmd = Command::new(build.exe_path.to_str().unwrap())
             .stdin(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdout(Stdio::inherit())
@@ -220,9 +249,40 @@ impl Compiler {
         src_paths
     }
 
+    pub fn find_honey_file(
+        file_path: &str,
+        additional_paths: Vec<&Path>,
+    ) -> Result<PathBuf, io::Error> {
+        let core_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).to_path_buf();
+        let mut paths = additional_paths;
+        paths.push(&core_dir);
+
+        // println!("trying to find file '{file_path} in {paths:?}'");
+
+        if fs::exists(file_path)? {
+            return Ok(PathBuf::from_str(file_path).unwrap());
+        }
+
+        for path in &paths {
+            if fs::exists(path)? {
+                let new_file_path = path.join(file_path);
+                if fs::exists(&new_file_path)? {
+                    return Ok(new_file_path);
+                }
+            }
+        }
+
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("file '{file_path}' was not found in any of the paths {paths:?}"),
+        ))
+    }
+
     fn copy_std_headers_to_build_path(build_path: &Path) {
         let mut headers = Vec::new();
-        for file in fs::read_dir("./std").unwrap() {
+        for file in
+            fs::read_dir(Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("std")).unwrap()
+        {
             let file = file.unwrap();
             if let Some(extension) = file.path().extension()
                 && extension == "h"

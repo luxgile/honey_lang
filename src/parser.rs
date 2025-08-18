@@ -1,6 +1,11 @@
-use std::fs::{self, File};
+use std::{
+    fs::{self, File},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use crate::{
+    Compiler,
     ast::*,
     ast_typer::AstTyped,
     errors::{CompilerError, ParserErrorKind},
@@ -111,7 +116,13 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_source(&mut self, name: &str, src: &str, print_tokens: bool) -> FileStmtAst {
+    pub fn parse_source(
+        &mut self,
+        name: &str,
+        src: &str,
+        print_tokens: bool,
+        file_path: Option<&Path>,
+    ) -> FileStmtAst {
         self.lexer.set_source(src);
         self.tk_queue.clear(); // Clear any previous tokens
 
@@ -120,7 +131,7 @@ impl<'a> Parser<'a> {
             if print_tokens {
                 tk.print_token();
             }
-            self.tk_queue.push(tk.clone()); // tk is moved, clone for push_back
+            self.tk_queue.push(tk.clone());
             if tk.kind == TokenKind::EoF {
                 break;
             }
@@ -131,6 +142,7 @@ impl<'a> Parser<'a> {
             &[TokenKind::EoF],
             &[TokenKind::NewLine, TokenKind::EoF],
             &mut offset,
+            file_path,
         );
 
         FileStmtAst {
@@ -145,10 +157,11 @@ impl<'a> Parser<'a> {
         end_tokens: &[TokenKind],
         halt_tokens: &[TokenKind],
         offset: &mut usize,
+        file_path: Option<&Path>,
     ) -> Vec<AstStatement> {
         let mut statements: Vec<AstStatement> = Vec::new();
         while !self.check_tokens(end_tokens, *offset) && *offset < self.tk_queue.len() {
-            let statement_res = self.parse_file_statement(offset);
+            let statement_res = self.parse_file_statement(offset, file_path);
             match statement_res {
                 Ok(statement) => {
                     statements.push(statement);
@@ -170,7 +183,11 @@ impl<'a> Parser<'a> {
         statements
     }
 
-    pub fn parse_file_statement(&mut self, offset: &mut usize) -> ParserResult<AstStatement> {
+    pub fn parse_file_statement(
+        &mut self,
+        offset: &mut usize,
+        file_path: Option<&Path>,
+    ) -> ParserResult<AstStatement> {
         self.skip_all(&[TokenKind::NewLine], offset);
         let s_range = self.get_tk(*offset).range;
 
@@ -187,11 +204,11 @@ impl<'a> Parser<'a> {
             return Ok(AstStatement::FnDef(Box::new(fn_def)));
         }
 
-        if let Some(import) = self.parse_import(offset)? {
+        if let Some(import) = self.parse_import(offset, file_path)? {
             return Ok(AstStatement::Import(Box::new(import)));
         }
 
-        if let Some(mod_def) = self.parse_module(offset)? {
+        if let Some(mod_def) = self.parse_module(offset, file_path)? {
             return Ok(AstStatement::Module(Box::new(mod_def)));
         }
 
@@ -206,7 +223,11 @@ impl<'a> Parser<'a> {
         Err(CompilerError::undefined_statement(s_range))
     }
 
-    pub fn parse_import(&mut self, offset: &mut usize) -> OptionalParserResult<ImportStmtAst> {
+    pub fn parse_import(
+        &mut self,
+        offset: &mut usize,
+        file_path: Option<&Path>,
+    ) -> OptionalParserResult<ImportStmtAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
         let s_range = self.get_tk(*offset).range;
@@ -249,6 +270,25 @@ impl<'a> Parser<'a> {
         }
 
         let path_tk = self.get_tk(*offset).clone();
+        // Check if we can actually import files
+        if file_path.is_none() {
+            return Err(CompilerError::import_unsupported(FileRange::new_merging(
+                &s_range,
+                &path_tk.range,
+            )));
+        }
+
+        // Check if it exists
+        let import_full_path =
+            Compiler::find_honey_file(&path_tk.value, vec![file_path.unwrap().parent().unwrap()])
+                .expect("issue found trying to find import file");
+        if !fs::exists(&import_full_path).unwrap() {
+            return Err(CompilerError::import_undefined_path(
+                path_tk.range,
+                path_tk.value.clone(),
+            ));
+        }
+
         *offset += 1;
 
         // Parse new imported file before keep going
@@ -257,10 +297,15 @@ impl<'a> Parser<'a> {
             parser.asttype_stack.push(module_ty);
         }
 
+        let mut file_path = PathBuf::from_str(&path_tk.value).unwrap();
+        file_path.set_extension("");
+        let file_name = file_path.file_name().unwrap().to_str().unwrap();
+
         let file = parser.parse_source(
-            &module_info.clone().map(|x| x.1.clone()).unwrap_or(String::new()),
-            &fs::read_to_string(&path_tk.value).unwrap(),
+            file_name,
+            &fs::read_to_string(&import_full_path).unwrap(),
             false,
+            Some(&import_full_path),
         );
 
         if module_info.is_some() {
@@ -282,7 +327,11 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    pub fn parse_module(&mut self, offset: &mut usize) -> OptionalParserResult<ModuleStmtAst> {
+    pub fn parse_module(
+        &mut self,
+        offset: &mut usize,
+        file_path: Option<&Path>,
+    ) -> OptionalParserResult<ModuleStmtAst> {
         self.skip_all(&[TokenKind::NewLine], offset);
 
         let mut tmp_offset = *offset;
@@ -312,8 +361,12 @@ impl<'a> Parser<'a> {
         let ty = self.ctx.type_db.new_module(&id, self.asttype_stack.last());
         self.asttype_stack.push(ty);
 
-        let statements =
-            self.parse_file_statements(&[TokenKind::RBrace], &[TokenKind::RBrace], &mut tmp_offset);
+        let statements = self.parse_file_statements(
+            &[TokenKind::RBrace],
+            &[TokenKind::RBrace],
+            &mut tmp_offset,
+            file_path,
+        );
 
         if !self.check_tokens(&[TokenKind::RBrace], tmp_offset) {
             return Err(CompilerError::unexpected_token(
@@ -395,7 +448,7 @@ impl<'a> Parser<'a> {
         let s_id = self
             .ctx
             .type_db
-            .new_struct(struct_name.clone(), Vec::new(), None);
+            .new_struct(struct_name.clone(), Vec::new(), is_external, None);
         self.asttype_stack.push(s_id);
 
         let mut methods: Vec<FnDefAst> = Vec::new();
@@ -724,6 +777,7 @@ impl<'a> Parser<'a> {
                 let s_type_id = self.ctx.type_db.new_struct(
                     field_name.clone(),
                     Vec::new(), // No fields
+                    false,
                     Some(enum_id),
                 );
 
@@ -743,7 +797,7 @@ impl<'a> Parser<'a> {
                     is_varadic: false,
                 });
                 field_stmts.push(AstStatement::StructDef(s));
-            } else if let Ok(stmt_option) = self.parse_file_statement(offset) {
+            } else if let Ok(stmt_option) = self.parse_file_statement(offset, None) {
                 // Convert a declared struct into another variant for the enum
                 if let AstStatement::StructDef(s_box) = stmt_option {
                     let stmt_type_id = s_box.type_id;
@@ -992,7 +1046,7 @@ impl<'a> Parser<'a> {
             expr: last_expr,
         })))
     }
-    
+
     pub fn parse_break(&mut self, offset: &mut usize) -> OptionalParserResult<BreakStmtAst> {
         if !self.check_tokens(&[TokenKind::Break], *offset) {
             return Ok(None);
@@ -1000,7 +1054,7 @@ impl<'a> Parser<'a> {
         let break_tk = self.get_tk(*offset);
         *offset += 1;
 
-        Ok(Some(BreakStmtAst{
+        Ok(Some(BreakStmtAst {
             pos: break_tk.range,
         }))
     }

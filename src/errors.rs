@@ -103,6 +103,12 @@ pub enum ParserErrorKind {
         return_ty: String,
         expected_ty: String,
     },
+
+    #[error("trying to import file at '{path}' but it wasn't found")]
+    ImportUndefinedPath { path: String },
+
+    #[error("importing file is not supported while parsing source directly")]
+    ImportUnsupported,
 }
 
 #[derive(Debug, Clone)]
@@ -328,5 +334,19 @@ impl CompilerError {
            range,
            kind: ParserErrorKind::UndefinedMetaFn { name: value }
        }
+    }
+
+    pub fn import_undefined_path(range: FileRange, path: String) -> CompilerError {
+        Self {
+            range,
+            kind: ParserErrorKind::ImportUndefinedPath { path }
+        }
+    }
+
+    pub fn import_unsupported(range: FileRange) -> CompilerError {
+        Self {
+            range,
+            kind: ParserErrorKind::ImportUnsupported
+        }
     }
 }

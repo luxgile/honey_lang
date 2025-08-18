@@ -21,6 +21,18 @@ struct BuildArgs {
 
     #[arg(long)]
     pub pretty_print: bool,
+
+    #[arg(long)]
+    #[arg(short('L'))]
+    pub lib_paths: Vec<String>,
+
+    #[arg(long)]
+    #[arg(short('l'))]
+    pub lib_names: Vec<String>,
+
+    #[arg(long)]
+    #[arg(short('I'))]
+    pub includes: Vec<String>,
 }
 
 #[derive(Subcommand, Clone)]
@@ -44,6 +56,9 @@ fn main() {
                 CompConfig {
                     pretty_print_ast: args.pretty_print,
                     build_path: None,
+                    lib_paths: args.lib_paths,
+                    lib_names: args.lib_names,
+                    includes: args.includes,
                 },
             )
             .expect("issue building file");
@@ -54,6 +69,9 @@ fn main() {
                 CompConfig {
                     pretty_print_ast: args.pretty_print,
                     build_path: None,
+                    lib_paths: args.lib_paths,
+                    lib_names: args.lib_names,
+                    includes: args.includes,
                 },
             )
             .unwrap();

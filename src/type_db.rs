@@ -67,9 +67,10 @@ impl AstTypeDb {
         &mut self,
         name: String,
         fields: Vec<AstNamedType>,
+        external: bool,
         parent_id: Option<AstTypeId>,
     ) -> AstTypeId {
-        let ty = AstType::new_struct(name, fields, parent_id, self);
+        let ty = AstType::new_struct(name, fields, parent_id, external, self);
         self.insert_type(ty, true)
     }
 
@@ -119,6 +120,7 @@ impl AstTypeDb {
         pre_args: Vec<AstNamedType>,
         su_args: Vec<AstNamedType>,
         ret_type: AstTypeId,
+        external: bool,
         parent_struct: Option<AstTypeId>,
     ) -> AstTypeId {
         let ty = AstType::new_fn(
@@ -128,6 +130,7 @@ impl AstTypeDb {
             su_args,
             ret_type,
             parent_struct,
+            external,
             self,
         );
         self.insert_type(ty, true)

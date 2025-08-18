@@ -1,0 +1,18 @@
+rl :: import "raylib.hun"
+
+main :: fn(|) i32 {
+  rl.InitWindow 800 450 "raylib on honey"
+  defer rl.CloseWindow
+
+  white := Color .{ .r = 255, .g = 255, .b = 255, .a = 255 }
+  lightgray := Color .{ .r = 200, .g = 200, .b = 200, .a = 255 }
+
+  loop ! rl.WindowShouldClose {
+    rl.BeginDrawing
+    rl.ClearBackground white
+    rl.DrawText "Hello from Honey!" 190 200 20 lightgray
+    rl.EndDrawing
+  }
+
+  0
+}
