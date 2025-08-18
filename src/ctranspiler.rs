@@ -580,9 +580,11 @@ impl CTranspilerPass {
         let member_ty = s.get_type_id(ctx);
         let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
 
+        self.add_src(&self.indent_space());
         self.add_src(&format!("{ty} {val};\n"));
         for field in &s.fields {
             let expr = &self.transpile_expr(ctx, &field.rvalue);
+            self.add_src(&self.indent_space());
             self.add_src(&format!("{val}.{} = {};\n", field.name, expr));
         }
         val
@@ -668,6 +670,10 @@ impl CTranspilerPass {
         }
 
         call_str += ")";
+
+        if self.raw_mode {
+            return call_str;
+        }
 
         if fn_ty.get_return_type_id() == VOID_TYPE.get_id() {
             self.add_src(&self.indent_space());
