@@ -16,7 +16,7 @@ Animal :: struct {
   owner: Person,
 
   age_up :: fn(|self) {
-    self.age = self.age + 1
+    &self.age += 1
   }
 }
 
@@ -32,20 +32,17 @@ print_member_access :: fn (|) {
   person := Person .{ .name = "Guille", .gender = true }
   animal := Animal .{ .kind = AnimalKind.Cat .{ .color = "Orange "}, .name = "Copper", .age = 8, .owner = person }
   animal.age_up
-  printf "2: my animal is %d years old\n" animal.age
-  printf "2: my owner is %s\n" animal.owner.name
+  printf "my animal is %d years old\n" animal.age
+  printf "my owner is %s\n" animal.owner.name
 }
 
 print_cat :: fn(|) {
   a := AnimalKind.Cat .{ .color = "orange" }
   match a : AnimalKind.Cat c {
-    printf "3: I'm a cat with color %s\n" c.color
+    printf "i'm a cat with color %s\n" c.color
   }
 }
 
-#+ Here's how multiline commands work
-   You can use as many lines as needed
-   It will work until the escape sequence: +#
 main :: fn (|) i32 {
   print_member_access
   print_cat

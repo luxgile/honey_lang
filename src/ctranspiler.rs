@@ -502,11 +502,13 @@ impl CTranspilerPass {
         self.add_src(&format!(
             "{} {} = {}.__variant_value.__variant_{};\n",
             CTranspilerPass::hun_type_to_c(ctx, &m.casted_enum_var.type_id),
-            m.casted_enum_var.name,
+            m.casted_enum_var.name.clone(),
             expr_str,
             variant_idx
         ));
-
+        
+        ctx.push_local();
+        ctx.def_var(m.casted_enum_var.name.clone(), m.casted_enum_var.type_id);
         let old_tmp = self.curr_return.clone();
         self.curr_return = Some(val.clone());
         if let AstExpression::Body(body) = &m.then_expr {
@@ -517,23 +519,26 @@ impl CTranspilerPass {
         } else {
             unreachable!();
         }
+        self.pop_frame();
         // self.transpile_expr(ctx, &m.then_expr);
         self.curr_return = old_tmp;
         if is_void { "".to_string() } else { val }
     }
 
     fn transpile_enum_expr(&mut self, ctx: &mut ProgramCtx, e: &EnumExprAst) -> String {
-        let enum_ty = ctx.type_db.get_type(e.enum_type).unwrap();
-        let variant_idx = enum_ty.get_field_index_by_id(e.struct_expr.type_id);
+        let enum_ty = ctx.type_db.get_type(e.enum_type).unwrap().clone();
+        let (ty, val) = self.gen_temp_expr(ctx, &enum_ty.get_id());
 
-        let mut enum_str = String::new();
-        enum_str += " { ";
-        enum_str += variant_idx.to_string().as_str();
-        enum_str += ", ";
-        enum_str += &format!("{{ .__variant_{variant_idx} = ");
-        enum_str += &self.transpile_struct_expr(ctx, &e.struct_expr);
-        enum_str += " }}";
-        enum_str
+        self.add_src(&self.indent_space());
+        self.add_src(&format!("{ty} {val};\n"));
+
+        let variant_idx = enum_ty.get_field_index_by_id(e.struct_expr.type_id);
+        self.add_src(&format!("{val}.__variant_index = {variant_idx};\n"));
+
+        let union_expr = self.transpile_struct_expr(ctx, &e.struct_expr);
+        self.add_src(&format!("{val}.__variant_value.__variant_{variant_idx} = {union_expr};\n"));
+
+        val
     }
 
     fn transpile_member_access(
@@ -577,8 +582,8 @@ impl CTranspilerPass {
     }
 
     fn transpile_struct_expr(&mut self, ctx: &mut ProgramCtx, s: &StructExprAst) -> String {
-        let member_ty = s.get_type_id(ctx);
-        let (ty, val) = self.gen_temp_expr(ctx, &member_ty);
+        let struct_ty = s.get_type_id(ctx);
+        let (ty, val) = self.gen_temp_expr(ctx, &struct_ty);
 
         self.add_src(&self.indent_space());
         self.add_src(&format!("{ty} {val};\n"));

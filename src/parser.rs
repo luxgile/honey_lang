@@ -279,9 +279,11 @@ impl<'a> Parser<'a> {
         }
 
         // Check if it exists
-        let import_full_path =
-            Compiler::find_honey_file(&path_tk.value, vec![file_path.unwrap().parent().unwrap().to_path_buf()])
-                .expect("issue found trying to find import file");
+        let import_full_path = Compiler::find_honey_file(
+            &path_tk.value,
+            vec![file_path.unwrap().parent().unwrap().to_path_buf()],
+        )
+        .expect("issue found trying to find import file");
         if !fs::exists(&import_full_path).unwrap() {
             return Err(CompilerError::import_undefined_path(
                 path_tk.range,
@@ -1423,7 +1425,7 @@ impl<'a> Parser<'a> {
             self.errors
                 .push(CompilerError::member_not_found(&id_tk, &base_ty_ref, id));
             *offset += 2; // Skip . and id
-            return (base_expr, false);
+            (base_expr, false)
         }
     }
 
@@ -1491,10 +1493,12 @@ impl<'a> Parser<'a> {
             assignment: None,
         });
 
+        self.ctx.push_local();
         self.ctx
             .def_var(casted_var_name.clone(), casted_var.type_id);
 
         let then_expr_res = self.parse_expr(&mut tmp_offset)?;
+        self.ctx.pop_local();
         let then_expr = then_expr_res
             .ok_or_else(|| CompilerError::expression_expected(self.get_tk(tmp_offset)))?;
 
@@ -1617,6 +1621,7 @@ impl<'a> Parser<'a> {
             // self.line_expressions.clear();
 
             // Suffix arguments
+            // TODO: This needs to be cleaned up...
             let mut suffix_args: Vec<AstExpression> = Vec::new();
             if fn_ty.is_varadic() {
                 loop {
@@ -1624,13 +1629,16 @@ impl<'a> Parser<'a> {
                         break;
                     }
 
+                    let i = suffix_args.len(); // Current index for suffix_args
+                    let prev_type = self.expected_type;
+                    self.expected_type = Some(fn_ty.get_su_args()[i].id);
                     let expr_res = self.parse_expr(&mut tmp_offset)?;
+                    self.expected_type = prev_type;
                     if expr_res.is_none() {
                         break;
                     }
 
                     let res_expr = expr_res.unwrap();
-                    let i = suffix_args.len(); // Current index for suffix_args
 
                     if !fn_ty.is_varadic()
                         && (i >= fn_ty.get_su_args().len()
@@ -1657,7 +1665,10 @@ impl<'a> Parser<'a> {
                         continue;
                     }
 
+                    let prev_type = self.expected_type;
+                    self.expected_type = Some(su_arg.id);
                     let expr_res = self.parse_expr(&mut tmp_offset)?;
+                    self.expected_type = prev_type;
 
                     if expr_res.is_none() {
                         break;

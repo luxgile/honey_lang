@@ -73,6 +73,7 @@ fn single_match_expression() {
     main :: fn(|) i32 {
       animal := AnimalKind.Cat .{ .color = \"red\" } 
       match animal : AnimalKind.Cat cat {
+        color := cat.color
         ret 0
       }
       1

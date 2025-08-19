@@ -7,6 +7,7 @@ fib :: fn(|n: i32) i32 {
 
 main :: fn(|) {
   n := 10
+  printf "write any number: "
   scanf "%d" &n
   n = fib n
   printf "%d\n" n
