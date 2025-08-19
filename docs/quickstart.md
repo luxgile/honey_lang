@@ -4,6 +4,7 @@ Honey does not yet provide a package or bundle to easily install it.
 Alternatively, you can download your desired version from releases, decompress it, and optionally add it to your `PATH` variable.
 
 **Windows**
+
 Unzip honey:
 ```powershell
 Expand-Archive path/to/honey.zip -DestinationPath path/to/unzip
@@ -13,6 +14,7 @@ Adding the folder to your `PATH` variable cannot be done from the console (witho
 I'd recommend googling `windows adding directory to path` and you should find plenty of guides on how to do it.
 
 **Linux**
+
 Unzip Honey:
 ```bash
 tar -xf <honey>
