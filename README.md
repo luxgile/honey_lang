@@ -1,3 +1,5 @@
+![logo](./logo/honey_logo.png)
+
 # Honey Lang
 Honey is a fast and simple programming language centered both on flexibility, simplicity and performance. 
 It's aimed to those looking for a simple language like Odin with the features of Rust. 
