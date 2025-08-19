@@ -62,10 +62,9 @@ The following escaping characters are supported:
 > While `String` is a supported type. It's still in work in progress as it requires other language features to be developed before being actually useful.
 
 # Global declaration
-All global symbols are declared using `::`, for now this is only limited to [Functions], [Structs], [Importing] and [Enums].
+All global symbols are declared using `::`, for now this is only limited to [Functions](https://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#function-declaration), [Structs](https://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#structs), [Importing](https://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#importing) and [Enums](https://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#enums).
 ```honey
 main :: fn(|) i32 { 0 }
-
 ```
 
 # Variable declaration
@@ -108,10 +107,11 @@ main :: fn(|) i32 {
 Import paths are relative from the given file. Currently the only exception to this is honey defined files which are inside the `honey/` directory.
 
 # Function declaration
-As you might have already seen, functions are declared using `<id> :: fn(|)` which is the simplest way to declare 
-a function called `id` with no arguments and `void` for return type.
+As you might have already seen, functions are declared using `my_fn :: fn(|)` which is the simplest way to declare 
+a function called `my_fn` with no arguments and `void` for return type.
 
 The name of a function is not limited to characters and numbers, here are the special characters allowed as function names:
+
 __+ - < > = _ / \ * ~ ! $ % ; ?__
 
 To declare the arguments, you can provide a list of `name: Type` separated by commas like so:
@@ -152,7 +152,7 @@ plus :: fn(lhs: i32 | rhs: i32) i32 {
 x := 10 plus 7
 ```
 
-In fact, all operators in Honey are infixed functions, like so:
+In fact, all operators in Honey are infixed functions:
 ```honey
 + :: fn (lhs: i32 | rhs: i32) i32 {
   @+ lhs rhs
@@ -174,7 +174,7 @@ In fact, all operators in Honey are infixed functions, like so:
 This also means **there's no operator precedence in Honey**. All expressions are evaluated from left to right.
 So `10 + 5 * 3` evaluates to `45` and not `18`.
 
-## Returning a value
+### Returning a value
 To return a value from a function, simply define the expression at the end of the function or use `ret` to return it early:
 ```honey
 fib :: fn(|n: i32) i32 {
@@ -186,7 +186,7 @@ fib :: fn(|n: i32) i32 {
 ```
 
 # Control flow
-## If statement
+### If statement
 The `if` condition does not need to be surrounded by `( )`, but requires a body using `{ }`:
 ```honey
 if age >= 21 {
@@ -194,7 +194,7 @@ if age >= 21 {
 }
 ```
 
-## Loop statement
+### Loop statement
 Looping in Honey works as a `while` in C. The condition is constantly checked for each iteration:
 ```honey
 i := 0
@@ -219,10 +219,11 @@ loop true {
 
 ```
 
-## Match statement
->[!Error] Match statements are currently unsupported. 
+### Match statement
+>[!WARNING]
+> **Match statements are currently unsupported.**
 > However a similar feature `single matching` does pattern matching against a singular expression.
-> To see the details check the [Enums](). 
+> To see the details check the [Enums](https://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#enums). 
 > The below is the current proposal for `match` and `pattern matching`.
 ```honey
 Message :: enum {
@@ -258,7 +259,7 @@ process_message :: fn (| msg: Message) {
 }
 ```
 
-## Defer statement
+### Defer statement
 Any statement after `defer` will be executed at the end of the body it's declared.
 ```honey
 get_number :: fn(|) i32 {
@@ -273,7 +274,7 @@ printf "%d" i
 ```
 
 # Declaring types
-## Structs
+### Structs
 Structs are declared similar to functions like so:
 ```honey
 Person :: struct {
@@ -284,7 +285,8 @@ Person :: struct {
 person := Person .{ .name = "Sancho", .age = "38" }
 ```
 
-### Methods
+**Methods**
+
 Functions can be declared inside structs with `self` as the **first suffixed argument** to declare a method:
 ```honey
 Person :: struct {
@@ -300,10 +302,11 @@ person := Person .{ .name = "Emilia", .age = 24 }
 person.age_up # Age will now be '25'
 ```
 
->[!Warning] Static methods are not yet supported
+>[!Warning]
+> **Static methods are not yet supported**
 > Declaring a method without `self` won't work as expected and it's not currently handled.
 
-## Enums
+### Enums
 Simple enums can be declared like so:
 ```honey
 Animal :: enum {
@@ -327,7 +330,8 @@ Animal :: enum {
 my_cat := Animal.Cat .{ .color = "orange" }
 ```
 
-### Pattern matching enums
+**Pattern matching enums**
+
 Currently `match` can only check against one condition with a syntax similar to the [If statements]():
 ```honey
 my_animal := Animal.Cat .{ .color = "orange" }
@@ -337,8 +341,9 @@ match my_animal : Animal.Cat cat {
 }
 ```
 
-## Traits
->[!Error] Traits are currently not implemented.
+### Traits
+>[!Warning]
+> **Traits are currently not implemented.**
 > The below is the current proposal, but there's no way to use them yet.
 
 Traits are meant to be similar to interfaces in other languages or similar to traits in rust.
@@ -354,8 +359,9 @@ They can be indexed using `[<index>]`:
 println names[1] # prints 'Robby'
 ```
 
-# Dynamic arrays (a.k.a. Vectors)
->[!Error] Vectors are not yet implemented.
+# Dynamic arrays (Vectors)
+>[!Warning]
+> **Vectors are not yet implemented.**
 > They require meta programing and traits for their implementation.
 
 # Meta functions
@@ -376,7 +382,7 @@ printf "%d" x # prints '3'
 ```
 
 # Memory management
-## Manual
+### Manual
 Both `malloc` and `free` are available to allocate memory on the heap:
 ```honey
 # Allocate a 4 bytes
@@ -392,8 +398,9 @@ i := @cast ^i32 ptr
 free ptr
 ```
 
-## Dynamic
->[!Error] Not yet supported. The below is only the proposal
+### Dynamic
+>[!Warning]
+> **Not yet supported. The below is only the proposal**
 
 Honey will support a pointer type that checks if the given pointer has already been freed or where it has been allocated from. 
 ```honey
@@ -419,9 +426,10 @@ b := @move a
 ```
 
 ### Allocators
->[!Error] Not yet supported. The below is only the proposal
+>[!Warning]
+> **Not yet supported. The below is only the proposal**
 
-Custom allocators can be declared and create to better control how memory is allocated and freed:
+Custom allocators can be declared and created to better control how memory is allocated and freed:
 ```
 heap :: import "honey/heap.hun"
 
@@ -441,7 +449,8 @@ player_b := arena.alloc Player .{ "player_b", 50 }
 ```
 
 # Using Honey with C
->[!Warning] This feature is currently work in progress.
+>[!Warning]
+> **This feature is currently work in progress.**
 
 Both structs and functions can be declared using `extern` to denote these are actually defined in a C header file.
 As an example, here's the definition of `printf`:
