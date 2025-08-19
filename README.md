@@ -4,7 +4,7 @@
 Honey is a fast and simple programming language centered both on flexibility, simplicity and performance. 
 It's aimed to those looking for a simple language like Odin with the features of Rust. 
 
-[**Language Reference**](./docs/overview.md) - All working, in progress or planned language features are listed here.
+[**Language Reference**](./docs/overview.md) - All completed, WIP or planned features listed.
 
 [**Quickstart**](./docs/quickstart.md) - How to install and setup Honey to work with it right away.
 
