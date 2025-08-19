@@ -1,5 +1,5 @@
 **/.hun_build
-./std/.cache
+/std/.cache
 /.vscode
 
 /target
