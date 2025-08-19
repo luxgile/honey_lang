@@ -273,7 +273,7 @@ get_number :: fn(|) i32 {
 printf "%d" i 
 ```
 
-# Declaring typeshttps://github.com/luxgile/honey_lang/edit/main/docs/lang_reference.md#enums
+# Declaring types
 ## Structs
 Structs are declared similar to functions like so:
 ```honey
