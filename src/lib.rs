@@ -169,7 +169,7 @@ impl Compiler {
         });
 
         // Link with std
-        let std_path = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("std/build");
+        let std_path = honey_path::get_std_path().join("build");
         args.extend_from_slice(&["-L", std_path.to_str().unwrap()]);
         config.lib_paths.iter().for_each(|arg| {
             args.push("-L");
@@ -251,11 +251,10 @@ impl Compiler {
 
     pub fn find_honey_file(
         file_path: &str,
-        additional_paths: Vec<&Path>,
+        additional_paths: Vec<PathBuf>,
     ) -> Result<PathBuf, io::Error> {
-        let core_dir = Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).to_path_buf();
         let mut paths = additional_paths;
-        paths.push(&core_dir);
+        paths.push(honey_path::get_honey_path());
 
         // println!("trying to find file '{file_path} in {paths:?}'");
 
@@ -280,8 +279,9 @@ impl Compiler {
 
     fn copy_std_headers_to_build_path(build_path: &Path) {
         let mut headers = Vec::new();
-        for file in
-            fs::read_dir(Path::new(&env::var("CARGO_MANIFEST_DIR").unwrap()).join("std")).unwrap()
+        let honey_dir = honey_path::get_honey_path();
+        for file in fs::read_dir(&honey_dir)
+            .unwrap_or_else(|_| panic!("cannot find honey dir in {honey_dir:?}"))
         {
             let file = file.unwrap();
             if let Some(extension) = file.path().extension()
@@ -336,5 +336,25 @@ impl Compiler {
 
         def_bin(c, ">>", BinOpKind::LShr);
         def_bin(c, "<<", BinOpKind::Shl);
+    }
+}
+
+pub mod honey_path {
+    use std::{env, path::{Path, PathBuf}};
+
+    pub fn get_honey_path() -> PathBuf {
+        if let Ok(cargo_path) = env::var("CARGO_MANIFEST_DIR") {
+            Path::new(&cargo_path).to_path_buf()
+        } else {
+            env::current_exe().unwrap().parent().unwrap().to_path_buf()
+        }
+    }
+
+    pub fn get_core_path() -> PathBuf {
+        get_honey_path().join("honey")
+    }
+
+    pub fn get_std_path() -> PathBuf {
+        get_honey_path().join("std")
     }
 }

@@ -280,7 +280,7 @@ impl<'a> Parser<'a> {
 
         // Check if it exists
         let import_full_path =
-            Compiler::find_honey_file(&path_tk.value, vec![file_path.unwrap().parent().unwrap()])
+            Compiler::find_honey_file(&path_tk.value, vec![file_path.unwrap().parent().unwrap().to_path_buf()])
                 .expect("issue found trying to find import file");
         if !fs::exists(&import_full_path).unwrap() {
             return Err(CompilerError::import_undefined_path(

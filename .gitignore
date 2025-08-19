@@ -2,4 +2,6 @@
 /std/.cache
 /.vscode
 
+/bundle
+
 /target
