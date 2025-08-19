@@ -1,6 +1,5 @@
 **/.hun_build
-
-
-# Added by cargo
+./std/.cache
+/.vscode
 
 /target
