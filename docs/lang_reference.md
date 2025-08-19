@@ -35,33 +35,24 @@ You can expect the following primitives in Honey:
 ## Comments
 You can comment a single line using `#`:
 ```honey
-# This function will add two ints and return the result
-add :: fn(lhs: i32 | rhs: i32) i32 {
-    @+ lhs rhs
-}
+# This is a comment, it will be ignored by the compiler!
 ```
 
 Or multiple lines using `#+` and closing with `+#`:
 ```honey
 #+ 
-Here's a very detailed and long explanation
-about how to use this function and what's going to return. 
+This is a longer comment! I can take as 
+much space as I need to.
 +#
-very_complicated_fn :: fn(|) {
-    # Imagine some code here
-}
 ```
 
 ## CStrings
 To define a `cstring`, simply use quoting marks like so:
 ```honey
-main :: fn(|) i32 {
-    println "hello again!"
-    0
-}
+println "hello again!"
 ```
 
-You can escape the following characters from a `cstring`:
+The following escaping characters are supported:
 - `\n` - newline
 - `\t` - tab
 - `\"` - double quote
