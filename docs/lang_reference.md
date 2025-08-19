@@ -2,7 +2,7 @@
 This document will explain all features of the Honey Programming Language. 
 It's assumed you have some basic knowledge of programming on other similar languages like Rust, C or Odin.
 
-If you just want to use Honey right away, check [Quickstart](quickstart.md).
+If you just want to use Honey right away, check the [quickstart](quickstart.md).
 
 Additionally, Honey is a language in a very early state, with some of its main features still work in progress or not even implemented yet. 
 This reference will note all important features that are are currently missing.
