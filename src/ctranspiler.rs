@@ -506,7 +506,7 @@ impl CTranspilerPass {
             expr_str,
             variant_idx
         ));
-        
+
         ctx.push_local();
         ctx.def_var(m.casted_enum_var.name.clone(), m.casted_enum_var.type_id);
         let old_tmp = self.curr_return.clone();
@@ -533,10 +533,14 @@ impl CTranspilerPass {
         self.add_src(&format!("{ty} {val};\n"));
 
         let variant_idx = enum_ty.get_field_index_by_id(e.struct_expr.type_id);
+        self.add_src(&self.indent_space());
         self.add_src(&format!("{val}.__variant_index = {variant_idx};\n"));
 
         let union_expr = self.transpile_struct_expr(ctx, &e.struct_expr);
-        self.add_src(&format!("{val}.__variant_value.__variant_{variant_idx} = {union_expr};\n"));
+        self.add_src(&self.indent_space());
+        self.add_src(&format!(
+            "{val}.__variant_value.__variant_{variant_idx} = {union_expr};\n"
+        ));
 
         val
     }

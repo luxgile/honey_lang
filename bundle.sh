@@ -14,7 +14,7 @@ bundle_target() {
     fi
   fi
 
-  bundle="bundle/${1}"
+  bundle="bundle/honey-${1}"
   if [ ! -d "$bundle" ]; then
     mkdir -p "$bundle"
   fi
