@@ -4,13 +4,19 @@
 Honey is a fast and simple programming language centered both on flexibility, simplicity and performance. 
 It's aimed to those looking for a simple language like Odin with the features of Rust. 
 
+[**Language Reference**](./docs/overview.md) - All working, in progress or planned language features are listed here.
+
+[**Quickstart**](./docs/quickstart.md) - How to install and setup Honey to work with it right away.
+
+[**Examples**](./examples) - To check how Honey works.
+
+<br/>
+
 > [!WARNING]
-> The language is very much still work in progress. While a good amount of features are already working, there are a lot of edge cases that are not handled properly,
-> safety checks that are not implemented and a lack of compiler error printing, so working with Honey at the moment can be very frustrating. Use at your own risk!
+The language is very much still work in progress. While a good amount of features are already working, there are a lot of edge cases that are not handled properly,
+safety checks that are not implemented and a lack of compiler error printing, so working with Honey at the moment can be very frustrating. Use at your own risk!
 
-## Some examples
-To see all examples, check [examples](./examples)
-
+## A taste of Honey
 **Hello world**
 ```honey
 main :: fn(|) i32 {
@@ -20,6 +26,8 @@ main :: fn(|) i32 {
 ```
 
 **Using [Raylib](https://github.com/raysan5/raylib/tree/master)**
+
+_More details on how to interop with C [here](./examples/raylib_game)_
 ```honey
 rl :: import "raylib.hun"
 
@@ -41,7 +49,4 @@ main :: fn(|) i32 {
 }
 ```
 
-## Documentation
-[**Language Reference**](./docs/overview.md)
 
-All working, in progress or planned language features are listed here.
