@@ -441,7 +441,7 @@ impl<'a> Parser<'a> {
         }
         let struct_name_tk = self.get_tk(tmp_offset).clone();
         let struct_name = struct_name_tk.value.clone();
-        tmp_offset += 5;
+        tmp_offset += 4;
         *offset = tmp_offset;
 
         // Parse generic arguments
@@ -454,8 +454,9 @@ impl<'a> Parser<'a> {
                 ));
             }
             gen_args.push(self.get_tk(*offset).value.clone());
-            *offset += 1;
+            *offset += 1; // Consume id
         }
+        *offset += 1; // Consume {
 
         self.skip_all(&[TokenKind::NewLine], offset);
 
