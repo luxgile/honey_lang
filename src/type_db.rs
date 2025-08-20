@@ -67,10 +67,11 @@ impl AstTypeDb {
         &mut self,
         name: String,
         fields: Vec<AstNamedType>,
+        gen_args: Vec<String>,
         external: bool,
         parent_id: Option<AstTypeId>,
     ) -> AstTypeId {
-        let ty = AstType::new_struct(name, fields, parent_id, external, self);
+        let ty = AstType::new_struct(name, fields, parent_id, gen_args, external, self);
         self.insert_type(ty, true)
     }
 

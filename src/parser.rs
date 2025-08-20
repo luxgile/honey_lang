@@ -354,7 +354,7 @@ impl<'a> Parser<'a> {
 
         if !self.check_tokens(&[TokenKind::LBrace], tmp_offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(*offset).range,
                 &[TokenKind::LBrace],
             ));
         }
@@ -372,7 +372,7 @@ impl<'a> Parser<'a> {
 
         if !self.check_tokens(&[TokenKind::RBrace], tmp_offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(tmp_offset),
+                self.get_tk(tmp_offset).range,
                 &[TokenKind::RBrace],
             ));
         }
@@ -434,7 +434,6 @@ impl<'a> Parser<'a> {
                 TokenKind::Colon,
                 TokenKind::Colon,
                 TokenKind::Struct,
-                TokenKind::LBrace,
             ],
             tmp_offset,
         ) {
@@ -445,12 +444,28 @@ impl<'a> Parser<'a> {
         tmp_offset += 5;
         *offset = tmp_offset;
 
+        // Parse generic arguments
+        let mut gen_args = Vec::new();
+        while !self.check_tokens(&[TokenKind::LBrace], *offset) {
+            if !self.check_tokens(&[TokenKind::Id], *offset) {
+                return Err(CompilerError::unexpected_token(
+                    self.get_tk(*offset).range,
+                    &[TokenKind::LBrace, TokenKind::Id],
+                ));
+            }
+            gen_args.push(self.get_tk(*offset).value.clone());
+            *offset += 1;
+        }
+
         self.skip_all(&[TokenKind::NewLine], offset);
 
-        let s_id = self
-            .ctx
-            .type_db
-            .new_struct(struct_name.clone(), Vec::new(), is_external, None);
+        let s_id = self.ctx.type_db.new_struct(
+            struct_name.clone(),
+            Vec::new(),
+            gen_args,
+            is_external,
+            None,
+        );
         self.asttype_stack.push(s_id);
 
         let mut methods: Vec<FnDefAst> = Vec::new();
@@ -496,7 +511,7 @@ impl<'a> Parser<'a> {
             if let Some(field_def) = self.parse_arg_def(offset)? {
                 if !self.check_any_tokens(&[TokenKind::Comma, TokenKind::RBrace], *offset) {
                     self.errors.push(CompilerError::unexpected_token(
-                        self.get_tk(*offset),
+                        self.get_tk(*offset).range,
                         &[TokenKind::Comma],
                     ));
                     self.skip_until_single(TokenKind::RBrace, offset);
@@ -542,7 +557,6 @@ impl<'a> Parser<'a> {
                 self.get_tk(*offset),
                 ParserErrorKind::UnexpectedTokenKind {
                     expected_kind: vec![TokenKind::RBrace],
-                    found_kind: self.get_tk(*offset).kind,
                 },
             ));
         }
@@ -706,7 +720,6 @@ impl<'a> Parser<'a> {
                 self.get_tk(tmp_offset),
                 ParserErrorKind::UnexpectedTokenKind {
                     expected_kind: vec![self.get_tk(tmp_offset).kind],
-                    found_kind: TokenKind::Id,
                 },
             ));
         }
@@ -779,6 +792,7 @@ impl<'a> Parser<'a> {
                 let s_type_id = self.ctx.type_db.new_struct(
                     field_name.clone(),
                     Vec::new(), // No fields
+                    Vec::new(),
                     false,
                     Some(enum_id),
                 );
@@ -830,7 +844,6 @@ impl<'a> Parser<'a> {
                         self.get_tk(*offset),
                         ParserErrorKind::UnexpectedTokenKind {
                             expected_kind: vec![TokenKind::Comma, TokenKind::RBrace],
-                            found_kind: self.get_tk(*offset).kind,
                         },
                     ));
                 }
@@ -845,7 +858,6 @@ impl<'a> Parser<'a> {
                 self.get_tk(*offset),
                 ParserErrorKind::UnexpectedTokenKind {
                     expected_kind: vec![TokenKind::RBrace],
-                    found_kind: self.get_tk(*offset).kind,
                 },
             ));
         }
@@ -1447,7 +1459,7 @@ impl<'a> Parser<'a> {
 
         if !self.check_tokens(&[TokenKind::Colon], tmp_offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(tmp_offset),
+                self.get_tk(tmp_offset).range,
                 &[TokenKind::Colon],
             ));
         }
@@ -1455,7 +1467,7 @@ impl<'a> Parser<'a> {
 
         if !self.check_tokens(&[TokenKind::Id, TokenKind::Dot, TokenKind::Id], tmp_offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(tmp_offset),
+                self.get_tk(tmp_offset).range,
                 &[TokenKind::Id, TokenKind::Dot, TokenKind::Id],
             ));
         }
@@ -1781,7 +1793,7 @@ impl<'a> Parser<'a> {
         if !self.check_tokens(&[TokenKind::RBracks], *offset) {
             // Assuming RBrace means ]
             self.errors.push(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(*offset).range,
                 &[TokenKind::RBrace],
             ));
             return (base, false);
@@ -1846,7 +1858,7 @@ impl<'a> Parser<'a> {
 
             // If neither a comma nor a closing bracket is found, it's an unexpected token
             return Err(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(*offset).range,
                 &[TokenKind::Comma, TokenKind::RBracks],
             ));
         }
@@ -1882,7 +1894,7 @@ impl<'a> Parser<'a> {
 
             if !self.check_tokens(&[TokenKind::Dot, TokenKind::Id], *offset) {
                 return Err(CompilerError::unexpected_token(
-                    self.get_tk(*offset),
+                    self.get_tk(*offset).range,
                     &[TokenKind::Id],
                 ));
             }
@@ -1891,7 +1903,7 @@ impl<'a> Parser<'a> {
 
             if !self.check_tokens(&[TokenKind::Id], *offset) && self.get_tk(*offset).value == "=" {
                 return Err(CompilerError::unexpected_token(
-                    self.get_tk(*offset),
+                    self.get_tk(*offset).range,
                     &[TokenKind::Id],
                 ));
             }

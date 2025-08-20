@@ -27,10 +27,9 @@ pub enum ParserErrorKind {
         found_kind: String,
     },
 
-    #[error("{expected_kind:?} was expected, but {found_kind} was found instead")]
+    #[error("{expected_kind:?} was expected, but this was found instead")]
     UnexpectedTokenKind {
         expected_kind: Vec<TokenKind>,
-        found_kind: TokenKind,
     },
 
     #[error("'{id}' is not defined")]
@@ -225,12 +224,11 @@ impl CompilerError {
         }
     }
 
-    pub fn unexpected_token(tk: &Token, expected: &[TokenKind]) -> CompilerError {
+    pub fn unexpected_token(range: FileRange, expected: &[TokenKind]) -> CompilerError {
         Self {
-            range: tk.range,
+            range,
             kind: ParserErrorKind::UnexpectedTokenKind {
                 expected_kind: expected.to_vec(),
-                found_kind: tk.kind,
             },
         }
     }

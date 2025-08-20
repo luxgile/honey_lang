@@ -35,6 +35,7 @@ pub struct AstType {
     array_size: usize,
     name: String,
     overload: u32,
+    gen_args: Vec<String>,
     fields: Vec<AstNamedType>,
     methods: Vec<AstTypeId>,
     ret_type: AstTypeId,
@@ -53,6 +54,7 @@ impl AstType {
             array_size: 0,
             name,
             overload: 0,
+            gen_args: Vec::new(),
             fields: Vec::new(),
             methods: Vec::new(),
             ret_type: 0,
@@ -90,6 +92,7 @@ impl AstType {
         name: String,
         fields: Vec<AstNamedType>,
         parent_id: Option<AstTypeId>,
+        gen_args: Vec<String>,
         external: bool,
         db: &crate::type_db::AstTypeDb,
     ) -> Self {
@@ -97,6 +100,7 @@ impl AstType {
         type_.fields = fields;
         type_.parent = parent_id;
         type_.id = calculate_hash(&type_.get_fullname(db));
+        type_.gen_args = gen_args;
         type_.external = external;
         type_
     }
