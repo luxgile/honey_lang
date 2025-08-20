@@ -37,5 +37,8 @@ main :: fn(|) i32 {
 
 And run `honeyc run main.hun`. If you get `hello hun!`, everything is working correctly!
 
+> [!WARNING]
+> In Windows during some cases includes might not be found properly. Run instead `honeyc run main.hun -I./.hun_build` to point the compiler to where the generated headers are.
+
 ## What's next?
 Checkout the [language reference](./lang_reference.md) to see all working and planned features Honey has to offer.
