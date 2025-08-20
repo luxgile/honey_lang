@@ -13,8 +13,8 @@ It's aimed to those looking for a simple language like Odin with the features of
 <br/>
 
 > [!WARNING]
-The language is very much still work in progress. While a good amount of features are already working, there are a lot of edge cases that are not handled properly,
-safety checks that are not implemented and a lack of compiler error printing, so working with Honey at the moment can be very frustrating. Use at your own risk!
+The language is very much still work in progress. While a good amount of features are already working, expect bugs, a lot of edge cases that are not handled properly and
+safety checks that are not yet implemented. Working with Honey at the moment can be very frustrating. Use at your own risk!
 
 ## A taste of Honey
 **Hello world**
