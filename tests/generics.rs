@@ -1,7 +1,7 @@
 mod common;
 use common::assert_src;
 
-// #[test]
+#[test]
 fn generic_def() {
     assert_src(
         "generic def",
