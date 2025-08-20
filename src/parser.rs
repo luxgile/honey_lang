@@ -1923,7 +1923,7 @@ impl<'a> Parser<'a> {
                 *offset += 1; // Consume comma
             } else if !self.check_tokens(&[TokenKind::RBrace], *offset) {
                 return Err(CompilerError::unexpected_token(
-                    self.get_tk(*offset),
+                    self.get_tk(*offset).range,
                     &[TokenKind::Comma, TokenKind::RBrace],
                 ));
             }
@@ -1972,7 +1972,7 @@ impl<'a> Parser<'a> {
     ) -> ParserResult<FnHeaderAst> {
         if !self.check_tokens(&[TokenKind::LPar], *offset) {
             return Err(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(*offset).range,
                 &[TokenKind::LPar],
             ));
         }
@@ -1989,7 +1989,7 @@ impl<'a> Parser<'a> {
             suffix_args = suffix_args_res.unwrap_or_else(Vec::new);
             if !self.check_tokens(&[TokenKind::RPar], *offset) {
                 return Err(CompilerError::unexpected_token(
-                    self.get_tk(*offset),
+                    self.get_tk(*offset).range,
                     &[TokenKind::RPar],
                 ));
             }
@@ -2064,7 +2064,7 @@ impl<'a> Parser<'a> {
             }
 
             return Err(CompilerError::unexpected_token(
-                self.get_tk(*offset),
+                self.get_tk(*offset).range,
                 &[TokenKind::Comma, TokenKind::RPar, TokenKind::Bar],
             ));
         }
